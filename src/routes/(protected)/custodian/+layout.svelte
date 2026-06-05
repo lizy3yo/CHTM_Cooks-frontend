@@ -1,0 +1,39 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import CustodianSidebar from '$lib/components/custodian/CustodianSidebar.svelte';
+	import CustodianTopNav from '$lib/components/custodian/CustodianTopNav.svelte';
+	import CustodianBottomNav from '$lib/components/custodian/CustodianBottomNav.svelte';
+	import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
+	import ConfirmDialogContainer from '$lib/components/ui/ConfirmDialogContainer.svelte';
+	import { sidebarCollapsed } from '$lib/stores/custodian';
+	import { authStore } from '$lib/stores/auth';
+	import type { Snippet } from 'svelte';
+	
+	interface Props {
+		children: Snippet;
+	}
+	
+	let { children }: Props = $props();
+
+	onMount(() => {
+		// Refresh user data (including profilePhotoUrl) so the avatar in the
+		// top nav is always up-to-date without requiring a profile page visit.
+		void authStore.verifySession();
+	});
+</script>
+
+<div class="flex min-h-screen bg-white">
+	<CustodianSidebar />
+	
+	<!-- Main Content -->
+	<main class="min-w-0 flex-1 overflow-x-hidden bg-white transition-all duration-300 {$sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-72'}">
+		<div class="mx-auto max-w-7xl px-4 pt-5 pb-6 sm:px-6 lg:px-8 lg:pt-6">
+			{@render children()}
+		</div>
+	</main>
+</div>
+
+<CustodianTopNav />
+<CustodianBottomNav />
+<ToastContainer />
+<ConfirmDialogContainer />

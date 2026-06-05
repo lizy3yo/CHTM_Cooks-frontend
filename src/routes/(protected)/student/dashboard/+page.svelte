@@ -1,0 +1,1451 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import { goto } from '$app/navigation';
+	import { user, authStore, justLoggedIn } from '$lib/stores/auth';
+	import { toastStore } from '$lib/stores/toast';
+	import { borrowRequestsAPI, type BorrowRequestRecord } from '$lib/api/borrowRequests';
+	import { statisticsAPI, type StudentStatisticsData } from '$lib/api/statistics';
+	import { notificationsAPI, type NotificationRecord } from '$lib/api/notifications';
+	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
+	import {
+		ClipboardList,
+		Clock,
+		PackageOpen,
+		TriangleAlert,
+		CheckCircle2,
+		CalendarDays,
+		TrendingUp,
+		Package,
+		ArrowRight,
+		CircleCheck,
+		CornerDownLeft,
+		CircleAlert,
+		PackageCheck,
+		CircleX,
+		PackageX,
+		ChevronDown,
+		ChevronUp,
+		Award,
+		ShieldCheck,
+		BellRing
+	} from 'lucide-svelte';
+
+	// ── types ────────────────────────────────────────────────────────────────
+	interface DashboardRequest {
+		rawId: string;
+		id: string;
+		status: string;
+		statusLabel: string;
+		items: { name: string; picture?: string }[];
+		itemCount: number;
+		borrowDate: string;
+		returnDate: string;
+		createdAt: string;
+		instructor: string;
+		daysUntilDue: number | null;
+		isOverdue: boolean;
+	}
+
+	// ── state ─────────────────────────────────────────────────────────────────
+	const initialRequests = browser ? borrowRequestsAPI.peekCachedList({ limit: 100 }) : null;
+	const initialStats = browser ? statisticsAPI.peek('all') : null;
+
+	let loading = $state(!initialRequests || !initialStats);
+	let trustScoreLoading = $state(!initialStats);
+	let cardsLoading = $state(!initialRequests);
+	let returnPerfHealthReplLoading = $state(!initialStats);
+	let activeLoansNotificationsLoading = $state(!initialRequests);
+	let pendingReqPerformanceLoading = $state(!initialRequests);
+	let recentHistoryLoading = $state(!initialRequests);
+	let allRequests = $state<DashboardRequest[]>([]);
+	let performanceStats = $state<StudentStatisticsData | null>(initialStats);
+	let showScoreBreakdown = $state(false);
+	let currentTime = $state(new Date());
+
+	// ── notification widget state ──────────────────────────────────────────
+	let dashboardNotifications = $state<NotificationRecord[]>([]);
+	let notificationUnreadCount = $state(0);
+	let notificationsLoading = $state(true);
+
+	// ── helpers ───────────────────────────────────────────────────────────────
+	function formatRequestCode(id: string) {
+		return `REQ-${id.slice(-6).toUpperCase()}`;
+	}
+
+	// Removed currency formatting - system now tracks item replacement only
+
+	function isCancelledRequest(
+		raw: BorrowRequestRecord['status'],
+		rejectionReason?: string
+	): boolean {
+		return (
+			raw === 'cancelled' ||
+			(raw === 'rejected' && rejectionReason === 'Request cancelled by student')
+		);
+	}
+
+	function toUiStatus(raw: BorrowRequestRecord['status'], rejectionReason?: string): string {
+		const map: Record<string, string> = {
+			pending_instructor: 'pending',
+			approved_instructor: 'approved',
+			ready_for_pickup: 'ready',
+			borrowed: 'picked-up',
+			pending_return: 'pending-return',
+			missing: 'missing',
+			returned: 'returned',
+			resolved: 'returned',
+			cancelled: 'cancelled',
+			rejected: 'rejected'
+		};
+		if (isCancelledRequest(raw, rejectionReason)) return 'cancelled';
+		return map[raw] ?? raw;
+	}
+
+	function toStatusLabel(s: string): string {
+		const labels: Record<string, string> = {
+			pending: 'Under Review',
+			approved: 'Approved',
+			ready: 'Ready for Pickup',
+			'picked-up': 'Active Loan',
+			'pending-return': 'Return Initiated',
+			missing: 'Item Missing',
+			returned: 'Returned',
+			cancelled: 'Cancelled',
+			rejected: 'Rejected'
+		};
+		return labels[s] ?? s;
+	}
+
+	function calcDaysUntilDue(returnDate: string): number {
+		const now = new Date();
+		now.setHours(0, 0, 0, 0);
+		const due = new Date(returnDate);
+		due.setHours(0, 0, 0, 0);
+		return Math.round((due.getTime() - now.getTime()) / 86_400_000);
+	}
+
+	function mapToCard(r: BorrowRequestRecord): DashboardRequest {
+		const status = toUiStatus(r.status, r.rejectReason);
+		const days = ['picked-up', 'pending-return', 'missing'].includes(status)
+			? calcDaysUntilDue(r.returnDate)
+			: null;
+		return {
+			rawId: r.id,
+			id: formatRequestCode(r.id),
+			status,
+			statusLabel: toStatusLabel(status),
+			items: r.items.map((i) => ({ name: i.name, picture: i.picture })),
+			itemCount: r.items.length,
+			borrowDate: r.borrowDate,
+			returnDate: r.returnDate,
+			createdAt: r.createdAt,
+			instructor: r.instructor?.fullName ?? 'Pending Assignment',
+			daysUntilDue: days,
+			isOverdue: days !== null && days < 0
+		};
+	}
+
+	// Populate initialRequests if present
+	if (initialRequests) {
+		allRequests = initialRequests.requests.map(mapToCard);
+	}
+
+	async function loadDashboard(force = false) {
+		const hasCache = !!performanceStats && allRequests.length > 0;
+
+		if (force || !hasCache) {
+			trustScoreLoading = true;
+			cardsLoading = true;
+			returnPerfHealthReplLoading = true;
+			activeLoansNotificationsLoading = true;
+			notificationsLoading = true;
+			pendingReqPerformanceLoading = true;
+			recentHistoryLoading = true;
+		}
+
+		try {
+			const [statsResult, requestsResult, notificationsResult] = await Promise.allSettled([
+				statisticsAPI.get({ forceRefresh: force, period: 'all' }),
+				borrowRequestsAPI.list({ limit: 100 }, { forceRefresh: force }),
+				notificationsAPI.list(10, 0)
+			]);
+
+			if (statsResult.status === 'fulfilled') {
+				performanceStats = statsResult.value;
+			} else {
+				console.error('[Dashboard] Failed to load statistics:', statsResult.reason);
+			}
+
+			if (requestsResult.status === 'fulfilled') {
+				allRequests = requestsResult.value.requests.map(mapToCard);
+			} else {
+				console.error('[Dashboard] Failed to load requests:', requestsResult.reason);
+			}
+
+			if (notificationsResult.status === 'fulfilled') {
+				dashboardNotifications = notificationsResult.value.notifications;
+				notificationUnreadCount = notificationsResult.value.unreadCount;
+			} else {
+				console.error('[Dashboard] Failed to load notifications:', notificationsResult.reason);
+			}
+		} catch (err) {
+			console.error('[Dashboard] Failed to load dashboard:', err);
+			toastStore.error('Failed to load dashboard data', 'Error');
+		} finally {
+			trustScoreLoading = false;
+			cardsLoading = false;
+			returnPerfHealthReplLoading = false;
+			activeLoansNotificationsLoading = false;
+			notificationsLoading = false;
+			pendingReqPerformanceLoading = false;
+			recentHistoryLoading = false;
+			loading = false;
+		}
+	}
+
+	async function refreshStatistics() {
+		try {
+			const statsResult = await statisticsAPI.get({ forceRefresh: true, period: 'all' });
+			performanceStats = statsResult;
+		} catch (err) {
+			console.error('[Dashboard] Failed to refresh statistics:', err);
+		}
+	}
+
+	async function openNotification(notification: NotificationRecord) {
+		if (!notification.isRead) {
+			await notificationsAPI.markAsRead(notification.id);
+		}
+
+		if (notification.link) {
+			await goto(notification.link);
+		}
+	}
+
+	// ── derived metrics ───────────────────────────────────────────────────────
+	const metrics = $derived({
+		totalRequests: allRequests.length,
+		activeLoans: allRequests.filter((r) => ['picked-up', 'pending-return'].includes(r.status))
+			.length,
+		pendingCount: allRequests.filter((r) => r.status === 'pending').length,
+		overdueCount: allRequests.filter((r) => r.isOverdue).length,
+		returnedCount: allRequests.filter((r) => r.status === 'returned').length,
+		cancelledCount: allRequests.filter((r) => r.status === 'cancelled').length,
+		rejectedCount: allRequests.filter((r) => r.status === 'rejected').length
+	});
+
+	// Active request in best next-action priority (max 3 recent ones)
+	const activeRequests = $derived(
+		allRequests
+			.filter((r) => ['picked-up', 'pending-return', 'missing'].includes(r.status))
+			.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+			.slice(0, 3)
+	);
+
+	// Requests pending action (need attention from student or admin) (max 3 recent ones)
+	const pendingRequests = $derived(
+		allRequests
+			.filter((r) => ['pending', 'approved', 'ready'].includes(r.status))
+			.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+			.slice(0, 3)
+	);
+
+	// Items due within 7 days, sorted by urgency
+	const dueSoon = $derived(
+		allRequests
+			.filter((r) => r.daysUntilDue !== null && r.daysUntilDue <= 7)
+			.sort((a, b) => (a.daysUntilDue ?? 99) - (b.daysUntilDue ?? 99))
+	);
+
+	// Recent history (last 5 terminal requests)
+	const recentHistory = $derived(
+		allRequests
+			.filter((r) => ['returned', 'rejected'].includes(r.status))
+			.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+			.slice(0, 5)
+	);
+
+	const requestOverview = $derived.by(() => {
+		const missingCount = allRequests.filter((r) => r.status === 'missing').length;
+		const rows = [
+			{
+				label: 'Returned',
+				value: metrics.returnedCount,
+				dot: 'bg-emerald-500',
+				text: 'text-emerald-700',
+				bar: 'bg-emerald-500'
+			},
+			{
+				label: 'Active',
+				value: metrics.activeLoans,
+				dot: 'bg-violet-500',
+				text: 'text-violet-700',
+				bar: 'bg-violet-500'
+			},
+			{
+				label: 'Under Review',
+				value: metrics.pendingCount,
+				dot: 'bg-amber-500',
+				text: 'text-amber-700',
+				bar: 'bg-amber-500'
+			},
+			{
+				label: 'Cancelled',
+				value: metrics.cancelledCount,
+				dot: 'bg-slate-500',
+				text: 'text-slate-700',
+				bar: 'bg-slate-500'
+			},
+			{
+				label: 'Rejected',
+				value: metrics.rejectedCount,
+				dot: 'bg-red-500',
+				text: 'text-red-700',
+				bar: 'bg-red-500'
+			},
+			{
+				label: 'Missing',
+				value: missingCount,
+				dot: 'bg-rose-600',
+				text: 'text-rose-700',
+				bar: 'bg-rose-600'
+			}
+		] as const;
+
+		const max = Math.max(...rows.map((r) => r.value), 1);
+		return { rows, max };
+	});
+
+	// ── greeting ──────────────────────────────────────────────────────────────
+	const greeting = $derived.by(() => {
+		const h = currentTime.getHours();
+		if (h < 12) return 'Good Morning';
+		if (h < 18) return 'Good Afternoon';
+		return 'Good Evening';
+	});
+
+	// ── status badge helpers ──────────────────────────────────────────────────
+	function statusColor(s: string): string {
+		const map: Record<string, string> = {
+			pending: 'bg-yellow-100 text-yellow-800',
+			approved: 'bg-blue-100 text-blue-800',
+			ready: 'bg-emerald-100 text-emerald-800',
+			'picked-up': 'bg-violet-100 text-violet-800',
+			'pending-return': 'bg-orange-100 text-orange-800',
+			missing: 'bg-rose-100 text-rose-800',
+			returned: 'bg-teal-100 text-teal-800',
+			cancelled: 'bg-slate-100 text-slate-800',
+			rejected: 'bg-red-100 text-red-800'
+		};
+		return map[s] ?? 'bg-gray-100 text-gray-700';
+	}
+
+	function statusIcon(s: string): typeof Clock {
+		const map: Record<string, typeof Clock> = {
+			pending: Clock,
+			approved: CheckCircle2,
+			ready: PackageCheck,
+			'picked-up': PackageCheck,
+			'pending-return': CornerDownLeft,
+			missing: CircleAlert,
+			returned: CircleCheck,
+			cancelled: CircleX,
+			rejected: CircleX
+		};
+		return map[s] ?? Clock;
+	}
+
+	function dueBadge(days: number): { label: string; color: string } {
+		if (days < 0) return { label: `${Math.abs(days)}d overdue`, color: 'bg-red-100 text-red-700' };
+		if (days === 0) return { label: 'Due today', color: 'bg-rose-100 text-rose-700' };
+		if (days === 1) return { label: 'Due tomorrow', color: 'bg-orange-100 text-orange-700' };
+		if (days <= 3) return { label: `${days}d left`, color: 'bg-amber-100 text-amber-700' };
+		return { label: `${days}d left`, color: 'bg-green-100 text-green-700' };
+	}
+
+	function relativeTime(dateStr: string): string {
+		const diff = Date.now() - new Date(dateStr).getTime();
+		const min = Math.floor(diff / 60_000);
+		const hr = Math.floor(diff / 3_600_000);
+		const day = Math.floor(diff / 86_400_000);
+		if (min < 1) return 'just now';
+		if (min < 60) return `${min}m ago`;
+		if (hr < 24) return `${hr}h ago`;
+		if (day < 7) return `${day}d ago`;
+		return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+	}
+
+	function trustTierConfig(tier: StudentStatisticsData['trustScore']['tier']): {
+		label: string;
+		description: string;
+		text: string;
+		bg: string;
+		border: string;
+		ring: string;
+		stroke: string;
+	} {
+		const cfg = {
+			excellent: {
+				label: 'Excellent',
+				description: 'Outstanding borrowing history. Keep this strong record going.',
+				text: 'text-emerald-700',
+				bg: 'bg-emerald-50',
+				border: 'border-emerald-200',
+				ring: 'bg-emerald-500',
+				stroke: 'stroke-emerald-500'
+			},
+			good: {
+				label: 'Good Standing',
+				description: 'Good borrowing history. Keep up the responsible use of equipment.',
+				text: 'text-pink-700',
+				bg: 'bg-pink-50',
+				border: 'border-pink-200',
+				ring: 'bg-pink-500',
+				stroke: 'stroke-pink-500'
+			},
+			fair: {
+				label: 'Fair',
+				description: 'You are doing okay. Focus on timely returns and item care.',
+				text: 'text-amber-700',
+				bg: 'bg-amber-50',
+				border: 'border-amber-200',
+				ring: 'bg-amber-500',
+				stroke: 'stroke-amber-500'
+			},
+			poor: {
+				label: 'Poor',
+				description: 'Multiple issues were detected. Resolve obligations and improve handling.',
+				text: 'text-orange-700',
+				bg: 'bg-orange-50',
+				border: 'border-orange-200',
+				ring: 'bg-orange-500',
+				stroke: 'stroke-orange-500'
+			},
+			critical: {
+				label: 'Critical',
+				description: 'High risk profile. Immediate improvement is needed.',
+				text: 'text-red-700',
+				bg: 'bg-red-50',
+				border: 'border-red-200',
+				ring: 'bg-red-500',
+				stroke: 'stroke-red-500'
+			}
+		} as const;
+
+		return cfg[tier] ?? cfg.fair;
+	}
+
+	function trustTierBadgeClass(tier: StudentStatisticsData['trustScore']['tier']): string {
+		const badgeMap: Record<StudentStatisticsData['trustScore']['tier'], string> = {
+			excellent: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+			good: 'text-pink-700 bg-pink-50 border-pink-200',
+			fair: 'text-amber-700 bg-amber-50 border-amber-200',
+			poor: 'text-orange-700 bg-orange-50 border-orange-200',
+			critical: 'text-red-700 bg-red-50 border-red-200'
+		};
+
+		return badgeMap[tier] ?? badgeMap.fair;
+	}
+
+	// ── lifecycle ─────────────────────────────────────────────────────────────
+	onMount(() => {
+		if ($justLoggedIn) {
+			toastStore.success(
+				'Welcome back! You have successfully logged in.',
+				'Login Successful',
+				5000
+			);
+			authStore.clearJustLoggedIn();
+		}
+
+		void (async () => {
+			await loadDashboard(false);
+		})();
+
+		const clockId = setInterval(() => {
+			currentTime = new Date();
+		}, 60_000);
+
+		const POLLING_INTERVAL_MS = 30_000;
+		const pollingId = setInterval(() => {
+			void refreshStatistics();
+		}, POLLING_INTERVAL_MS);
+
+		return () => {
+			clearInterval(clockId);
+			clearInterval(pollingId);
+		};
+	});
+</script>
+
+<svelte:head>
+	<title>Dashboard - Student Portal</title>
+</svelte:head>
+
+<div class="space-y-6">
+	<!-- ── Header ─────────────────────────────────────────────────────────── -->
+	<div class="flex items-start justify-between gap-3">
+		<div class="min-w-0">
+			<h1 class="text-xl font-bold text-gray-900 sm:text-2xl lg:text-3xl">
+				{greeting}, {$user?.firstName}
+			</h1>
+			<p class="mt-0.5 text-xs text-gray-500 sm:text-sm">
+				{#if $user?.yearLevel && $user?.block}
+					{$user.yearLevel} · Block {$user.block}
+				{:else}
+					Student Portal
+				{/if}
+			</p>
+		</div>
+		<a
+			href="/student/request"
+			class="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-pink-600 px-3 py-2 text-xs font-medium text-white shadow-sm transition-colors hover:bg-pink-700 sm:px-4 sm:text-sm"
+		>
+			<ClipboardList size={13} />
+			New Request
+		</a>
+	</div>
+
+	{#if trustScoreLoading}
+		<div class="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 animate-pulse">
+			<div class="flex items-center gap-4">
+				<Skeleton class="h-16 w-16 rounded-full sm:h-20 sm:w-20" />
+				<div class="min-w-0 flex-1 space-y-3">
+					<Skeleton class="h-5 w-40" />
+					<Skeleton class="h-4 w-full" />
+					<Skeleton class="h-3 w-3/4" />
+				</div>
+			</div>
+		</div>
+	{:else if performanceStats}
+			{@const trust = trustTierConfig(performanceStats.trustScore.tier)}
+			{@const score = performanceStats.trustScore.score}
+			<div class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-gray-100 sm:p-4">
+				<div class="flex items-center gap-3 sm:gap-4">
+					<!-- Gauge -->
+					<div class="flex shrink-0 flex-col items-center gap-1">
+						<div class="relative flex h-16 w-16 items-center justify-center sm:h-20 sm:w-20">
+							<svg viewBox="0 0 120 120" class="h-full w-full -rotate-90">
+								<circle cx="60" cy="60" r="50" fill="none" stroke="#d1d5db" stroke-width="10" />
+								<circle
+									cx="60"
+									cy="60"
+									r="50"
+									fill="none"
+									stroke-width="10"
+									stroke-linecap="round"
+									class={trust.stroke}
+									stroke-dasharray={Math.PI * 2 * 50}
+									stroke-dashoffset={Math.PI * 2 * 50 * (1 - score / 100)}
+									style="transition: stroke-dashoffset 700ms ease;"
+								/>
+							</svg>
+							<div class="absolute inset-0 flex flex-col items-center justify-center">
+								<p class="text-xl font-bold {trust.text} sm:text-2xl">{score}</p>
+								<p class="text-[9px] text-gray-500 sm:text-[10px]">/ 100</p>
+							</div>
+						</div>
+						<span
+							class="inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] font-medium {trustTierBadgeClass(
+								performanceStats.trustScore.tier
+							)} sm:text-xs"
+						>
+							<ShieldCheck class="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+							{trust.label}
+						</span>
+					</div>
+
+					<!-- Text content -->
+					<div class="min-w-0 flex-1 space-y-1">
+						<h2 class="text-base font-semibold {trust.text} sm:text-lg">Trust Score</h2>
+						<p class="text-xs text-gray-600 sm:text-sm">{trust.description}</p>
+
+						<div
+							class="flex flex-wrap gap-x-4 gap-y-1.5 text-[10px] text-gray-500 sm:gap-x-5 sm:text-xs"
+						>
+							<span class="inline-flex items-center"
+								><span class="mr-1.5 inline-block h-1 w-1 rounded-full bg-red-500 sm:h-1.5 sm:w-1.5"
+								></span>Critical &lt;40</span
+							>
+							<span class="inline-flex items-center"
+								><span
+									class="mr-1.5 inline-block h-1 w-1 rounded-full bg-orange-500 sm:h-1.5 sm:w-1.5"
+								></span>Poor 40-59</span
+							>
+							<span class="inline-flex items-center"
+								><span
+									class="mr-1.5 inline-block h-1 w-1 rounded-full bg-amber-500 sm:h-1.5 sm:w-1.5"
+								></span>Fair 60-74</span
+							>
+							<span class="inline-flex items-center"
+								><span
+									class="mr-1.5 inline-block h-1 w-1 rounded-full bg-pink-500 sm:h-1.5 sm:w-1.5"
+								></span>Good 75-89</span
+							>
+							<span class="inline-flex items-center"
+								><span
+									class="mr-1.5 inline-block h-1 w-1 rounded-full bg-emerald-500 sm:h-1.5 sm:w-1.5"
+								></span>Excellent 90+</span
+							>
+						</div>
+
+						<button
+							onclick={() => (showScoreBreakdown = !showScoreBreakdown)}
+							class="inline-flex items-center gap-0.5 text-xs font-semibold {trust.text} hover:underline sm:text-sm"
+						>
+							{#if showScoreBreakdown}
+								<ChevronUp class="h-3 w-3 sm:h-3.5 sm:w-3.5" />Hide breakdown
+							{:else}
+								<ChevronDown class="h-3 w-3 sm:h-3.5 sm:w-3.5" />View breakdown
+							{/if}
+						</button>
+
+						{#if showScoreBreakdown}
+							<div class="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
+								<div class="rounded-lg border border-red-100 bg-white p-3">
+									<p class="text-xs font-semibold tracking-wide text-red-600 uppercase">
+										Penalties
+									</p>
+									<div class="mt-2 space-y-1 text-xs text-gray-700">
+										<div class="flex justify-between">
+											<span>Missing items</span><span class="font-semibold text-red-600"
+												>-{performanceStats.trustScore.breakdown.missingItemPenalty}</span
+											>
+										</div>
+										<div class="flex justify-between">
+											<span>Damaged items</span><span class="font-semibold text-red-600"
+												>-{performanceStats.trustScore.breakdown.damagedItemPenalty}</span
+											>
+										</div>
+										<div class="flex justify-between">
+											<span>Late returns</span><span class="font-semibold text-red-600"
+												>-{performanceStats.trustScore.breakdown.lateReturnPenalty}</span
+											>
+										</div>
+										<div class="flex justify-between">
+											<span>Cancelled after approval</span><span class="font-semibold text-red-600"
+												>-{performanceStats.trustScore.breakdown
+													.cancelledAfterApprovalPenalty}</span
+											>
+										</div>
+										<div class="flex justify-between">
+											<span>Pending obligations</span><span class="font-semibold text-red-600"
+												>-{performanceStats.trustScore.breakdown.pendingObligationPenalty}</span
+											>
+										</div>
+									</div>
+									<div class="mt-2 border-t border-red-100 pt-2 text-xs font-bold text-red-700">
+										Total penalties: -{performanceStats.trustScore.totalPenalties}
+									</div>
+								</div>
+								<div class="rounded-lg border border-emerald-100 bg-white p-3">
+									<p class="text-xs font-semibold tracking-wide text-emerald-600 uppercase">
+										Bonuses
+									</p>
+									<div class="mt-2 space-y-1 text-xs text-gray-700">
+										<div class="flex justify-between">
+											<span>Clean returns</span><span class="font-semibold text-emerald-600"
+												>+{performanceStats.trustScore.breakdown.cleanReturnBonus}</span
+											>
+										</div>
+										<div class="flex justify-between">
+											<span>Resolved obligations</span><span class="font-semibold text-emerald-600"
+												>+{performanceStats.trustScore.breakdown.resolvedObligationBonus}</span
+											>
+										</div>
+									</div>
+									<div
+										class="mt-2 border-t border-emerald-100 pt-2 text-xs font-bold text-emerald-700"
+									>
+										Total bonuses: +{performanceStats.trustScore.totalBonuses}
+									</div>
+								</div>
+							</div>
+						{/if}
+					</div>
+				</div>
+			</div>
+		{/if}
+
+		{#if cardsLoading}
+			<div class="grid grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-3">
+				{#each Array(4) as _}
+					<div class="space-y-3 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 animate-pulse">
+						<Skeleton class="h-3.5 w-28" />
+						<Skeleton class="h-9 w-16" />
+					</div>
+				{/each}
+			</div>
+		{:else}
+			<!-- ── KPI cards ───────────────────────────────────────────────────── -->
+			<div class="grid grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-3">
+				<button
+					onclick={() => goto('/student/borrowed')}
+					class="rounded-xl border border-violet-200 bg-violet-50 p-3 shadow-sm hover:shadow-md hover:border-violet-300/60 hover:bg-violet-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-violet-500/20 sm:p-4"
+				>
+					<div
+						class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-violet-700 uppercase"
+					>
+						<Package size={12} />
+						<span>Active Loans</span>
+					</div>
+					<p class="mt-2 text-3xl font-bold text-violet-700 sm:text-4xl">{metrics.activeLoans}</p>
+					<p class="mt-0.5 text-xs text-violet-500">Borrowed or returning</p>
+				</button>
+
+				<button
+					onclick={() => goto('/student/requests?tab=history')}
+					class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 shadow-sm hover:shadow-md hover:border-emerald-300/60 hover:bg-emerald-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-emerald-500/20 sm:p-4"
+				>
+					<div
+						class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-emerald-700 uppercase"
+					>
+						<CheckCircle2 size={12} />
+						<span>Completed</span>
+					</div>
+					<p class="mt-2 text-3xl font-bold text-emerald-700 sm:text-4xl">{metrics.returnedCount}</p>
+					<p class="mt-0.5 text-xs text-emerald-500">Successfully returned</p>
+				</button>
+
+				<button
+					onclick={() => goto('/student/requests?tab=pending')}
+					class="rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-sm hover:shadow-md hover:border-amber-300/60 hover:bg-amber-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-amber-500/20 sm:p-4"
+				>
+					<div
+						class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-amber-700 uppercase"
+					>
+						<Clock size={12} />
+						<span>Pending</span>
+					</div>
+					<p class="mt-2 text-3xl font-bold text-amber-700 sm:text-4xl">{metrics.pendingCount}</p>
+					<p class="mt-0.5 text-xs text-amber-500">Awaiting action</p>
+				</button>
+
+				<button
+					onclick={() => goto('/student/borrowed?filter=overdue')}
+					class="rounded-xl border {metrics.overdueCount > 0
+						? 'border-red-200 bg-red-50 hover:border-red-300/60 hover:bg-red-100/30 focus:ring-red-500/20'
+						: 'border-gray-200 bg-gray-50 hover:border-gray-300/60 hover:bg-gray-100/30 focus:ring-gray-500/20'} p-3 shadow-sm transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 sm:p-4"
+				>
+					<div
+						class="flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase {metrics.overdueCount >
+						0
+							? 'text-red-700'
+							: 'text-gray-600'}"
+					>
+						<TriangleAlert size={12} />
+						<span>Overdue</span>
+					</div>
+					<p
+						class="mt-2 text-3xl font-bold {metrics.overdueCount > 0
+							? 'text-red-700'
+							: 'text-gray-700'} sm:text-4xl"
+					>
+						{metrics.overdueCount}
+					</p>
+					<p class="mt-0.5 text-xs {metrics.overdueCount > 0 ? 'text-red-500' : 'text-gray-500'}">
+						Past return date
+					</p>
+				</button>
+			</div>
+		{/if}
+
+		{#if returnPerfHealthReplLoading}
+			<div class="grid gap-4 md:grid-cols-3">
+				{#each Array(3) as _}
+					<div class="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 animate-pulse">
+						<Skeleton class="h-5 w-40" />
+						<Skeleton class="h-4 w-full" />
+						<Skeleton class="h-8 w-1/2" />
+					</div>
+				{/each}
+			</div>
+		{:else if performanceStats}
+			<!-- ── Performance Snapshot Cards ──────────────────────────────── -->
+			<div class="grid gap-4 md:grid-cols-3">
+				<!-- Return Performance -->
+				<div class="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+					<div class="mb-4 flex items-center gap-2">
+						<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
+							<TrendingUp class="h-4 w-4 text-blue-600" />
+						</div>
+						<h3 class="font-semibold text-gray-900">Return Performance</h3>
+					</div>
+					<div class="space-y-3">
+						<div class="flex items-center justify-between">
+							<span class="text-sm text-gray-500">On-time rate</span>
+							<span
+								class="text-sm font-bold {performanceStats.returnPerformance.onTimeRate === null
+									? 'text-gray-500'
+									: performanceStats.returnPerformance.onTimeRate >= 80
+										? 'text-emerald-600'
+										: performanceStats.returnPerformance.onTimeRate >= 60
+											? 'text-amber-600'
+											: 'text-red-600'}"
+							>
+								{performanceStats.returnPerformance.onTimeRate === null
+									? 'N/A'
+									: `${performanceStats.returnPerformance.onTimeRate}%`}
+							</span>
+						</div>
+						<div class="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+							<div
+								class="h-2 rounded-full {performanceStats.returnPerformance.onTimeRate === null
+									? 'bg-gray-300'
+									: performanceStats.returnPerformance.onTimeRate >= 80
+										? 'bg-emerald-500'
+										: performanceStats.returnPerformance.onTimeRate >= 60
+											? 'bg-amber-500'
+											: 'bg-red-500'}"
+								style="width: {performanceStats.returnPerformance.onTimeRate ?? 0}%"
+							></div>
+						</div>
+						<div class="grid grid-cols-3 gap-2 pt-1">
+							<div class="rounded-lg bg-emerald-50 p-2 text-center">
+								<p class="text-2xl font-bold text-emerald-700">
+									{performanceStats.returnPerformance.onTime}
+								</p>
+								<p class="text-xs text-emerald-500">On time</p>
+							</div>
+							<div class="rounded-lg bg-red-50 p-2 text-center">
+								<p class="text-2xl font-bold text-red-700">
+									{performanceStats.returnPerformance.late}
+								</p>
+								<p class="text-xs text-red-500">Late</p>
+							</div>
+							<div class="rounded-lg bg-gray-100 p-2 text-center">
+								<p class="text-2xl font-bold text-gray-700">
+									{performanceStats.returnPerformance.unknown}
+								</p>
+								<p class="text-xs text-gray-500">Unknown</p>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Item Health -->
+				<div class="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+					<div class="mb-4 flex items-center gap-2">
+						<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-pink-50">
+							<PackageCheck class="h-4 w-4 text-pink-600" />
+						</div>
+						<h3 class="font-semibold text-gray-900">Item Health</h3>
+					</div>
+					{#if performanceStats.itemHealth.totalInspected === 0}
+						<div class="space-y-3">
+							<div class="flex items-center justify-between text-sm">
+								<span class="text-gray-500">Good condition rate</span>
+								<span class="font-bold text-gray-500">N/A</span>
+							</div>
+							<div class="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+								<div class="h-2 rounded-full bg-gray-300" style="width: 0%"></div>
+							</div>
+							<div class="grid grid-cols-3 gap-2 pt-1">
+								<div class="rounded-lg bg-emerald-50 p-2 text-center">
+									<p class="text-2xl font-bold text-emerald-700">0</p>
+									<p class="text-xs text-emerald-500">Good</p>
+								</div>
+								<div class="rounded-lg bg-orange-50 p-2 text-center">
+									<p class="text-2xl font-bold text-orange-700">0</p>
+									<p class="text-xs text-orange-500">Damaged</p>
+								</div>
+								<div class="rounded-lg bg-red-50 p-2 text-center">
+									<p class="text-2xl font-bold text-red-700">0</p>
+									<p class="text-xs text-red-500">Missing</p>
+								</div>
+							</div>
+							<p class="text-xs text-gray-400">No inspections recorded yet.</p>
+						</div>
+					{:else}
+						<div class="space-y-3">
+							<div class="flex items-center justify-between text-sm">
+								<span class="text-gray-500">Good condition rate</span>
+								<span
+									class="font-bold {performanceStats.itemHealth.goodRate === null
+										? 'text-gray-500'
+										: performanceStats.itemHealth.goodRate >= 90
+											? 'text-emerald-600'
+											: performanceStats.itemHealth.goodRate >= 70
+												? 'text-amber-600'
+												: 'text-red-600'}"
+								>
+									{performanceStats.itemHealth.goodRate === null
+										? 'N/A'
+										: `${performanceStats.itemHealth.goodRate}%`}
+								</span>
+							</div>
+							<div class="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+								<div
+									class="h-2 rounded-full bg-emerald-500"
+									style="width: {performanceStats.itemHealth.goodRate ?? 0}%"
+								></div>
+							</div>
+							<div class="grid grid-cols-3 gap-2 pt-1">
+								<div class="rounded-lg bg-emerald-50 p-2 text-center">
+									<p class="text-2xl font-bold text-emerald-700">
+										{performanceStats.itemHealth.goodCondition}
+									</p>
+									<p class="text-xs text-emerald-500">Good</p>
+								</div>
+								<div class="rounded-lg bg-orange-50 p-2 text-center">
+									<p class="text-2xl font-bold text-orange-700">
+										{performanceStats.itemHealth.damaged}
+									</p>
+									<p class="text-xs text-orange-500">Damaged</p>
+								</div>
+								<div class="rounded-lg bg-red-50 p-2 text-center">
+									<p class="text-2xl font-bold text-red-700">
+										{performanceStats.itemHealth.missing}
+									</p>
+									<p class="text-xs text-red-500">Missing</p>
+								</div>
+							</div>
+							<p class="text-xs text-gray-400">
+								{performanceStats.itemHealth.totalInspected} items inspected
+							</p>
+						</div>
+					{/if}
+				</div>
+
+				<!-- Replacement Record -->
+				<div class="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+					<div class="mb-4 flex items-center gap-2">
+						<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50">
+							<PackageX class="h-4 w-4 text-emerald-600" />
+						</div>
+						<h3 class="font-semibold text-gray-900">Replacement Record</h3>
+					</div>
+					{#if performanceStats.replacement.totalObligations === 0}
+						<div class="space-y-3">
+							<div class="flex items-center justify-between text-sm">
+								<span class="text-gray-500">Outstanding items</span>
+								<span class="font-bold text-gray-500">0 items</span>
+							</div>
+							<div class="grid grid-cols-2 gap-2">
+								<div class="rounded-lg bg-red-50 p-2 text-center">
+									<p class="text-2xl font-bold text-red-700">0</p>
+									<p class="text-xs text-red-500">Pending cases</p>
+								</div>
+								<div class="rounded-lg bg-emerald-50 p-2 text-center">
+									<p class="text-2xl font-bold text-emerald-700">0</p>
+									<p class="text-xs text-emerald-500">Resolved cases</p>
+								</div>
+							</div>
+							<div class="space-y-1 text-xs text-gray-400">
+								<div class="flex justify-between">
+									<span>Recorded ({performanceStats.periodLabel})</span>
+									<span>0 items</span>
+								</div>
+								<div class="flex justify-between">
+									<span>Total items affected</span>
+									<span>0 items</span>
+								</div>
+								<div class="flex justify-between">
+									<span>Items replaced</span>
+									<span>0 items</span>
+								</div>
+							</div>
+							<p class="text-xs text-gray-400">No replacement records yet.</p>
+						</div>
+					{:else}
+						<div class="space-y-3">
+							<div class="flex items-center justify-between text-sm">
+								<span class="text-gray-500">Outstanding items</span>
+								<span
+									class="font-bold {performanceStats.replacement.balance > 0
+										? 'text-red-600'
+										: 'text-emerald-600'}"
+								>
+									{performanceStats.replacement.balance} item{performanceStats.replacement
+										.balance !== 1
+										? 's'
+										: ''}
+								</span>
+							</div>
+							<div class="grid grid-cols-2 gap-2">
+								<div class="rounded-lg bg-red-50 p-2 text-center">
+									<p class="text-2xl font-bold text-red-700">
+										{performanceStats.replacement.pendingCount}
+									</p>
+									<p class="text-xs text-red-500">Pending cases</p>
+								</div>
+								<div class="rounded-lg bg-emerald-50 p-2 text-center">
+									<p class="text-2xl font-bold text-emerald-700">
+										{performanceStats.replacement.resolvedCount}
+									</p>
+									<p class="text-xs text-emerald-500">Resolved cases</p>
+								</div>
+							</div>
+							<div class="space-y-1 text-xs text-gray-400">
+								<div class="flex justify-between">
+									<span>Recorded ({performanceStats.periodLabel})</span>
+									<span
+										>{performanceStats.replacement.periodIncurredAmount} item{performanceStats
+											.replacement.periodIncurredAmount !== 1
+											? 's'
+											: ''}</span
+									>
+								</div>
+								<div class="flex justify-between">
+									<span>Total items affected</span>
+									<span
+										>{performanceStats.replacement.totalAmount} item{performanceStats.replacement
+											.totalAmount !== 1
+											? 's'
+											: ''}</span
+									>
+								</div>
+								<div class="flex justify-between">
+									<span>Items replaced</span>
+									<span class="text-emerald-600"
+										>{performanceStats.replacement.amountPaid} item{performanceStats.replacement
+											.amountPaid !== 1
+											? 's'
+											: ''}</span
+									>
+								</div>
+							</div>
+						</div>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
+
+		<!-- ── Main 2-col grid ─────────────────────────────────────────────── -->
+		<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+			<!-- LEFT col ────────────────────────────────────────────────────── -->
+			<div class="space-y-6 lg:col-span-2">
+				<!-- Active Loans -->
+				{#if activeLoansNotificationsLoading}
+					<div class="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 animate-pulse">
+						<Skeleton class="h-5 w-40" />
+						<div class="space-y-2">
+							<Skeleton class="h-12 w-full" />
+							<Skeleton class="h-12 w-full" />
+						</div>
+					</div>
+				{:else}
+					<div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+					<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+						<div class="flex items-center gap-2">
+							<PackageOpen size={18} class="text-violet-600" />
+							<h2 class="text-sm font-semibold text-gray-900">Active Loans</h2>
+						</div>
+						<a
+							href="/student/borrowed"
+							class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700"
+						>
+							View all <ArrowRight size={13} />
+						</a>
+					</div>
+
+					{#if activeRequests.length === 0}
+						<div class="flex min-h-48 flex-col items-center justify-center px-5 py-10 text-center">
+							<PackageCheck size={32} class="mx-auto text-pink-600" />
+							<p class="mt-2 text-sm text-gray-500">No active loans</p>
+						</div>
+					{:else}
+						<ul class="divide-y divide-gray-50">
+							{#each activeRequests as req}
+								{@const Icon = statusIcon(req.status)}
+								{@const badge = req.daysUntilDue !== null ? dueBadge(req.daysUntilDue) : null}
+								<li class="px-4 py-3 transition-colors hover:bg-gray-50/60 sm:px-5 sm:py-4">
+									<div class="flex items-start gap-3">
+										<!-- Item images -->
+										<div class="flex shrink-0 -space-x-2">
+											{#each req.items.slice(0, 2) as item}
+												{#if item.picture}
+													{@const imgId = `al-${req.rawId}-${item.name}`}
+													<img
+														src={item.picture}
+														alt={item.name}
+														id={imgId}
+														class="h-10 w-10 rounded-lg object-cover ring-2 ring-white sm:h-12 sm:w-12"
+														onerror={(e) => {
+															(e.currentTarget as HTMLImageElement).style.display = 'none';
+															(
+																e.currentTarget as HTMLImageElement
+															).nextElementSibling?.removeAttribute('style');
+														}}
+													/>
+													<div
+														class="h-10 w-10 overflow-hidden rounded-lg ring-2 ring-white sm:h-12 sm:w-12"
+														style="display:none"
+													>
+														<ItemImagePlaceholder size="sm" />
+													</div>
+												{:else}
+													<div
+														class="h-10 w-10 overflow-hidden rounded-lg ring-2 ring-white sm:h-12 sm:w-12"
+													>
+														<ItemImagePlaceholder size="sm" />
+													</div>
+												{/if}
+											{/each}
+											{#if req.items.length > 2}
+												<div
+													class="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-200 text-[10px] font-semibold text-gray-600 ring-2 ring-white sm:h-12 sm:w-12 sm:text-xs"
+												>
+													+{req.items.length - 2}
+												</div>
+											{/if}
+										</div>
+
+										<!-- Content -->
+										<div class="min-w-0 flex-1">
+											<p class="truncate text-sm font-semibold text-gray-900 sm:text-base">
+												{req.items[0]?.name || 'Item'}{req.items.length > 1
+													? ` +${req.items.length - 1}`
+													: ''}
+											</p>
+											<div
+												class="mt-1 flex flex-col gap-0.5 text-xs text-gray-500 sm:flex-row sm:items-center sm:gap-2"
+											>
+												<span class="font-mono text-[11px] sm:text-xs">{req.id}</span>
+												<span class="hidden sm:inline">·</span>
+												<span class="text-[11px] sm:text-xs"
+													>Due {new Date(req.returnDate).toLocaleDateString('en-US', {
+														month: 'short',
+														day: 'numeric'
+													})}</span
+												>
+											</div>
+											<!-- Status badges on mobile -->
+											<div class="mt-2 flex flex-wrap items-center gap-1.5 sm:hidden">
+												<span
+													class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium {statusColor(
+														req.status
+													)}"
+												>
+													<Icon size={10} />
+													{req.statusLabel}
+												</span>
+												{#if badge}
+													<span
+														class="rounded-full px-2 py-0.5 text-[10px] font-semibold {badge.color}"
+													>
+														{badge.label}
+													</span>
+												{/if}
+											</div>
+										</div>
+
+										<!-- Status badges on desktop -->
+										<div class="hidden shrink-0 flex-col items-end gap-1.5 sm:flex">
+											<span
+												class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium {statusColor(
+													req.status
+												)}"
+											>
+												<Icon size={11} />
+												{req.statusLabel}
+											</span>
+											{#if badge}
+												<span class="rounded-full px-2.5 py-1 text-xs font-semibold {badge.color}">
+													{badge.label}
+												</span>
+											{/if}
+										</div>
+									</div>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+				{/if}
+
+				<!-- Pending Requests -->
+				{#if pendingReqPerformanceLoading}
+					<div class="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 animate-pulse">
+						<Skeleton class="h-5 w-40" />
+						<div class="space-y-2">
+							<Skeleton class="h-12 w-full" />
+							<Skeleton class="h-12 w-full" />
+						</div>
+					</div>
+				{:else}
+					<div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+					<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+						<div class="flex items-center gap-2">
+							<Clock size={18} class="text-yellow-500" />
+							<h2 class="text-sm font-semibold text-gray-900">Recent Requests</h2>
+						</div>
+						<a
+							href="/student/requests"
+							class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700"
+						>
+							View all <ArrowRight size={13} />
+						</a>
+					</div>
+
+					{#if pendingRequests.length === 0}
+						<div class="flex min-h-48 flex-col items-center justify-center px-5 py-10 text-center">
+							<CheckCircle2 size={32} class="mx-auto text-pink-600" />
+							<p class="mt-2 text-sm text-gray-500">No pending requests</p>
+						</div>
+					{:else}
+						<ul class="divide-y divide-gray-50">
+							{#each pendingRequests as req}
+								{@const Icon = statusIcon(req.status)}
+								<li class="px-4 py-3 transition-colors hover:bg-gray-50/60 sm:px-5 sm:py-4">
+									<div class="flex items-start gap-3">
+										<!-- Item images -->
+										<div class="flex shrink-0 -space-x-2">
+											{#each req.items.slice(0, 2) as item}
+												{#if item.picture}
+													<img
+														src={item.picture}
+														alt={item.name}
+														class="h-10 w-10 rounded-lg object-cover ring-2 ring-white sm:h-12 sm:w-12"
+														onerror={(e) => {
+															(e.currentTarget as HTMLImageElement).style.display = 'none';
+															(
+																e.currentTarget as HTMLImageElement
+															).nextElementSibling?.removeAttribute('style');
+														}}
+													/>
+													<div
+														class="h-10 w-10 overflow-hidden rounded-lg ring-2 ring-white sm:h-12 sm:w-12"
+														style="display:none"
+													>
+														<ItemImagePlaceholder size="sm" />
+													</div>
+												{:else}
+													<div
+														class="h-10 w-10 overflow-hidden rounded-lg ring-2 ring-white sm:h-12 sm:w-12"
+													>
+														<ItemImagePlaceholder size="sm" />
+													</div>
+												{/if}
+											{/each}
+											{#if req.items.length > 2}
+												<div
+													class="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-200 text-[10px] font-semibold text-gray-600 ring-2 ring-white sm:h-12 sm:w-12 sm:text-xs"
+												>
+													+{req.items.length - 2}
+												</div>
+											{/if}
+										</div>
+
+										<!-- Content -->
+										<div class="min-w-0 flex-1">
+											<p class="truncate text-sm font-semibold text-gray-900 sm:text-base">
+												{req.items[0]?.name || 'Item'}{req.items.length > 1
+													? ` +${req.items.length - 1}`
+													: ''}
+											</p>
+											<div
+												class="mt-1 flex flex-col gap-0.5 text-xs text-gray-500 sm:flex-row sm:items-center sm:gap-2"
+											>
+												<span class="font-mono text-[11px] sm:text-xs">{req.id}</span>
+												<span class="hidden sm:inline">·</span>
+												<span class="flex items-center gap-1 text-[11px] sm:text-xs">
+													<CalendarDays size={11} class="shrink-0" />
+													<span class="truncate"
+														>{new Date(req.borrowDate).toLocaleDateString('en-US', {
+															month: 'short',
+															day: 'numeric'
+														})} – {new Date(req.returnDate).toLocaleDateString('en-US', {
+															month: 'short',
+															day: 'numeric'
+														})}</span
+													>
+												</span>
+											</div>
+											<!-- Status badge on mobile -->
+											<div class="mt-2 sm:hidden">
+												<span
+													class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium {statusColor(
+														req.status
+													)}"
+												>
+													<Icon size={10} />
+													{req.statusLabel}
+												</span>
+											</div>
+										</div>
+
+										<!-- Status badge on desktop -->
+										<div class="hidden shrink-0 sm:block">
+											<span
+												class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium {statusColor(
+													req.status
+												)}"
+											>
+												<Icon size={11} />
+												{req.statusLabel}
+											</span>
+										</div>
+									</div>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+				{/if}
+
+				<!-- Recent History -->
+				{#if recentHistoryLoading}
+					<div class="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 animate-pulse">
+						<Skeleton class="h-5 w-40" />
+						<div class="space-y-2">
+							<Skeleton class="h-10 w-full" />
+							<Skeleton class="h-10 w-full" />
+						</div>
+					</div>
+				{:else if recentHistory.length > 0}
+					<div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+						<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+							<div class="flex items-center gap-2">
+								<CheckCircle2 size={18} class="text-teal-500" />
+								<h2 class="text-sm font-semibold text-gray-900">Recent History</h2>
+							</div>
+							<a
+								href="/student/account/history"
+								class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700"
+							>
+								View all <ArrowRight size={13} />
+							</a>
+						</div>
+						<ul class="divide-y divide-gray-50">
+							{#each recentHistory as req}
+								{@const Icon = statusIcon(req.status)}
+								<li class="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-gray-50/60">
+									<div class="min-w-0 flex-1">
+										<p class="truncate text-sm font-medium text-gray-800">
+											{req.items
+												.slice(0, 2)
+												.map((i) => i.name)
+												.join(', ')}{req.items.length > 2 ? ` +${req.items.length - 2}` : ''}
+										</p>
+										<p class="mt-0.5 font-mono text-xs text-gray-400">{req.id}</p>
+									</div>
+									<div class="flex shrink-0 flex-col items-end gap-1">
+										<span
+											class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium {statusColor(
+												req.status
+											)}"
+										>
+											<Icon size={10} />
+											{req.statusLabel}
+										</span>
+										<span class="text-xs text-gray-400">{relativeTime(req.createdAt)}</span>
+									</div>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
+			</div>
+
+			<!-- RIGHT sidebar ─────────────────────────────────────────────── -->
+			<div class="space-y-6 lg:sticky lg:top-6 lg:self-start">
+				<!-- Notifications -->
+				{#if notificationsLoading}
+					<div class="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 animate-pulse">
+						<Skeleton class="h-5 w-40" />
+						<div class="space-y-2">
+							<Skeleton class="h-10 w-full" />
+							<Skeleton class="h-10 w-full" />
+							<Skeleton class="h-10 w-full" />
+						</div>
+					</div>
+				{:else}
+					<div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+						<!-- Header -->
+						<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+							<div class="flex items-center gap-2">
+								<BellRing size={17} class="text-orange-500" />
+								<h2 class="text-sm font-semibold text-gray-900">Notifications</h2>
+							</div>
+							{#if notificationUnreadCount > 0}
+								<span
+									class="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700"
+								>{notificationUnreadCount} unread</span>
+							{/if}
+						</div>
+
+						{#if dashboardNotifications.length === 0}
+							<div class="flex min-h-36 flex-col items-center justify-center px-5 py-8 text-center">
+								<BellRing size={28} class="mx-auto text-pink-300" />
+								<p class="mt-2 text-xs text-gray-400">No notifications at the moment</p>
+							</div>
+						{:else}
+							<ul class="divide-y divide-gray-50">
+								{#each dashboardNotifications.slice(0, 3) as notif (notif.id)}
+									<li>
+										<button
+											type="button"
+											onclick={() => openNotification(notif)}
+											class="flex w-full px-5 py-3 text-left transition-colors hover:bg-orange-50/70 {notif.isRead
+												? 'bg-white'
+												: 'bg-orange-50/60'}"
+										>
+										<div class="flex items-start gap-2.5">
+											<!-- Unread dot -->
+											{#if !notif.isRead}
+												<span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-500"></span>
+											{:else}
+												<span class="mt-1.5 h-1.5 w-1.5 shrink-0"></span>
+											{/if}
+											<div class="min-w-0 flex-1">
+												<p class="truncate text-xs font-semibold {notif.isRead ? 'text-gray-700' : 'text-gray-900'}">
+													{notif.title}
+												</p>
+												<p class="mt-0.5 line-clamp-2 text-[11px] text-gray-500">{notif.message}</p>
+												<p class="mt-1 text-[10px] text-gray-400">{relativeTime(notif.createdAt)}</p>
+											</div>
+										</div>
+										</button>
+									</li>
+								{/each}
+							</ul>
+							<div class="border-t border-gray-100 px-5 py-3">
+								<a
+									href="/student/account/notifications"
+									class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700"
+								>
+									View all notifications <ArrowRight size={12} />
+								</a>
+							</div>
+						{/if}
+					</div>
+				{/if}
+
+				<!-- Performance -->
+				{#if pendingReqPerformanceLoading}
+					<div class="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 animate-pulse">
+						<Skeleton class="h-5 w-32" />
+						{#each Array(4) as _}
+							<Skeleton class="h-10 w-full rounded-lg" />
+						{/each}
+					</div>
+				{:else}
+					<div class="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+						<div class="mb-4 flex items-center gap-2">
+							<TrendingUp size={17} class="text-pink-600" />
+							<h2 class="text-sm font-semibold text-gray-900">Performance</h2>
+						</div>
+						<div class="space-y-3">
+							{#each requestOverview.rows as row}
+								<div class="grid grid-cols-[auto_1fr_auto_80px] items-center gap-3">
+									<span class="h-2.5 w-2.5 rounded-full {row.dot}"></span>
+									<p class="text-sm text-gray-600">{row.label}</p>
+									<p class="text-lg font-semibold {row.text}">{row.value}</p>
+									<div class="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+										<div
+											class="h-1.5 rounded-full {row.bar}"
+											style="width: {(row.value / requestOverview.max) * 100}%"
+										></div>
+									</div>
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			</div>
+		</div>
+</div>

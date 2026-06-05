@@ -1,0 +1,2015 @@
+/* CHTM Cooks - Professional Pink Theme */
+/* Based on Material Design Pink palette with corporate refinements */
+
+@theme {
+	--font-primary: "Google Sans", var(--font-sans);
+}
+
+:root {
+	/* Primary Pink Palette - Professional & Sophisticated */
+	--color-primary-50: #fce4ec;
+	--color-primary-100: #f8bbd0;
+	--color-primary-200: #f48fb1;
+	--color-primary-300: #f06292;
+	--color-primary-400: #ec407a;
+	--color-primary-500: #e91e63; /* Main brand color */
+	--color-primary-600: #d81b60;
+	--color-primary-700: #c2185b;
+	--color-primary-800: #ad1457;
+	--color-primary-900: #880e4f;
+
+	/* Rose Accent - Complementary */
+	--color-rose-50: #fff1f2;
+	--color-rose-100: #ffe4e6;
+	--color-rose-200: #fecdd3;
+	--color-rose-300: #fda4af;
+	--color-rose-400: #fb7185;
+	--color-rose-500: #f43f5e;
+	--color-rose-600: #e11d48;
+	--color-rose-700: #be123c;
+	--color-rose-800: #9f1239;
+	--color-rose-900: #881337;
+
+	/* Neutral Grays - Professional */
+	--color-gray-50: #fafafa;
+	--color-gray-100: #f5f5f5;
+	--color-gray-200: #eeeeee;
+	--color-gray-300: #e0e0e0;
+	--color-gray-400: #bdbdbd;
+	--color-gray-500: #9e9e9e;
+	--color-gray-600: #757575;
+	--color-gray-700: #616161;
+	--color-gray-800: #424242;
+	--color-gray-900: #212121;
+
+	/* Semantic Colors */
+	--color-success: #10b981;
+	--color-warning: #f59e0b;
+	--color-error: #ef4444;
+	--color-info: #3b82f6;
+
+	/* Gradients */
+	--gradient-primary: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-rose-600) 100%);
+	--gradient-primary-hover: linear-gradient(135deg, var(--color-primary-700) 0%, var(--color-rose-700) 100%);
+	--gradient-light: linear-gradient(135deg, var(--color-primary-50) 0%, var(--color-rose-50) 100%);
+	--gradient-background: linear-gradient(135deg, #fce4ec 0%, #ffffff 50%, #fff1f2 100%);
+
+	/* Shadows - Professional depth */
+	--shadow-sm: 0 1px 2px 0 rgba(233, 30, 99, 0.05);
+	--shadow-md: 0 4px 6px -1px rgba(233, 30, 99, 0.1), 0 2px 4px -1px rgba(233, 30, 99, 0.06);
+	--shadow-lg: 0 10px 15px -3px rgba(233, 30, 99, 0.1), 0 4px 6px -2px rgba(233, 30, 99, 0.05);
+	--shadow-xl: 0 20px 25px -5px rgba(233, 30, 99, 0.1), 0 10px 10px -5px rgba(233, 30, 99, 0.04);
+	--shadow-2xl: 0 25px 50px -12px rgba(233, 30, 99, 0.25);
+
+	/* Border Radius - Modern & Professional */
+	--radius-sm: 0.375rem;
+	--radius-md: 0.5rem;
+	--radius-lg: 0.75rem;
+	--radius-xl: 1rem;
+	--radius-2xl: 1.5rem;
+	--radius-full: 9999px;
+
+	/* Transitions */
+	--transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+	--transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+	--transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+	/* Surface / Text tokens used by dark overrides */
+	--color-surface: #ffffff;
+	--color-text: #111827;
+	--color-border: rgba(0,0,0,0.08);
+	--color-muted: #6b7280;
+	--color-bg: #ffffff;
+	--color-sidebar: #ffffff;
+	--font-primary: "Google Sans", var(--font-sans);
+}
+
+/* Light mode - pure white background */
+html,
+html body,
+body {
+	background-color: #ffffff !important;
+	background: #ffffff !important;
+	font-family: var(--font-primary);
+}
+
+/* Disable default HTML5 input number spinners globally */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+input[type="number"] {
+	-webkit-appearance: textfield;
+	appearance: textfield;
+	-moz-appearance: textfield;
+}
+
+/* Dark mode variables and overrides (applies when `html` has class `dark`) */
+html.dark {
+	--color-gray-50: #0b1220;
+	--color-gray-100: #0f1724;
+	--color-gray-200: #111827;
+	--color-gray-300: #1b2433;
+	--color-gray-400: #374151;
+	--color-gray-500: #6b7280;
+	--color-gray-600: #9ca3af;
+	--color-gray-700: #d1d5db;
+	--color-gray-900: #f3f4f6;
+
+	/* Dark mode surface/text tokens */
+	--color-surface: #0b1220; /* main card/panel surface */
+	--color-text: #f3f4f6; /* primary readable text */
+	--color-border: rgba(255,255,255,0.06);
+	--color-muted: rgba(255,255,255,0.55);
+	--color-bg: linear-gradient(180deg, #081018 0%, #0f1724 100%);
+	--color-sidebar: rgba(10,14,20,0.7);
+}
+
+html.dark body {
+	background-color: var(--color-gray-100) !important;
+	color: var(--color-gray-900);
+}
+
+/* Sidebar / navigation dark styles */
+html.dark aside[style] {
+	background-color: var(--color-gray-200) !important;
+	color: var(--color-gray-900);
+}
+
+html.dark nav, html.dark .border-gray-200 {
+	border-color: rgba(255,255,255,0.06) !important;
+}
+
+html.dark .bg-white {
+	background-color: var(--color-surface) !important;
+	color: var(--color-text) !important;
+	border-color: var(--color-border) !important;
+}
+
+html.dark .bg-gradient-to-b.from-gray-50.to-white {
+	background-image: linear-gradient(to bottom, rgba(255,255,255,0.02), rgba(255,255,255,0.03)) !important;
+}
+
+html.dark .bg-gray-100 { background-color: transparent !important; }
+html.dark .text-gray-900 { color: var(--color-gray-900) !important; }
+html.dark .text-gray-700 { color: var(--color-gray-700) !important; }
+html.dark .text-gray-500 { color: var(--color-gray-500) !important; }
+
+/* Make common white panels and utilities render as dark surfaces in dark mode */
+html.dark .rounded-lg.bg-white,
+html.dark .rounded-lg.bg-white.shadow,
+html.dark .rounded-lg.bg-white.shadow-sm,
+html.dark .rounded-lg.bg-white.shadow-xl,
+html.dark .rounded-lg.bg-white.p-6,
+html.dark .rounded-lg.bg-white.p-4 {
+	background-color: var(--color-gray-200) !important;
+	color: var(--color-gray-900) !important;
+	border: 1px solid rgba(255,255,255,0.04) !important;
+}
+
+/* Dividers and borders */
+html.dark .divide-gray-200 > * + * { border-color: rgba(255,255,255,0.03) !important; }
+html.dark .border-gray-200 { border-color: rgba(255,255,255,0.06) !important; }
+
+/* Hover states on list rows and quick-action items */
+html.dark .hover\:bg-gray-50:hover { background-color: rgba(255,255,255,0.02) !important; }
+
+/* Utility background overlays used for subtle accents */
+html.dark .bg-white\/10 { background-color: rgba(255,255,255,0.02) !important; }
+
+
+/* Dropdown panel in sidebar */
+html.dark .absolute.bottom-full.mx-4.rounded-lg.border.bg-white {
+	background-color: #0f1724 !important;
+	border-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Profile dropdown: adjust logout hover for dark mode (scoped) */
+html.dark .absolute.bottom-full.mx-4.rounded-lg.border.bg-white button.text-red-600 {
+	color: rgba(255,138,160,0.95) !important;
+}
+
+html.dark .absolute.bottom-full.mx-4.rounded-lg.border.bg-white button.text-red-600:hover {
+	background-color: rgba(219,39,119,0.06) !important;
+	color: var(--color-primary-50) !important;
+}
+
+/* Ensure other dropdown items remain subtle on dark */
+html.dark .absolute.bottom-full.mx-4.rounded-lg.border.bg-white a,
+html.dark .absolute.bottom-full.mx-4.rounded-lg.border.bg-white button {
+	color: var(--color-text) !important;
+}
+
+html.dark .absolute.bottom-full.mx-4.rounded-lg.border.bg-white a:hover,
+html.dark .absolute.bottom-full.mx-4.rounded-lg.border.bg-white button:hover {
+	background-color: rgba(255,255,255,0.02) !important;
+}
+
+/* Buttons and hover adjustments */
+html.dark .hover\:bg-pink-50:hover { background-color: rgba(219, 39, 119, 0.06) !important; }
+html.dark .hover\:text-pink-600:hover { color: var(--color-rose-300) !important; }
+
+/* Ensure general text utility classes map to dark palette */
+html.dark .text-gray-600 { color: var(--color-muted) !important; }
+html.dark .text-gray-500 { color: rgba(255,255,255,0.55) !important; }
+
+/* Modal / dialog surfaces (common patterns) */
+html.dark [role="dialog"],
+html.dark .modal,
+html.dark .dialog,
+html.dark .relative.bg-white,
+html.dark .bg-white.rounded-2xl,
+html.dark .bg-white.rounded-3xl,
+html.dark .bg-white.rounded-lg {
+	background-color: var(--color-surface) !important;
+	color: var(--color-text) !important;
+	border-color: var(--color-border) !important;
+	box-shadow: 0 12px 30px rgba(2,6,23,0.6) !important;
+}
+
+/* Inputs, form fields and small components inside auth/landing cards */
+html.dark .relative.bg-white input,
+html.dark .relative.bg-white textarea,
+html.dark .relative.bg-white select,
+html.dark .rounded-lg.bg-white input,
+html.dark .rounded-lg.bg-white textarea,
+html.dark .rounded-lg.bg-white select,
+html.dark .card-surface input,
+html.dark .card-surface textarea,
+html.dark .card-surface select,
+html.dark input[type="text"],
+html.dark input[type="email"],
+html.dark input[type="password"] {
+	background-color: rgba(255,255,255,0.02) !important;
+	color: var(--color-text) !important;
+	border: 1px solid rgba(255,255,255,0.06) !important;
+	box-shadow: none !important;
+	transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+html.dark .relative.bg-white input::placeholder,
+html.dark .rounded-lg.bg-white input::placeholder,
+html.dark input::placeholder {
+	color: rgba(255,255,255,0.35) !important;
+}
+
+html.dark .relative.bg-white input:focus,
+html.dark .rounded-lg.bg-white input:focus,
+html.dark .card-surface input:focus {
+	outline: none !important;
+	border-color: rgba(219,39,119,0.36) !important;
+	box-shadow: 0 6px 20px rgba(219,39,119,0.06) !important;
+}
+
+/* Alerts / notices used on auth pages (info / warning) */
+html.dark .alert,
+html.dark .status-message,
+html.dark .notice {
+	background-color: rgba(255,255,255,0.04) !important;
+	color: var(--color-text) !important;
+	border-left: 4px solid rgba(219,39,119,0.14) !important;
+}
+
+/* Specific warning (yellow) boxes often used on auth forms */
+html.dark .bg-yellow-50,
+html.dark .bg-yellow-100 {
+	background-color: rgba(255,243,205,0.12) !important;
+	color: #fff8e1 !important;
+	border: 1px solid rgba(255,243,205,0.06) !important;
+}
+
+/* Auth CTA spacing/contrast: ensure primary CTA is readable in dark */
+html.dark .btn-primary,
+html.dark .bg-gradient-to-r.from-pink-600 {
+	background-image: linear-gradient(90deg, #8a1f3a 0%, #6b1730 100%) !important;
+	color: #fff !important;
+	border: none !important;
+}
+
+/* Selects and dropdown menus (native and common custom widgets) */
+html.dark select,
+html.dark .card-surface select,
+html.dark .relative.bg-white select,
+html.dark select.form-select {
+	background-color: rgba(255,255,255,0.02) !important;
+	color: var(--color-text) !important;
+	border: 1px solid rgba(255,255,255,0.06) !important;
+	box-shadow: none !important;
+	appearance: none !important;
+}
+
+html.dark select:focus {
+	outline: none !important;
+	border-color: rgba(219,39,119,0.36) !important;
+	box-shadow: 0 6px 20px rgba(219,39,119,0.06) !important;
+}
+
+/* Native option styling (best-effort; browsers may vary) */
+html.dark select option {
+	background-color: var(--color-surface) !important;
+	color: var(--color-text) !important;
+}
+
+/* Common custom-select menus (svelte/react/select2/choices) */
+html.dark .svelte-select__menu,
+html.dark .react-select__menu,
+html.dark .select2-dropdown,
+html.dark .choices__list--dropdown,
+html.dark .svelte-select .list {
+	background-color: var(--color-surface) !important;
+	color: var(--color-text) !important;
+	border: 1px solid var(--color-border) !important;
+	box-shadow: 0 12px 30px rgba(2,6,23,0.55) !important;
+}
+
+/* Secondary CTA which was light in light-mode: keep shape but make dark surface */
+html.dark .btn-secondary,
+html.dark .bg-white.text-pink-600.border-2.border-pink-600 {
+	background-color: var(--color-surface) !important;
+	color: var(--color-rose-300) !important;
+	border-color: rgba(219,39,119,0.12) !important;
+}
+
+/* Landing hero and page-level backgrounds */
+html.dark .landing-hero,
+html.dark .auth-hero,
+html.dark .min-h-screen {
+	background: var(--color-bg) !important;
+	color: var(--color-text) !important;
+}
+
+/* Low-stock red accents - make them darker and readable in dark mode */
+html.dark .border-red-200 {
+	border-color: rgba(219,39,119,0.12) !important;
+}
+
+html.dark .bg-red-50 {
+	background-color: rgba(219,39,119,0.03) !important;
+}
+
+html.dark .bg-red-100 {
+	background-color: rgba(219,39,119,0.06) !important;
+}
+
+html.dark .text-red-600 {
+	color: #ff7b9a !important;
+}
+
+/* Specific low-stock card rules to ensure text contrast */
+html.dark .rounded-lg.border-red-200.bg-red-50 {
+	background-color: rgba(10,14,20,0.55) !important;
+	border-color: rgba(219,39,119,0.12) !important;
+	color: var(--color-text) !important;
+}
+
+html.dark .rounded-lg.border-red-200.bg-red-50 .text-gray-900 {
+	color: var(--color-text) !important;
+}
+
+html.dark .rounded-lg.border-red-200.bg-red-50 .text-gray-600,
+html.dark .rounded-lg.border-red-200.bg-red-50 .text-sm {
+	color: var(--color-muted) !important;
+}
+
+html.dark .rounded-lg.border-red-200.bg-red-50 .bg-red-100 {
+	background-color: rgba(219,39,119,0.08) !important;
+}
+
+/* Return Processing: purple surface adjustments */
+html.dark .border-purple-200 {
+	border-color: rgba(124,58,237,0.08) !important;
+}
+
+html.dark .bg-purple-50 {
+	background-color: rgba(124,58,237,0.03) !important;
+}
+
+html.dark .bg-purple-100 {
+	background-color: rgba(124,58,237,0.06) !important;
+}
+
+html.dark .text-purple-600 {
+	color: #c4a5ff !important;
+}
+
+/* Specific return-processing card rules to ensure dark surface and readable text */
+html.dark .rounded-lg.border-purple-200.bg-purple-50 {
+	background-color: rgba(6,10,14,0.6) !important;
+	border-color: rgba(124,58,237,0.06) !important;
+	color: var(--color-text) !important;
+}
+
+html.dark .rounded-lg.border-purple-200.bg-purple-50 .text-gray-900,
+html.dark .rounded-lg.border-purple-200.bg-purple-50 h4.font-semibold {
+	color: var(--color-text) !important;
+}
+
+html.dark .rounded-lg.border-purple-200.bg-purple-50 .text-gray-600,
+html.dark .rounded-lg.border-purple-200.bg-purple-50 p.text-sm {
+	color: var(--color-muted) !important;
+}
+
+/* Buttons inside return processing: make green/yellow/red buttons readable */
+html.dark .border-green-300, html.dark .bg-green-50 {
+	border-color: rgba(16,185,129,0.08) !important;
+	background-color: rgba(16,185,129,0.03) !important;
+}
+
+html.dark .text-green-700 {
+	color: #7ee3bb !important;
+}
+
+html.dark .border-yellow-300, html.dark .bg-yellow-50 {
+	border-color: rgba(245,158,11,0.06) !important;
+	background-color: rgba(245,158,11,0.03) !important;
+}
+
+html.dark .text-yellow-700 { color: #ffd59a !important; }
+
+html.dark .border-red-300, html.dark .bg-red-50 {
+	border-color: rgba(239,68,68,0.06) !important;
+	background-color: rgba(239,68,68,0.03) !important;
+}
+
+html.dark .text-red-700 { color: #ff9ca8 !important; }
+
+/* ── Request List dropdown (top nav) dark mode ──────────────────────────── */
+
+/* required Items section header (bg-blue-50/50) */
+html.dark [aria-label="Request List"] .bg-blue-50\/50 {
+	background-color: rgba(59,130,246,0.08) !important;
+}
+html.dark [aria-label="Request List"] .text-blue-900 {
+	color: #93c5fd !important;
+}
+html.dark [aria-label="Request List"] .text-blue-600 {
+	color: #60a5fa !important;
+}
+
+/* required item rows (border-blue-500 bg-blue-50/30) */
+html.dark [aria-label="Request List"] .bg-blue-50\/30 {
+	background-color: rgba(59,130,246,0.05) !important;
+}
+html.dark [aria-label="Request List"] .hover\:bg-blue-50:hover {
+	background-color: rgba(59,130,246,0.10) !important;
+}
+
+/* "required" badge (bg-blue-100 text-blue-700) */
+html.dark [aria-label="Request List"] .bg-blue-100 {
+	background-color: rgba(59,130,246,0.20) !important;
+}
+html.dark [aria-label="Request List"] .text-blue-700 {
+	color: #93c5fd !important;
+}
+
+/* Qty stepper border (border-blue-300 bg-white) */
+html.dark [aria-label="Request List"] .border-blue-300.bg-white {
+	background-color: rgba(255,255,255,0.04) !important;
+	border-color: rgba(59,130,246,0.30) !important;
+}
+
+/* Image border for required items (border-blue-200) */
+html.dark [aria-label="Request List"] .border-blue-200 {
+	border-color: rgba(59,130,246,0.20) !important;
+}
+
+/* Additional Items section header (bg-gray-50) */
+html.dark [aria-label="Request List"] .bg-gray-50 {
+	background-color: rgba(255,255,255,0.03) !important;
+}
+
+/* Qty stepper for additional items (border-gray-300 bg-white) */
+html.dark [aria-label="Request List"] .border-gray-300.bg-white {
+	background-color: rgba(255,255,255,0.04) !important;
+	border-color: rgba(255,255,255,0.12) !important;
+}
+
+/* Profile dropdown (top nav): sign out hover */
+html.dark .absolute.right-0.top-full.rounded-xl.border.bg-white button.text-red-600:hover,
+html.dark .absolute.right-0.top-full.rounded-xl.border.bg-white button.hover\:bg-red-50:hover {
+	background-color: rgba(239,68,68,0.08) !important;
+	color: #fca5a5 !important;
+}
+
+/* ── Student Dashboard: Item Health stat mini-cards ─────────────────────── */
+html.dark .rounded-xl.bg-white.shadow-sm .rounded-lg.bg-emerald-50 {
+	background-color: rgba(16,185,129,0.12) !important;
+}
+html.dark .rounded-xl.bg-white.shadow-sm .rounded-lg.bg-orange-50 {
+	background-color: rgba(249,115,22,0.12) !important;
+}
+html.dark .rounded-xl.bg-white.shadow-sm .rounded-lg.bg-red-50 {
+	background-color: rgba(239,68,68,0.12) !important;
+}
+
+/* ── Student Dashboard: Recent History list item text ───────────────────── */
+html.dark .overflow-hidden.rounded-xl.bg-white.shadow-sm .text-gray-800 {
+	color: var(--color-text) !important;
+}
+html.dark .overflow-hidden.rounded-xl.bg-white.shadow-sm .divide-y li .text-gray-400 {
+	color: rgba(255,255,255,0.40) !important;
+}
+
+/* ── Custodian Dashboard: KPI stat cards and metric cards ───────────────── */
+/* KPI cards (Active Loans, Pending, Overdue, Stock Alerts, Replacements) */
+html.dark .rounded-xl.border.border-violet-200.bg-violet-50 {
+	background-color: rgba(139,92,246,0.10) !important;
+	border-color: rgba(139,92,246,0.20) !important;
+}
+html.dark .rounded-xl.border.border-amber-200.bg-amber-50 {
+	background-color: rgba(245,158,11,0.10) !important;
+	border-color: rgba(245,158,11,0.20) !important;
+}
+html.dark .rounded-xl.border.border-red-200.bg-red-50 {
+	background-color: rgba(239,68,68,0.10) !important;
+	border-color: rgba(239,68,68,0.20) !important;
+}
+html.dark .rounded-xl.border.border-orange-200.bg-orange-50 {
+	background-color: rgba(249,115,22,0.10) !important;
+	border-color: rgba(249,115,22,0.20) !important;
+}
+html.dark .rounded-xl.border.border-rose-200.bg-rose-50 {
+	background-color: rgba(244,63,94,0.10) !important;
+	border-color: rgba(244,63,94,0.20) !important;
+}
+
+/* Metric cards (Avg Approval/Release/Return Time) */
+html.dark .rounded-xl.border.border-blue-100.bg-blue-50 {
+	background-color: rgba(59,130,246,0.10) !important;
+	border-color: rgba(59,130,246,0.20) !important;
+}
+html.dark .rounded-xl.border.border-indigo-100.bg-indigo-50 {
+	background-color: rgba(99,102,241,0.10) !important;
+	border-color: rgba(99,102,241,0.20) !important;
+}
+html.dark .rounded-xl.border.border-pink-100.bg-pink-50 {
+	background-color: rgba(236,72,153,0.10) !important;
+	border-color: rgba(236,72,153,0.20) !important;
+}
+
+/* Request list items (Ready for Pickup, Active Loans) */
+html.dark .rounded-lg.border.border-indigo-100.bg-indigo-50\/50 {
+	background-color: rgba(99,102,241,0.08) !important;
+	border-color: rgba(99,102,241,0.15) !important;
+}
+html.dark .rounded-lg.border.border-indigo-100.bg-indigo-50\/50:hover,
+html.dark .rounded-lg.border.border-indigo-100.hover\:bg-indigo-50:hover {
+	background-color: rgba(99,102,241,0.12) !important;
+}
+html.dark .rounded-lg.border.border-violet-100.bg-violet-50\/50 {
+	background-color: rgba(139,92,246,0.08) !important;
+	border-color: rgba(139,92,246,0.15) !important;
+}
+html.dark .rounded-lg.border.border-violet-100.bg-violet-50\/50:hover,
+html.dark .rounded-lg.border.hover\:bg-violet-50:hover {
+	background-color: rgba(139,92,246,0.12) !important;
+}
+html.dark .rounded-lg.border.border-red-200.bg-red-50\/50 {
+	background-color: rgba(239,68,68,0.08) !important;
+	border-color: rgba(239,68,68,0.20) !important;
+}
+html.dark .rounded-lg.border.border-red-200.bg-red-50\/50:hover,
+html.dark .rounded-lg.border.hover\:bg-red-50:hover {
+	background-color: rgba(239,68,68,0.12) !important;
+}
+
+/* Student Risk mini-cards (Active Obligations, Overdue, High Incidents) */
+html.dark .rounded-lg.border.border-rose-100.bg-rose-50 {
+	background-color: rgba(244,63,94,0.10) !important;
+	border-color: rgba(244,63,94,0.18) !important;
+}
+html.dark .rounded-lg.border.border-orange-100.bg-orange-50 {
+	background-color: rgba(249,115,22,0.10) !important;
+	border-color: rgba(249,115,22,0.18) !important;
+}
+html.dark .rounded-lg.border.border-red-100.bg-red-50 {
+	background-color: rgba(239,68,68,0.10) !important;
+	border-color: rgba(239,68,68,0.18) !important;
+}
+
+/* ── Help & Support page dark mode ──────────────────────────────────────── */
+
+/* Info banner (border-blue-100 bg-blue-50 text-blue-700) */
+html.dark .rounded-xl.border.border-blue-100.bg-blue-50 {
+	background-color: rgba(59,130,246,0.08) !important;
+	border-color: rgba(59,130,246,0.18) !important;
+	color: #93c5fd !important;
+}
+html.dark .rounded-xl.border.border-blue-100.bg-blue-50 strong {
+	color: #bfdbfe !important;
+}
+html.dark .rounded-xl.border.border-blue-100.bg-blue-50 button {
+	color: #93c5fd !important;
+}
+
+/* FAQ accordion question text (text-gray-800) */
+html.dark .overflow-hidden.rounded-xl.border.border-gray-200.bg-white.shadow-sm button .text-gray-800 {
+	color: var(--color-text) !important;
+}
+/* FAQ accordion answer text */
+html.dark .overflow-hidden.rounded-xl.border.border-gray-200.bg-white.shadow-sm .border-t.border-gray-100 p {
+	color: rgba(255,255,255,0.65) !important;
+}
+
+/* Chat panel outer container */
+html.dark .flex.overflow-hidden.rounded-xl.border.border-gray-200.bg-white.shadow-sm {
+	background-color: var(--color-surface) !important;
+	border-color: rgba(255,255,255,0.06) !important;
+}
+/* Left panel divider */
+html.dark .flex.overflow-hidden.rounded-xl.border.border-gray-200.bg-white.shadow-sm .border-r.border-gray-200 {
+	border-color: rgba(255,255,255,0.06) !important;
+}
+/* Active conversation row (bg-pink-50) */
+html.dark .flex.overflow-hidden.rounded-xl.border.border-gray-200.bg-white.shadow-sm .bg-pink-50 {
+	background-color: rgba(219,39,119,0.10) !important;
+}
+/* Messages area (bg-gray-50) */
+html.dark .flex.overflow-hidden.rounded-xl.border.border-gray-200.bg-white.shadow-sm .flex-1.overflow-y-auto.bg-gray-50 {
+	background-color: rgba(255,255,255,0.02) !important;
+}
+/* Incoming message bubble (bg-white border-gray-200) */
+html.dark .flex.overflow-hidden.rounded-xl.border.border-gray-200.bg-white.shadow-sm .rounded-2xl.border.border-gray-200.bg-white {
+	background-color: rgba(255,255,255,0.05) !important;
+	border-color: rgba(255,255,255,0.08) !important;
+	color: var(--color-text) !important;
+}
+/* Status bar (bg-blue-50 text-blue-600) */
+html.dark .flex.overflow-hidden.rounded-xl.border.border-gray-200.bg-white.shadow-sm .bg-blue-50 {
+	background-color: rgba(59,130,246,0.06) !important;
+}
+html.dark .flex.overflow-hidden.rounded-xl.border.border-gray-200.bg-white.shadow-sm .bg-blue-50 .text-blue-600 {
+	color: #93c5fd !important;
+}
+/* Input bar (bg-white) */
+html.dark .flex.overflow-hidden.rounded-xl.border.border-gray-200.bg-white.shadow-sm .border-t.border-gray-100.bg-white {
+	background-color: var(--color-surface) !important;
+	border-color: rgba(255,255,255,0.06) !important;
+}
+html.dark .flex.overflow-hidden.rounded-xl.border.border-gray-200.bg-white.shadow-sm .rounded-full.border.border-gray-300.bg-white,
+html.dark .flex.overflow-hidden.rounded-xl.border.border-gray-200.bg-white.shadow-sm .rounded-full.border.border-pink-400.bg-white {
+	background-color: rgba(255,255,255,0.04) !important;
+	border-color: rgba(255,255,255,0.12) !important;
+}
+/* Welcome panel bot avatar (bg-pink-100) */
+html.dark .flex.overflow-hidden.rounded-xl.border.border-gray-200.bg-white.shadow-sm .bg-pink-100 {
+	background-color: rgba(219,39,119,0.15) !important;
+}
+html.dark .from-emerald-100.to-teal-100 {
+	background: rgba(16,185,129,0.1) !important;
+}
+html.dark .ring-emerald-200 { --tw-ring-color: rgba(16,185,129,0.2) !important; }
+
+/* required item quantity input (bg-emerald-50 border-emerald-300) */
+html.dark .border-emerald-300.bg-emerald-50 {
+	background-color: rgba(16,185,129,0.06) !important;
+	border-color: rgba(16,185,129,0.2) !important;
+}
+html.dark .border-emerald-300.bg-emerald-50.text-emerald-900 {
+	color: #6ee7b7 !important;
+}
+
+/* Out-of-stock warning pill (bg-amber-100 text-amber-800) */
+html.dark .bg-amber-100 {
+	background-color: rgba(245,158,11,0.08) !important;
+}
+html.dark .text-amber-800 { color: #fcd34d !important; }
+
+/* Out-of-stock item card (border-amber-300 bg-amber-50) */
+html.dark .border-amber-300.bg-amber-50 {
+	background-color: rgba(245,158,11,0.05) !important;
+	border-color: rgba(245,158,11,0.2) !important;
+}
+
+/* Quantity +/- buttons (border-gray-300 bg-white) */
+html.dark .border-gray-300.bg-white.text-gray-700 {
+	background-color: rgba(255,255,255,0.04) !important;
+	border-color: rgba(255,255,255,0.1) !important;
+	color: #d1d5db !important;
+}
+
+/* Search dropdown panel */
+html.dark .rounded-xl.border.border-gray-200.bg-white.shadow-2xl {
+	background-color: var(--color-gray-200) !important;
+	border-color: rgba(255,255,255,0.06) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-white.shadow-2xl .border-b.border-gray-200 {
+	border-color: rgba(255,255,255,0.06) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-white.shadow-2xl .border-t.border-gray-200.bg-gray-50 {
+	background-color: rgba(255,255,255,0.02) !important;
+	border-color: rgba(255,255,255,0.04) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-white.shadow-2xl input {
+	background-color: rgba(255,255,255,0.04) !important;
+	border-color: rgba(255,255,255,0.08) !important;
+	color: var(--color-text) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-white.shadow-2xl select {
+	background-color: rgba(255,255,255,0.04) !important;
+	border-color: rgba(255,255,255,0.08) !important;
+	color: var(--color-text) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-white.shadow-2xl .divide-y.divide-gray-100 > * + * {
+	border-color: rgba(255,255,255,0.04) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-white.shadow-2xl .hover\:bg-gray-50:hover {
+	background-color: rgba(255,255,255,0.03) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-white.shadow-2xl .text-gray-900 {
+	color: var(--color-text) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-white.shadow-2xl .text-gray-500 {
+	color: rgba(255,255,255,0.45) !important;
+}
+
+/* ── Student Requests Detail Modal & QR Modal dark mode ─────────────────── */
+
+/* Main modal panel (detail + QR) — rounded-t-3xl bg-white shadow-2xl */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl {
+	background-color: var(--color-gray-200) !important;
+	color: var(--color-text) !important;
+}
+
+/* Sticky header / footer with bg-white/95 backdrop */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .bg-white\/95,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .bg-white\/95 {
+	background-color: rgba(17,24,39,0.97) !important;
+	border-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Info/detail cards: from-white to-gray-50 gradient */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .bg-linear-to-br.from-white.to-gray-50,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .bg-linear-to-br.from-white.to-gray-50,
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .bg-gradient-to-br.from-white.to-gray-50,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .bg-gradient-to-br.from-white.to-gray-50 {
+	background: rgba(255,255,255,0.03) !important;
+	border-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Requested items cards (bg-white with border) */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-xl.border.border-gray-200.bg-white,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-xl.border.border-gray-200.bg-white {
+	background-color: rgba(255,255,255,0.03) !important;
+	border-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Timeline step circles (bg-white with border) */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-full.border-2.bg-white,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-full.border-2.bg-white {
+	background-color: var(--color-gray-200) !important;
+}
+
+/* Rejection reason card */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .border-red-200.from-red-50,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .border-red-200.from-red-50 {
+	background: rgba(239,68,68,0.06) !important;
+	border-color: rgba(239,68,68,0.15) !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .text-red-900,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .text-red-900 { color: #fca5a5 !important; }
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .text-red-800,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .text-red-800 { color: #fca5a5 !important; }
+
+/* Ready-for-pickup info box (blue) */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .border-blue-200.from-blue-50,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .border-blue-200.from-blue-50 {
+	background: rgba(59,130,246,0.06) !important;
+	border-color: rgba(59,130,246,0.15) !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .text-blue-900,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .text-blue-900 { color: #93c5fd !important; }
+
+/* Section headings and body text */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .text-gray-900,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .text-gray-900 { color: var(--color-text) !important; }
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .text-gray-700,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .text-gray-700 { color: #d1d5db !important; }
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .text-gray-600,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .text-gray-600 { color: rgba(255,255,255,0.55) !important; }
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .text-gray-500,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .text-gray-500 { color: rgba(255,255,255,0.45) !important; }
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .text-gray-400,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .text-gray-400 { color: rgba(255,255,255,0.3) !important; }
+
+/* Dividers */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .border-gray-200,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .border-gray-200 { border-color: rgba(255,255,255,0.06) !important; }
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .border-gray-100,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .border-gray-100 { border-color: rgba(255,255,255,0.04) !important; }
+
+/* Close / hover buttons */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .hover\:bg-gray-100:hover,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .hover\:bg-gray-100:hover {
+	background-color: rgba(255,255,255,0.06) !important;
+}
+
+/* ── QR Modal specific ── */
+
+/* QR modal header gradient (from-pink-50 via-white to-purple-50) */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .from-pink-50.via-white.to-purple-50,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .from-pink-50.via-white.to-purple-50 {
+	background: rgba(255,255,255,0.03) !important;
+}
+
+/* QR code white frame */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.bg-white.p-4,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.bg-white.p-4,
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.bg-white.p-6,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.bg-white.p-6 {
+	background-color: #ffffff !important;
+}
+
+/* QR request ID badge (from-gray-50 to-gray-100/50) */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .from-gray-50.to-gray-100\/50,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .from-gray-50.to-gray-100\/50 {
+	background: rgba(255,255,255,0.04) !important;
+	border-color: rgba(255,255,255,0.06) !important;
+}
+
+/* QR footer (from-gray-50 to-white) */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .from-gray-50.to-white,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .from-gray-50.to-white {
+	background: rgba(255,255,255,0.02) !important;
+	border-color: rgba(255,255,255,0.04) !important;
+}
+
+/* QR badge pill (bg-white/80 ring) */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .bg-white\/80,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .bg-white\/80 {
+	background-color: rgba(255,255,255,0.06) !important;
+}
+
+/* ── Reports & Analytics page dark mode ─────────────────────────────────── */
+
+/* Instructor KPI cards use gradient backgrounds (bg-linear-to-br from-*-50 to-white) */
+html.dark .rounded-xl.border.border-gray-200.bg-linear-to-br.from-pink-50 {
+	background: rgba(236,72,153,0.08) !important;
+	border-color: rgba(236,72,153,0.15) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-linear-to-br.from-emerald-50 {
+	background: rgba(16,185,129,0.08) !important;
+	border-color: rgba(16,185,129,0.15) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-linear-to-br.from-rose-50 {
+	background: rgba(244,63,94,0.08) !important;
+	border-color: rgba(244,63,94,0.15) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-linear-to-br.from-amber-50 {
+	background: rgba(245,158,11,0.08) !important;
+	border-color: rgba(245,158,11,0.15) !important;
+}
+/* Total Incidents card (from-gray-50 to-white) */
+html.dark .rounded-xl.border.border-gray-200.bg-linear-to-br.from-gray-50 {
+	background: rgba(255,255,255,0.04) !important;
+	border-color: rgba(255,255,255,0.08) !important;
+}
+/* Text inside gradient KPI cards */
+html.dark .rounded-xl.border.border-gray-200.bg-linear-to-br .text-gray-700 {
+	color: rgba(255,255,255,0.75) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-linear-to-br .text-gray-900 {
+	color: var(--color-text) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-linear-to-br .text-gray-600 {
+	color: rgba(255,255,255,0.50) !important;
+}
+/* Icon circles inside gradient KPI cards */
+html.dark .rounded-xl.border.border-gray-200.bg-linear-to-br .rounded-full.bg-pink-100 {
+	background-color: rgba(219,39,119,0.20) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-linear-to-br .rounded-full.bg-emerald-100 {
+	background-color: rgba(16,185,129,0.20) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-linear-to-br .rounded-full.bg-rose-100 {
+	background-color: rgba(244,63,94,0.20) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-linear-to-br .rounded-full.bg-amber-100 {
+	background-color: rgba(245,158,11,0.20) !important;
+}
+
+/* KPI card icon badge circles (plain bg-white cards — custodian) */
+html.dark .rounded-xl.border.border-gray-200.bg-white.p-5 .rounded-full.bg-pink-100 {
+	background-color: rgba(219,39,119,0.18) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-white.p-5 .rounded-full.bg-rose-100 {
+	background-color: rgba(244,63,94,0.18) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-white.p-5 .rounded-full.bg-amber-100 {
+	background-color: rgba(245,158,11,0.18) !important;
+}
+/* KPI card text */
+html.dark .rounded-xl.border.border-gray-200.bg-white.p-5 .text-gray-700 {
+	color: rgba(255,255,255,0.75) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-white.p-5 .text-gray-600 {
+	color: rgba(255,255,255,0.50) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-white.p-5 .text-gray-900 {
+	color: var(--color-text) !important;
+}
+/* Loss vs Damage legend pills */
+html.dark .rounded-xl.border.border-gray-200.bg-white.p-5 .rounded-lg.bg-rose-50 {
+	background-color: rgba(244,63,94,0.12) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-white.p-5 .rounded-lg.bg-amber-50 {
+	background-color: rgba(245,158,11,0.12) !important;
+}
+/* Donut chart inner white circle */
+html.dark .rounded-xl.border.border-gray-200.bg-white.p-5 .rounded-full.bg-white {
+	background-color: var(--color-surface) !important;
+}
+/* Bar chart track */
+html.dark .rounded-xl.border.border-gray-200.bg-white.p-5 .rounded-full.bg-gray-100 {
+	background-color: rgba(255,255,255,0.08) !important;
+}
+/* Empty state dashed card */
+html.dark .rounded-xl.border.border-gray-200.bg-white.p-5 .border-dashed.border-gray-200 {
+	background-color: rgba(255,255,255,0.02) !important;
+	border-color: rgba(255,255,255,0.08) !important;
+}
+/* Summary stat cards (bg-gray-50) in sub-tabs */
+html.dark .rounded-xl.border.border-gray-200.bg-gray-50 {
+	background-color: rgba(255,255,255,0.03) !important;
+	border-color: rgba(255,255,255,0.06) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-gray-50 .text-gray-600 {
+	color: rgba(255,255,255,0.55) !important;
+}
+html.dark .rounded-xl.border.border-gray-200.bg-gray-50 .text-gray-900 {
+	color: var(--color-text) !important;
+}
+
+/* ── Superadmin Dashboard: System Performance analytics card ────────────── */
+html.dark .overflow-hidden.rounded-xl.bg-linear-to-br.from-pink-50 {
+	background: rgba(219,39,119,0.07) !important;
+	--tw-ring-color: rgba(219,39,119,0.12) !important;
+}
+/* Header bar (bg-white/50 border-pink-100) */
+html.dark .overflow-hidden.rounded-xl.bg-linear-to-br.from-pink-50 .bg-white\/50 {
+	background-color: rgba(255,255,255,0.04) !important;
+	border-color: rgba(219,39,119,0.12) !important;
+}
+/* Inner stat cards (border-white bg-white/70) */
+html.dark .overflow-hidden.rounded-xl.bg-linear-to-br.from-pink-50 .rounded-lg.border.border-white.bg-white\/70 {
+	background-color: rgba(255,255,255,0.06) !important;
+	border-color: rgba(255,255,255,0.10) !important;
+}
+/* Stat label text */
+html.dark .overflow-hidden.rounded-xl.bg-linear-to-br.from-pink-50 .text-gray-500 {
+	color: rgba(255,255,255,0.45) !important;
+}
+html.dark .overflow-hidden.rounded-xl.bg-linear-to-br.from-pink-50 .text-gray-900 {
+	color: var(--color-text) !important;
+}
+
+/* "My activity" highlighted rows (bg-pink-50/50 hover:bg-pink-100/60) */
+html.dark tr.bg-pink-50\/50 {
+	background-color: rgba(219,39,119,0.08) !important;
+}
+html.dark tr.hover\:bg-pink-100\/60:hover {
+	background-color: rgba(219,39,119,0.14) !important;
+}
+/* Mobile card "my activity" rows */
+html.dark button.bg-pink-50\/40 {
+	background-color: rgba(219,39,119,0.08) !important;
+}
+
+/* Role badges in activity log table */
+html.dark .rounded-full.bg-purple-100.text-purple-800 {
+	background-color: rgba(139,92,246,0.20) !important;
+	color: #c4b5fd !important;
+}
+html.dark .rounded-full.bg-blue-100.text-blue-800 {
+	background-color: rgba(59,130,246,0.20) !important;
+	color: #93c5fd !important;
+}
+html.dark .rounded-full.bg-green-100.text-green-800 {
+	background-color: rgba(34,197,94,0.20) !important;
+	color: #86efac !important;
+}
+
+/* "My Activities" filter button active state (bg-pink-50 text-pink-700) */
+html.dark button.bg-pink-50.text-pink-700 {
+	background-color: rgba(219,39,119,0.12) !important;
+	color: #f9a8d4 !important;
+	border-color: rgba(219,39,119,0.35) !important;
+}
+
+/* Activity count pill (bg-pink-100 text-pink-700) */
+html.dark .rounded-full.bg-pink-100.text-pink-700 {
+	background-color: rgba(219,39,119,0.20) !important;
+	color: #f9a8d4 !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-pink-100,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-pink-100 {
+	background: rgba(236,72,153,0.10) !important;
+	border-color: rgba(236,72,153,0.20) !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-pink-100 .text-pink-900,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-pink-100 .text-pink-900 {
+	color: #f9a8d4 !important;
+}
+
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-green-100,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-green-100 {
+	background: rgba(34,197,94,0.10) !important;
+	border-color: rgba(34,197,94,0.20) !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-green-100 .text-green-900,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-green-100 .text-green-900 {
+	color: #86efac !important;
+}
+
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-emerald-100,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-emerald-100 {
+	background: rgba(16,185,129,0.10) !important;
+	border-color: rgba(16,185,129,0.20) !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-emerald-100 .text-emerald-900,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-emerald-100 .text-emerald-900 {
+	color: #6ee7b7 !important;
+}
+
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-amber-100,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-amber-100 {
+	background: rgba(245,158,11,0.10) !important;
+	border-color: rgba(245,158,11,0.20) !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-amber-100 .text-amber-900,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-amber-100 .text-amber-900 {
+	color: #fcd34d !important;
+}
+
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-red-100,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-red-100 {
+	background: rgba(239,68,68,0.10) !important;
+	border-color: rgba(239,68,68,0.20) !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-red-100 .text-red-900,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-red-100 .text-red-900 {
+	color: #fca5a5 !important;
+}
+
+/* Validation Errors card (border-yellow-200 bg-linear yellow) */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-yellow-200,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-yellow-200 {
+	background: rgba(234,179,8,0.10) !important;
+	border-color: rgba(234,179,8,0.22) !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-yellow-200 .text-yellow-900,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-yellow-200 .text-yellow-900 {
+	color: #fde047 !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-yellow-200 .text-yellow-800,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-yellow-200 .text-yellow-800 {
+	color: #fef08a !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-yellow-200 .bg-yellow-200\/60,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-yellow-200 .bg-yellow-200\/60 {
+	background-color: rgba(234,179,8,0.15) !important;
+}
+
+/* Preview table header (bg-gray-50/95) */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-gray-200 thead,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-gray-200 thead {
+	background-color: rgba(255,255,255,0.04) !important;
+}
+
+/* Preview table body and row hover states */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-gray-200 tbody.bg-white,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl .rounded-2xl.border.border-gray-200 tbody.bg-white {
+	background-color: transparent !important;
+}
+/* Create rows */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl tr.bg-green-50\/40,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl tr.bg-green-50\/40 {
+	background-color: rgba(34,197,94,0.08) !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl tr.hover\:bg-green-50:hover,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl tr.hover\:bg-green-50:hover {
+	background-color: rgba(34,197,94,0.14) !important;
+}
+/* Update rows */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl tr.bg-emerald-50\/40,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl tr.bg-emerald-50\/40 {
+	background-color: rgba(16,185,129,0.08) !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl tr.hover\:bg-emerald-50:hover,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl tr.hover\:bg-emerald-50:hover {
+	background-color: rgba(16,185,129,0.14) !important;
+}
+/* No-change rows */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl tr.bg-amber-50\/40,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl tr.bg-amber-50\/40 {
+	background-color: rgba(245,158,11,0.08) !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl tr.hover\:bg-amber-50:hover,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl tr.hover\:bg-amber-50:hover {
+	background-color: rgba(245,158,11,0.14) !important;
+}
+/* Error rows */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl tr.bg-red-50,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl tr.bg-red-50 {
+	background-color: rgba(239,68,68,0.08) !important;
+}
+/* Table cell text */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl tbody td.text-gray-900,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl tbody td.text-gray-900 {
+	color: var(--color-text) !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl tbody td.text-gray-600,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl tbody td.text-gray-600 {
+	color: rgba(255,255,255,0.60) !important;
+}
+/* Category "exists"/"new" badges inside table */
+html.dark .rounded-t-3xl.bg-white.shadow-2xl tbody .rounded.bg-green-100,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl tbody .rounded.bg-green-100 {
+	background-color: rgba(34,197,94,0.18) !important;
+	color: #86efac !important;
+}
+html.dark .rounded-t-3xl.bg-white.shadow-2xl tbody .rounded.bg-blue-100,
+html.dark .sm\:rounded-3xl.bg-white.shadow-2xl tbody .rounded.bg-blue-100 {
+	background-color: rgba(59,130,246,0.18) !important;
+	color: #93c5fd !important;
+}
+
+/* Main modal container */
+html.dark [role="dialog"].bg-white {
+	background-color: var(--color-gray-200) !important;
+	color: var(--color-text) !important;
+}
+
+/* Sticky header and footer (bg-white/95 backdrop) */
+html.dark [role="dialog"] .bg-white\/95 {
+	background-color: rgba(17,24,39,0.97) !important;
+	border-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Image card and details card (from-white to-gray-50 gradient panels) */
+html.dark [role="dialog"] .bg-linear-to-br.from-white.to-gray-50,
+html.dark [role="dialog"] .bg-gradient-to-br.from-white.to-gray-50 {
+	background: rgba(255,255,255,0.03) !important;
+	border-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Image placeholder area inside the modal */
+html.dark [role="dialog"] .bg-gray-100 {
+	background-color: rgba(255,255,255,0.04) !important;
+}
+
+/* Detail grid dividers */
+html.dark [role="dialog"] .border-t.border-gray-200 {
+	border-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Description text block */
+html.dark [role="dialog"] .bg-gray-50.rounded-lg {
+	background-color: rgba(255,255,255,0.03) !important;
+}
+
+/* Label text */
+html.dark [role="dialog"] .text-gray-500 {
+	color: rgba(255,255,255,0.45) !important;
+}
+html.dark [role="dialog"] .text-gray-700 {
+	color: #d1d5db !important;
+}
+html.dark [role="dialog"] .text-gray-900 {
+	color: var(--color-text) !important;
+}
+
+/* Close button hover */
+html.dark [role="dialog"] .hover\:bg-gray-100:hover {
+	background-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Footer Close button */
+html.dark [role="dialog"] .border-gray-300.bg-white {
+	background-color: rgba(255,255,255,0.04) !important;
+	border-color: rgba(255,255,255,0.1) !important;
+	color: #d1d5db !important;
+}
+html.dark [role="dialog"] .border-gray-300.bg-white:hover {
+	background-color: rgba(255,255,255,0.07) !important;
+}
+
+/* Qty badge (gray-100 border-gray-300) */
+html.dark [role="dialog"] .border-gray-300.bg-gray-100 {
+	background-color: rgba(255,255,255,0.06) !important;
+	border-color: rgba(255,255,255,0.1) !important;
+	color: #d1d5db !important;
+}
+
+/* required badge (purple) */
+html.dark [role="dialog"] .bg-purple-100 {
+	background-color: rgba(139,92,246,0.1) !important;
+}
+html.dark [role="dialog"] .text-purple-800 { color: #c4b5fd !important; }
+html.dark [role="dialog"] .ring-purple-200 { --tw-ring-color: rgba(139,92,246,0.15) !important; }
+
+/* Save error / success banners inside modal */
+html.dark [role="dialog"] .border-rose-200.bg-rose-50 {
+	background-color: rgba(244,63,94,0.06) !important;
+	border-color: rgba(244,63,94,0.15) !important;
+}
+html.dark [role="dialog"] .border-emerald-200.bg-emerald-50 {
+	background-color: rgba(16,185,129,0.06) !important;
+	border-color: rgba(16,185,129,0.15) !important;
+}
+
+/* ── Dashboard colored-tint cards (student dashboard KPI / trust score) ── */
+
+/* Violet (Active Loans card) */
+html.dark .bg-violet-50 {
+	background-color: rgba(139,92,246,0.06) !important;
+}
+html.dark .border-violet-200 {
+	border-color: rgba(139,92,246,0.12) !important;
+}
+html.dark .text-violet-700 { color: #c4b5fd !important; }
+html.dark .text-violet-500 { color: rgba(196,181,253,0.6) !important; }
+
+/* Amber (Pending card) */
+html.dark .bg-amber-50 {
+	background-color: rgba(245,158,11,0.05) !important;
+}
+html.dark .border-amber-200 {
+	border-color: rgba(245,158,11,0.12) !important;
+}
+html.dark .text-amber-700 { color: #fcd34d !important; }
+html.dark .text-amber-500 { color: rgba(252,211,77,0.6) !important; }
+
+/* Pink (Trust Score hero / Good Standing) */
+html.dark .bg-pink-50 {
+	background-color: rgba(236,72,153,0.05) !important;
+}
+html.dark .border-pink-200 {
+	border-color: rgba(236,72,153,0.12) !important;
+}
+html.dark .text-pink-700 { color: #f9a8d4 !important; }
+html.dark .text-pink-500 { color: rgba(249,168,212,0.6) !important; }
+
+/* Unread count badge (rounded-full bg-pink-100 text-pink-700) in notification filter tabs */
+html.dark .rounded-full.bg-pink-100 {
+	background-color: rgba(219,39,119,0.75) !important;
+}
+html.dark .rounded-full.bg-pink-100.text-pink-700 {
+	color: #ffffff !important;
+}
+
+/* View mode toggle (card/list) active state in catalog pages */
+html.dark .rounded-lg.border.border-gray-300.overflow-hidden button.bg-pink-100 {
+	background-color: rgba(219,39,119,0.20) !important;
+	color: #f9a8d4 !important;
+}
+
+/* Tab count badges (rounded-full bg-pink-100 text-pink-600) when active */
+html.dark nav .rounded-full.bg-pink-100 {
+	background-color: rgba(219,39,119,0.75) !important;
+	color: #ffffff !important;
+}
+
+/* ── Borrowed Items / Request status badges (inline-flex rounded-full) ── */
+/* These use bg-*-100 text-*-700 ring-*-200 combos that become invisible in dark mode */
+
+html.dark .inline-flex.rounded-full.bg-red-100 {
+	background-color: rgba(239,68,68,0.18) !important;
+	color: #fca5a5 !important;
+}
+html.dark .inline-flex.rounded-full.bg-amber-100 {
+	background-color: rgba(245,158,11,0.18) !important;
+	color: #fcd34d !important;
+}
+html.dark .inline-flex.rounded-full.bg-emerald-100 {
+	background-color: rgba(16,185,129,0.18) !important;
+	color: #6ee7b7 !important;
+}
+html.dark .inline-flex.rounded-full.bg-slate-100 {
+	background-color: rgba(100,116,139,0.20) !important;
+	color: #cbd5e1 !important;
+}
+html.dark .inline-flex.rounded-full.bg-rose-100 {
+	background-color: rgba(244,63,94,0.18) !important;
+	color: #fda4af !important;
+}
+html.dark .inline-flex.rounded-full.bg-orange-100 {
+	background-color: rgba(249,115,22,0.18) !important;
+	color: #fdba74 !important;
+}
+html.dark .inline-flex.rounded-full.bg-cyan-100 {
+	background-color: rgba(6,182,212,0.18) !important;
+	color: #67e8f9 !important;
+}
+html.dark .inline-flex.rounded-full.bg-blue-100 {
+	background-color: rgba(59,130,246,0.18) !important;
+	color: #93c5fd !important;
+}
+
+/* Unread notification row highlight (border-pink-200 bg-pink-50/30) */
+html.dark .border-pink-200.bg-pink-50\/30 {
+	background-color: rgba(236,72,153,0.08) !important;
+	border-color: rgba(236,72,153,0.25) !important;
+}
+html.dark .border-pink-200.bg-pink-50\/30:hover,
+html.dark .border-pink-200.hover\:border-pink-300:hover {
+	background-color: rgba(236,72,153,0.12) !important;
+	border-color: rgba(236,72,153,0.35) !important;
+}
+/* Text inside unread notification rows */
+html.dark .border-pink-200.bg-pink-50\/30 .text-gray-900,
+html.dark .border-pink-200.bg-pink-50\/30 .text-gray-800 {
+	color: var(--color-text) !important;
+}
+html.dark .border-pink-200.bg-pink-50\/30 .text-gray-600 {
+	color: rgba(255,255,255,0.65) !important;
+}
+
+/* Top nav notification dropdown: unread row (border-pink-500 bg-pink-50/40) */
+html.dark [aria-label="Notifications"] button.border-pink-500 {
+	background-color: rgba(236,72,153,0.08) !important;
+}
+html.dark [aria-label="Notifications"] button:hover {
+	background-color: rgba(255,255,255,0.03) !important;
+}
+/* Avatar initials circle (bg-pink-100 text-pink-600) inside notification dropdown */
+html.dark [aria-label="Notifications"] .bg-pink-100 {
+	background-color: rgba(219,39,119,0.20) !important;
+}
+/* Notification title text */
+html.dark [aria-label="Notifications"] .text-gray-900 {
+	color: var(--color-text) !important;
+}
+/* Notification message text */
+html.dark [aria-label="Notifications"] .text-gray-600 {
+	color: rgba(255,255,255,0.55) !important;
+}
+
+/* Teal (Returned status badge) */
+html.dark .bg-teal-100 {
+	background-color: rgba(20,184,166,0.08) !important;
+}
+html.dark .text-teal-800 { color: #5eead4 !important; }
+html.dark .text-teal-500 { color: rgba(94,234,212,0.6) !important; }
+
+/* Orange (Pending-return status badge) */
+html.dark .bg-orange-100 {
+	background-color: rgba(249,115,22,0.08) !important;
+}
+html.dark .text-orange-800 { color: #fdba74 !important; }
+html.dark .text-orange-700 { color: #fdba74 !important; }
+html.dark .text-orange-500 { color: rgba(253,186,116,0.6) !important; }
+
+/* Rose (Missing status badge) */
+html.dark .bg-rose-100 {
+	background-color: rgba(244,63,94,0.08) !important;
+}
+html.dark .text-rose-800 { color: #fda4af !important; }
+html.dark .text-rose-700 { color: #fda4af !important; }
+
+/* Emerald text/bg used in performance cards */
+html.dark .text-emerald-700 { color: #6ee7b7 !important; }
+html.dark .text-emerald-600 { color: #34d399 !important; }
+html.dark .text-emerald-500 { color: rgba(110,231,183,0.6) !important; }
+html.dark .bg-emerald-100 {
+	background-color: rgba(16,185,129,0.08) !important;
+}
+
+/* Violet status badge (Active Loan) */
+html.dark .bg-violet-100 {
+	background-color: rgba(139,92,246,0.08) !important;
+}
+html.dark .text-violet-800 { color: #c4b5fd !important; }
+
+/* Yellow status badge (Under Review) */
+html.dark .bg-yellow-100 {
+	background-color: rgba(234,179,8,0.08) !important;
+}
+html.dark .text-yellow-800 { color: #fde047 !important; }
+
+/* Blue status badge (Instructor Approved) */
+html.dark .bg-blue-100 {
+	background-color: rgba(59,130,246,0.08) !important;
+}
+html.dark .text-blue-800 { color: #93c5fd !important; }
+
+/* Slate (Cancelled status badge) */
+html.dark .bg-slate-100 {
+	background-color: rgba(100,116,139,0.08) !important;
+}
+html.dark .text-slate-800 { color: #cbd5e1 !important; }
+
+/* Gray stat cells inside performance cards */
+html.dark .bg-gray-100 {
+	background-color: rgba(255,255,255,0.04) !important;
+}
+html.dark .text-gray-700 { color: #d1d5db !important; }
+html.dark .text-gray-400 { color: rgba(255,255,255,0.35) !important; }
+
+/* Score breakdown panels (white bg inside trust score card) */
+html.dark .rounded-lg.border-red-100.bg-white,
+html.dark .rounded-lg.border-emerald-100.bg-white {
+	background-color: rgba(255,255,255,0.03) !important;
+	border-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Export Data panel: blue info box and selectable cards */
+html.dark .bg-blue-50 {
+	background-color: rgba(59,130,246,0.04) !important;
+}
+
+html.dark .border-blue-200 {
+	border-color: rgba(59,130,246,0.06) !important;
+}
+
+html.dark .text-blue-900 { color: #cfe9ff !important; }
+html.dark .text-blue-700 { color: #9ed0ff !important; }
+
+/* Export configuration cards (emerald selection) */
+html.dark .border-emerald-500 {
+	border-color: rgba(16,185,129,0.12) !important;
+}
+
+html.dark .bg-emerald-50 {
+	background-color: rgba(16,185,129,0.03) !important;
+}
+
+html.dark .text-emerald-900 { color: #9be9c8 !important; }
+
+/* Export summary block and gray utilities */
+html.dark .bg-gray-50 {
+	background-color: rgba(255,255,255,0.02) !important;
+}
+
+html.dark .border-gray-200 { border-color: rgba(255,255,255,0.04) !important; }
+html.dark .border-gray-100 { border-color: rgba(255,255,255,0.03) !important; }
+html.dark .divide-gray-50 > * + * { border-color: rgba(255,255,255,0.02) !important; }
+
+/* Ensure radio/checkbox inputs inside export panel remain visible */
+html.dark input[type="radio"].text-emerald-600,
+html.dark input[type="checkbox"].text-emerald-600 {
+	accent-color: rgba(16,185,129,0.9) !important;
+}
+
+/* Quick Export Presets: hovered/selected card contrast in dark mode */
+html.dark .hover\:bg-emerald-50:hover {
+	background-color: rgba(16,185,129,0.06) !important;
+}
+
+html.dark .hover\:border-emerald-500:hover {
+	border-color: rgba(16,185,129,0.18) !important;
+}
+
+/* When a preset card is active/selected (border-emerald-500 + bg-emerald-50) */
+html.dark .border-emerald-500.bg-emerald-50 {
+	background-color: rgba(16,185,129,0.04) !important;
+	border-color: rgba(16,185,129,0.18) !important;
+	box-shadow: 0 6px 18px rgba(2,6,23,0.55) !important;
+}
+
+html.dark .border-emerald-500.bg-emerald-50 .font-medium,
+html.dark .border-emerald-500.bg-emerald-50 .text-sm,
+html.dark .border-emerald-500.bg-emerald-50 p,
+html.dark .border-emerald-500.bg-emerald-50 span {
+	color: var(--color-text) !important;
+}
+
+/* Make the emerald icon/tint slightly brighter inside selected card */
+html.dark .border-emerald-500.bg-emerald-50 .text-emerald-600 {
+	color: #9be9c8 !important;
+}
+
+/* Footer auth links: make 'Back to Login' match register 'Sign in' pink in dark mode */
+html.dark .text-center.bg-white\/50 a.text-blue-600,
+html.dark .text-center.bg-white\/50 a.font-medium.text-blue-600 {
+	color: var(--color-primary-600) !important;
+	transition: color var(--transition-fast);
+}
+html.dark .text-center.bg-white\/50 a.text-blue-600:hover,
+html.dark .text-center.bg-white\/50 a.font-medium.text-blue-600:hover,
+html.dark .text-center.bg-white\/50 a.hover\:text-blue-500:hover {
+	color: var(--color-primary-500) !important;
+}
+
+/* Light mode: ensure footer 'Back to Login' uses brand pink instead of default blue */
+.text-center.bg-white\/50 a.text-blue-600,
+.text-center.bg-white\/50 a.font-medium.text-blue-600 {
+	color: var(--color-primary-600) !important;
+	transition: color var(--transition-fast);
+}
+.text-center.bg-white\/50 a.text-blue-600:hover,
+.text-center.bg-white\/50 a.font-medium.text-blue-600:hover,
+.text-center.bg-white\/50 a.hover\:text-blue-500:hover {
+	color: var(--color-primary-500) !important;
+}
+
+/* Transparent / translucent white utilities */
+html.dark .bg-white\/50 { background-color: rgba(255,255,255,0.03) !important; }
+html.dark .bg-white\/10 { background-color: rgba(255,255,255,0.02) !important; }
+
+/* Stronger dark shadow for large modals/cards */
+html.dark .shadow-2xl { box-shadow: 0 25px 50px rgba(2,6,23,0.65) !important; }
+
+/* Ensure interactive hover states are visible and subtle */
+html.dark .hover\:bg-gray-50:hover { background-color: rgba(255,255,255,0.02) !important; }
+html.dark .hover\:bg-white:hover { background-color: rgba(255,255,255,0.02) !important; }
+
+
+/* Landing / Auth pages: hero background and CTA adjustments */
+html.dark .min-h-screen.bg-gradient-to-br.from-pink-50,
+html.dark .min-h-screen.bg-gradient-to-br.from-pink-50.via-white {
+	background: radial-gradient(circle at 10% 20%, rgba(255,255,255,0.02), transparent 10%), linear-gradient(180deg, var(--color-bg) 0%, var(--color-sidebar) 100%) !important;
+	color: var(--color-text) !important;
+}
+
+/* Primary gradient CTA (Sign In) - use stronger contrast in dark */
+html.dark .bg-gradient-to-r.from-pink-600 {
+	background-image: linear-gradient(90deg, #8a1f3a 0%, #6b1730 100%) !important;
+}
+
+/* Secondary CTA (white with pink border) - become dark surface with pink outline */
+html.dark .bg-white.text-pink-600.border-2.border-pink-600 {
+	background-color: var(--color-surface) !important;
+	color: var(--color-rose-300) !important;
+	border-color: rgba(219,39,119,0.16) !important;
+}
+
+/* Auth card and footer */
+html.dark .relative.bg-white.rounded-3xl,
+html.dark .text-center.bg-white\/50 {
+	background-color: var(--color-surface) !important;
+	border-color: var(--color-border) !important;
+	color: var(--color-text) !important;
+}
+
+/* Decorative gradient accents inside layouts should be subtle in dark */
+html.dark .absolute.inset-0.bg-gradient-to-r.from-pink-600,
+html.dark .absolute.inset-0.bg-gradient-to-r.from-pink-600.to-rose-600,
+html.dark .absolute.top-0.left-0.w-20.h-20.bg-gradient-to-br.from-pink-100 {
+	opacity: 0.06 !important;
+}
+
+
+/* Global Styles */
+* {
+	box-sizing: border-box;
+}
+
+body {
+	font-family: var(--font-primary);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Utility Classes */
+.gradient-primary {
+	background: var(--gradient-primary);
+}
+
+.gradient-primary-hover:hover {
+	background: var(--gradient-primary-hover);
+}
+
+.text-gradient {
+	background: var(--gradient-primary);
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+::-webkit-scrollbar-track {
+	background: var(--color-gray-100);
+	border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--gradient-primary);
+	border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: var(--gradient-primary-hover);
+}
+
+/* Selection */
+::selection {
+	background-color: var(--color-primary-200);
+	color: var(--color-gray-900);
+}
+
+::-moz-selection {
+	background-color: var(--color-primary-200);
+	color: var(--color-gray-900);
+}
+
+/* Focus Visible - Accessibility */
+*:focus-visible {
+	outline: 2px solid var(--color-primary-500);
+	outline-offset: 2px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes slideIn {
+	from {
+		opacity: 0;
+		transform: translateX(-20px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+@keyframes scaleIn {
+	from {
+		opacity: 0;
+		transform: scale(0.95);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+.animate-fadeIn {
+	animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slideIn {
+	animation: slideIn 0.3s ease-out;
+}
+
+.animate-scaleIn {
+	animation: scaleIn 0.3s ease-out;
+}
+
+/* Accessibility Settings */
+
+/* Reduced Motion */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+	animation-duration: 0.01ms !important;
+	animation-iteration-count: 1 !important;
+	transition-duration: 0.01ms !important;
+	scroll-behavior: auto !important;
+}
+
+/* High Contrast Mode - Professional Text-Focused Approach */
+/* Meets WCAG AAA standards (7:1 contrast ratio) for enhanced readability */
+
+html.high-contrast {
+	/* Enhanced text contrast without changing layout */
+	--color-text-primary: #000000;
+	--color-text-secondary: #1a1a1a;
+	--color-text-tertiary: #333333;
+}
+
+/* Primary text - Pure black for maximum readability */
+html.high-contrast .text-gray-900,
+html.high-contrast h1,
+html.high-contrast h2,
+html.high-contrast h3,
+html.high-contrast h4,
+html.high-contrast h5,
+html.high-contrast h6 {
+	color: #000000 !important;
+}
+
+/* Secondary text - Near black instead of gray */
+html.high-contrast .text-gray-700,
+html.high-contrast .text-gray-600 {
+	color: #1a1a1a !important;
+}
+
+/* Tertiary text - Dark gray instead of light gray */
+html.high-contrast .text-gray-500,
+html.high-contrast .text-gray-400 {
+	color: #333333 !important;
+}
+
+/* Pink text - Darker for better contrast */
+html.high-contrast .text-pink-600,
+html.high-contrast .text-pink-700 {
+	color: #880e4f !important;
+}
+
+/* Button text - Ensure readability */
+html.high-contrast button {
+	font-weight: 500 !important;
+}
+
+/* Link text - Darker and more visible */
+html.high-contrast a {
+	color: #1a1a1a !important;
+	font-weight: 500 !important;
+}
+
+/* Placeholder text - Darker for visibility */
+html.high-contrast ::placeholder,
+html.high-contrast .placeholder-gray-400 {
+	color: #666666 !important;
+	opacity: 1 !important;
+}
+
+/* Focus states - More visible */
+html.high-contrast *:focus-visible {
+	outline: 2px solid #000000 !important;
+	outline-offset: 2px !important;
+}
+
+/* ── High Contrast + Dark Mode combined ─────────────────────────────────────
+   When both high-contrast and dark are active, flip all the forced-black text
+   to high-contrast light equivalents. Pure white on dark backgrounds meets
+   WCAG AAA (21:1 contrast ratio) — the highest possible standard.           */
+
+html.high-contrast.dark {
+	--color-text-primary: #ffffff;
+	--color-text-secondary: #f3f4f6;
+	--color-text-tertiary: #d1d5db;
+}
+
+/* Primary text — pure white */
+html.high-contrast.dark .text-gray-900,
+html.high-contrast.dark h1,
+html.high-contrast.dark h2,
+html.high-contrast.dark h3,
+html.high-contrast.dark h4,
+html.high-contrast.dark h5,
+html.high-contrast.dark h6 {
+	color: #ffffff !important;
+}
+
+/* Secondary text — near white */
+html.high-contrast.dark .text-gray-700,
+html.high-contrast.dark .text-gray-600 {
+	color: #f3f4f6 !important;
+}
+
+/* Tertiary text — light gray */
+html.high-contrast.dark .text-gray-500,
+html.high-contrast.dark .text-gray-400 {
+	color: #d1d5db !important;
+}
+
+/* Pink text — lighter pink for dark backgrounds */
+html.high-contrast.dark .text-pink-600,
+html.high-contrast.dark .text-pink-700 {
+	color: #f9a8d4 !important;
+}
+
+/* Link text — white on dark */
+html.high-contrast.dark a {
+	color: #f3f4f6 !important;
+	font-weight: 500 !important;
+}
+
+/* Placeholder text — visible on dark inputs */
+html.high-contrast.dark ::placeholder,
+html.high-contrast.dark .placeholder-gray-400 {
+	color: #9ca3af !important;
+	opacity: 1 !important;
+}
+
+/* Focus states — white outline on dark */
+html.high-contrast.dark *:focus-visible {
+	outline: 2px solid #ffffff !important;
+	outline-offset: 2px !important;
+}
+
+/* Font Size Classes */
+html.text-sm {
+	font-size: 14px;
+}
+
+html.text-base {
+	font-size: 16px;
+}
+
+html.text-lg {
+	font-size: 18px;
+}
+
+html.text-xl {
+	font-size: 20px;
+}
+
+/* Screen Reader Optimization */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border-width: 0;
+}
+
+/* Keyboard Navigation Hints */
+html.keyboard-hints [tabindex]:focus::after,
+html.keyboard-hints button:focus::after,
+html.keyboard-hints a:focus::after {
+	content: '';
+	position: absolute;
+	inset: -4px;
+	border: 2px dashed var(--color-primary-500);
+	border-radius: var(--radius-md);
+	pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SETTINGS PAGE — dark mode
+   Covers all four roles: student, instructor, custodian, superadmin
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Settings card container */
+html.dark .rounded-lg.bg-white.shadow {
+	background-color: var(--color-surface) !important;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.4) !important;
+}
+
+/* Section header divider inside settings card */
+html.dark .rounded-lg.bg-white.shadow .border-b.border-gray-200 {
+	border-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Row dividers inside settings card */
+html.dark .rounded-lg.bg-white.shadow .divide-y.divide-gray-200 > * + * {
+	border-color: rgba(255,255,255,0.05) !important;
+}
+
+/* "Reset to Default" button */
+html.dark button.border.border-gray-300.bg-white.text-gray-700 {
+	background-color: rgba(255,255,255,0.04) !important;
+	border-color: rgba(255,255,255,0.10) !important;
+	color: var(--color-gray-700) !important;
+}
+html.dark button.border.border-gray-300.bg-white.text-gray-700:hover {
+	background-color: rgba(255,255,255,0.07) !important;
+}
+
+/* Font-size selector buttons — inactive state */
+html.dark .border-gray-300.bg-white.text-gray-700 {
+	background-color: rgba(255,255,255,0.04) !important;
+	border-color: rgba(255,255,255,0.10) !important;
+	color: var(--color-gray-700) !important;
+}
+html.dark .border-gray-300.bg-white.text-gray-700:hover {
+	border-color: rgba(219,39,119,0.45) !important;
+}
+
+/* Toggle switch track — OFF state (bg-gray-300) */
+html.dark button[role="switch"].bg-gray-300 {
+	background-color: rgba(255,255,255,0.15) !important;
+}
+
+/* Toggle switch thumb always stays white */
+html.dark button[role="switch"] span {
+	background-color: #ffffff !important;
+}
+
+/* Icon container inside settings rows (bg-pink-50) */
+html.dark .rounded-lg.bg-pink-50 {
+	background-color: rgba(219,39,119,0.12) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TOP NAV — dark mode
+   Covers header bar, all dropdowns (notifications, profile, request list)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Header bar */
+html.dark header.fixed.inset-x-0.top-0 {
+	background-color: var(--color-surface) !important;
+	border-color: rgba(255,255,255,0.06) !important;
+	box-shadow: 0 1px 0 rgba(255,255,255,0.04) !important;
+}
+
+/* Date / clock text in header */
+html.dark header.fixed.inset-x-0.top-0 .text-gray-500 {
+	color: rgba(255,255,255,0.45) !important;
+}
+
+/* Branding text in header (mobile) */
+html.dark header.fixed.inset-x-0.top-0 .text-gray-900 {
+	color: var(--color-text) !important;
+}
+html.dark header.fixed.inset-x-0.top-0 .text-gray-400 {
+	color: rgba(255,255,255,0.35) !important;
+}
+
+/* Divider line before avatar */
+html.dark header.fixed.inset-x-0.top-0 .bg-gray-200 {
+	background-color: rgba(255,255,255,0.08) !important;
+}
+
+/* Icon buttons in header (dark/light toggle, bell, cart) */
+html.dark header.fixed.inset-x-0.top-0 button.text-gray-600 {
+	color: rgba(255,255,255,0.60) !important;
+}
+
+/* Avatar button hover */
+html.dark header.fixed.inset-x-0.top-0 .hover\:bg-pink-50:hover {
+	background-color: rgba(219,39,119,0.08) !important;
+}
+
+/* User name in header */
+html.dark header.fixed.inset-x-0.top-0 .text-gray-900.font-medium {
+	color: var(--color-text) !important;
+}
+
+/* Notification badge ring */
+html.dark header.fixed.inset-x-0.top-0 .ring-white {
+	--tw-ring-color: var(--color-surface) !important;
+}
+
+/* ── Notifications dropdown ─────────────────────────────────────────────── */
+html.dark [role="dialog"][aria-label="Notifications"] {
+	background-color: var(--color-surface) !important;
+	border-color: rgba(255,255,255,0.07) !important;
+	box-shadow: 0 12px 30px rgba(2,6,23,0.65) !important;
+}
+html.dark [role="dialog"][aria-label="Notifications"] .border-b.border-gray-100 {
+	border-color: rgba(255,255,255,0.06) !important;
+}
+html.dark [role="dialog"][aria-label="Notifications"] .text-gray-900 {
+	color: var(--color-text) !important;
+}
+html.dark [role="dialog"][aria-label="Notifications"] .text-gray-600 {
+	color: rgba(255,255,255,0.55) !important;
+}
+html.dark [role="dialog"][aria-label="Notifications"] .text-gray-500 {
+	color: rgba(255,255,255,0.40) !important;
+}
+html.dark [role="dialog"][aria-label="Notifications"] .text-gray-400 {
+	color: rgba(255,255,255,0.30) !important;
+}
+html.dark [role="dialog"][aria-label="Notifications"] .hover\:bg-gray-50:hover {
+	background-color: rgba(255,255,255,0.03) !important;
+}
+html.dark [role="dialog"][aria-label="Notifications"] .bg-pink-50\/40 {
+	background-color: rgba(219,39,119,0.07) !important;
+}
+html.dark [role="dialog"][aria-label="Notifications"] .bg-pink-100 {
+	background-color: rgba(219,39,119,0.18) !important;
+}
+
+/* ── Profile dropdown ───────────────────────────────────────────────────── */
+html.dark [role="menu"].absolute.right-0.top-full {
+	background-color: var(--color-surface) !important;
+	border-color: rgba(255,255,255,0.07) !important;
+	box-shadow: 0 12px 30px rgba(2,6,23,0.65) !important;
+}
+html.dark [role="menu"].absolute.right-0.top-full .border-b.border-gray-100 {
+	border-color: rgba(255,255,255,0.06) !important;
+}
+html.dark [role="menu"].absolute.right-0.top-full .text-gray-900 {
+	color: var(--color-text) !important;
+}
+html.dark [role="menu"].absolute.right-0.top-full .text-gray-500 {
+	color: rgba(255,255,255,0.45) !important;
+}
+html.dark [role="menu"].absolute.right-0.top-full .text-gray-700 {
+	color: rgba(255,255,255,0.75) !important;
+}
+html.dark [role="menu"].absolute.right-0.top-full .text-gray-400 {
+	color: rgba(255,255,255,0.30) !important;
+}
+html.dark [role="menu"].absolute.right-0.top-full .hover\:bg-pink-50:hover {
+	background-color: rgba(219,39,119,0.08) !important;
+}
+html.dark [role="menu"].absolute.right-0.top-full .hover\:text-pink-600:hover {
+	color: var(--color-rose-300) !important;
+}
+html.dark [role="menu"].absolute.right-0.top-full .border-t.border-gray-100 {
+	border-color: rgba(255,255,255,0.06) !important;
+}
+html.dark [role="menu"].absolute.right-0.top-full button.text-red-600 {
+	color: #ff9ca8 !important;
+}
+html.dark [role="menu"].absolute.right-0.top-full button.text-red-600:hover {
+	background-color: rgba(239,68,68,0.08) !important;
+	color: #fca5a5 !important;
+}

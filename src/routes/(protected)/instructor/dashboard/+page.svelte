@@ -1,0 +1,576 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import { goto } from '$app/navigation';
+	import { user, authStore, justLoggedIn } from '$lib/stores/auth';
+	import { toastStore } from '$lib/stores/toast';
+	import { fetchAnalytics, peekCachedAnalytics, type AnalyticsReport } from '$lib/api/analyticsReports';
+	import { borrowRequestsAPI, type BorrowRequestRecord } from '$lib/api/borrowRequests';
+	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	import {
+		ClipboardList, Clock, TriangleAlert, CheckCircle2,
+		ArrowRight, PackageOpen,
+		Activity, TrendingUp, Package, AlertCircle,
+		ChevronRight
+	} from 'lucide-svelte';
+
+	// ── state ─────────────────────────────────────────────────────────────────
+	let loading = $state(true);
+	let cardsLoading = $state(true);
+	let requestsNeedingActionLoading = $state(true);
+	let mostBorrowedAlertsLoading = $state(true);
+	let report = $state<AnalyticsReport | null>(null);
+	let liveRequests = $state<BorrowRequestRecord[]>([]);
+	let requestsLoading = $state(true);
+	let currentTime = $state(new Date());
+
+	// ── greeting ──────────────────────────────────────────────────────────────
+	const greeting = $derived.by(() => {
+		const h = currentTime.getHours();
+		if (h < 12) return 'Good morning';
+		if (h < 18) return 'Good afternoon';
+		return 'Good evening';
+	});
+
+	// ── derived KPIs ──────────────────────────────────────────────────────────
+	const pendingApprovalCount = $derived(
+		liveRequests.filter(r => r.status === 'pending_instructor').length
+	);
+	const activeLoans = $derived(
+		liveRequests.filter(r => r.status === 'borrowed' || r.status === 'pending_return').length
+	);
+	const overdueCount = $derived(
+		liveRequests.filter(r =>
+			(r.status === 'borrowed' || r.status === 'pending_return') &&
+			new Date(r.returnDate) < new Date()
+		).length
+	);
+	const fulfillmentCount = $derived(
+		liveRequests.filter(r => r.status === 'approved_instructor' || r.status === 'ready_for_pickup').length
+	);
+
+	// request groups
+	const requestsPending = $derived(liveRequests.filter(r => r.status === 'pending_instructor'));
+	const requestsFulfillment = $derived(
+		liveRequests.filter(r => r.status === 'approved_instructor' || r.status === 'ready_for_pickup')
+	);
+	const requestsActive = $derived(
+		liveRequests.filter(r => r.status === 'borrowed' || r.status === 'pending_return')
+	);
+	const requestsOverdue = $derived(
+		requestsActive.filter(r => new Date(r.returnDate) < new Date())
+	);
+
+	// analytics-derived
+	const topBorrowedItems = $derived((report?.borrowRequests?.itemsBorrowed ?? []).slice(0, 5));
+	const topBorrowedMax = $derived(
+		topBorrowedItems.length > 0
+			? Math.max(...topBorrowedItems.map((item) => item.totalQuantity), 1)
+			: 1
+	);
+	const stockAlerts = $derived(report?.inventory.stockAlerts ?? []);
+	const stockAlertCount = $derived(report?.inventory.summary.lowStockCount ?? stockAlerts.length);
+
+	// ── helpers ───────────────────────────────────────────────────────────────
+	function getInitials(name: string): string {
+		const parts = name.trim().split(/\s+/).filter(Boolean);
+		if (!parts.length) return '??';
+		if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+		return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+	}
+
+	function studentName(r: BorrowRequestRecord): string {
+		return r.student?.fullName ?? `Student ${r.studentId.slice(-6).toUpperCase()}`;
+	}
+
+	function studentInitials(r: BorrowRequestRecord): string {
+		return getInitials(studentName(r));
+	}
+
+	function formatDate(d: string): string {
+		return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+	}
+
+	function getRequestDeepLink(req: BorrowRequestRecord): string {
+		const tab =
+			req.status === 'pending_instructor'
+				? 'pending'
+				: req.status === 'approved_instructor' || req.status === 'ready_for_pickup'
+					? 'fulfillment'
+					: 'borrowed';
+
+		const params = new URLSearchParams({ tab, requestId: req.id });
+		if (req.status === 'borrowed' || req.status === 'pending_return') {
+			params.set('filter', 'overdue');
+		}
+
+		return `/instructor/requests?${params.toString()}`;
+	}
+
+	function daysOverdue(r: BorrowRequestRecord): number {
+		return Math.ceil((Date.now() - new Date(r.returnDate).getTime()) / 86_400_000);
+	}
+
+	function daysUntilDue(r: BorrowRequestRecord): number {
+		return Math.ceil((new Date(r.returnDate).getTime() - Date.now()) / 86_400_000);
+	}
+
+	// ── lifecycle ─────────────────────────────────────────────────────────────
+	async function loadDashboard(force = false, background = false) {
+		const hasCache = !!report && liveRequests.length > 0;
+
+		try {
+			// 1. cards (loaded from fetchAnalytics)
+			if (!background && (force || !hasCache)) {
+				cardsLoading = true;
+			}
+			const cardsResult = await Promise.allSettled([
+				fetchAnalytics({ period: 'semester', forceRefresh: force })
+			]);
+			if (cardsResult[0].status === 'fulfilled') {
+				report = cardsResult[0].value;
+			}
+			if (!background) cardsLoading = false;
+
+			// 2. Requests Needing Action (loaded from borrowRequestsAPI.list)
+			if (!background && (force || !hasCache)) {
+				requestsNeedingActionLoading = true;
+			}
+			const requestsResult = await Promise.allSettled([
+				borrowRequestsAPI.list(
+					{ statuses: ['pending_instructor', 'approved_instructor', 'ready_for_pickup', 'borrowed', 'pending_return'], limit: 50 },
+					{ forceRefresh: force }
+				)
+			]);
+			if (requestsResult[0].status === 'fulfilled') {
+				liveRequests = requestsResult[0].value.requests;
+			}
+			if (!background) requestsNeedingActionLoading = false;
+
+			// 3. Most Borrowed and Equipment Availability Alerts (same analytics payload)
+			if (!background && (force || !hasCache)) {
+				mostBorrowedAlertsLoading = true;
+			}
+			if (!background) mostBorrowedAlertsLoading = false;
+
+		} catch (err) {
+			console.error('[Instructor Dashboard] Failed to load:', err);
+			toastStore.error('Failed to load dashboard data.', 'Error');
+		} finally {
+			cardsLoading = false;
+			requestsNeedingActionLoading = false;
+			mostBorrowedAlertsLoading = false;
+			loading = false;
+			requestsLoading = false;
+		}
+	}
+
+	async function loadRequests(force = false) {
+		await loadDashboard(force);
+	}
+
+	onMount(() => {
+		if ($justLoggedIn) {
+			toastStore.success('Welcome back! You have successfully logged in.', 'Login Successful', 5000);
+			authStore.clearJustLoggedIn();
+		}
+
+		// Cache-first: render instantly from cache if available, then revalidate in background.
+		const cachedAnalytics = peekCachedAnalytics({ period: 'semester' });
+		if (cachedAnalytics) {
+			report = cachedAnalytics;
+			cardsLoading = false;
+			mostBorrowedAlertsLoading = false;
+		}
+
+		const cachedRequests = borrowRequestsAPI.peekCachedList({
+			statuses: ['pending_instructor', 'approved_instructor', 'ready_for_pickup', 'borrowed', 'pending_return'],
+			limit: 50
+		});
+		if (cachedRequests) {
+			liveRequests = cachedRequests.requests;
+			requestsNeedingActionLoading = false;
+			requestsLoading = false;
+			loading = false;
+		}
+
+		void loadDashboard(true, true);
+
+		const id = setInterval(() => {
+			currentTime = new Date();
+		}, 60_000);
+
+		return () => clearInterval(id);
+	});
+</script>
+
+<svelte:head><title>Dashboard - Instructor</title></svelte:head>
+
+<div class="space-y-6">
+
+	<!-- ── Header ─────────────────────────────────────────────────────────── -->
+	<div class="flex items-start justify-between gap-3">
+		<div class="min-w-0">
+			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">{greeting}, {$user?.firstName}</h1>
+			<p class="mt-0.5 text-sm text-gray-500">Instructor Portal — Equipment & Request Overview</p>
+		</div>
+		<a
+			href="/instructor/requests"
+			class="hidden shrink-0 items-center gap-1.5 rounded-lg bg-pink-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-pink-700 transition-colors sm:flex"
+		>
+			<ClipboardList size={15} /> Review Requests
+		</a>
+	</div>
+
+	{#if cardsLoading}
+		<div class="grid grid-cols-2 gap-3 sm:grid-cols-4 animate-pulse">
+			{#each Array(4) as _}
+				<div class="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 space-y-3">
+					<Skeleton class="h-3 w-24" /><Skeleton class="h-8 w-14" /><Skeleton class="h-3 w-20" />
+				</div>
+			{/each}
+		</div>
+	{:else}
+		<!-- ── KPI Strip ───────────────────────────────────────────────────── -->
+		<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+
+			<button
+				type="button"
+				onclick={() => goto('/instructor/requests?tab=pending')}
+				class="w-full text-left rounded-xl border border-yellow-200 bg-yellow-50 p-4 shadow-sm hover:shadow-md hover:bg-yellow-100/50 hover:border-yellow-300 transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 cursor-pointer"
+			>
+				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-yellow-800">
+					<Clock size={12} /> Pending Approval
+				</div>
+				<p class="mt-2 text-3xl font-bold text-yellow-700">{pendingApprovalCount}</p>
+				<p class="mt-0.5 text-xs text-yellow-600">Awaiting your review</p>
+			</button>
+
+			<button
+				type="button"
+				onclick={() => goto('/instructor/requests?tab=fulfillment')}
+				class="w-full text-left rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm hover:shadow-md hover:bg-blue-100/50 hover:border-blue-300 transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+			>
+				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-blue-800">
+					<PackageOpen size={12} /> In Fulfillment
+				</div>
+				<p class="mt-2 text-3xl font-bold text-blue-700">{fulfillmentCount}</p>
+				<p class="mt-0.5 text-xs text-blue-600">Approved / ready for pickup</p>
+			</button>
+
+			<button
+				type="button"
+				onclick={() => goto('/instructor/requests?tab=borrowed')}
+				class="w-full text-left rounded-xl border border-violet-200 bg-violet-50 p-4 shadow-sm hover:shadow-md hover:bg-violet-100/50 hover:border-violet-300 transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-violet-500/20 cursor-pointer"
+			>
+				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-violet-700">
+					<Package size={12} /> Active Loans
+				</div>
+				<p class="mt-2 text-3xl font-bold text-violet-700">{activeLoans}</p>
+				<p class="mt-0.5 text-xs text-violet-500">Currently borrowed</p>
+			</button>
+
+			<button
+				type="button"
+				onclick={() => goto('/instructor/requests?tab=borrowed&filter=overdue')}
+				class="w-full text-left rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm hover:shadow-md hover:bg-red-100/50 hover:border-red-300 transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-red-500/20 cursor-pointer"
+			>
+				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-red-800">
+					<TriangleAlert size={12} /> Overdue
+				</div>
+				<p class="mt-2 text-3xl font-bold text-red-700">{overdueCount}</p>
+				<p class="mt-0.5 text-xs text-red-600">Past return date</p>
+			</button>
+		</div>
+	{/if}
+
+		<!-- ── Requests Needing Action ────────────────────────────────────── -->
+		<div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+			<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+				<div class="flex items-center gap-2">
+					<ClipboardList size={16} class="text-pink-500" />
+					<h2 class="text-sm font-semibold text-gray-900">Requests Needing Action</h2>
+					{#if !requestsNeedingActionLoading && pendingApprovalCount + fulfillmentCount + activeLoans > 0}
+						<span class="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-semibold text-pink-700">{pendingApprovalCount + fulfillmentCount + activeLoans}</span>
+					{/if}
+				</div>
+				<a href="/instructor/requests" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
+					View all <ArrowRight size={13} />
+				</a>
+			</div>
+
+			{#if requestsNeedingActionLoading}
+				<div class="grid grid-cols-1 gap-4 p-5 sm:grid-cols-3 animate-pulse">
+					{#each Array(3) as _}
+						<div class="space-y-3 rounded-xl border border-gray-100 p-4">
+							<Skeleton class="h-4 w-32" />
+							{#each Array(2) as _}
+								<div class="flex items-center gap-3">
+									<Skeleton variant="circle" class="h-8 w-8" />
+									<div class="flex-1 space-y-1.5"><Skeleton class="h-3.5 w-28" /><Skeleton class="h-3 w-20" /></div>
+								</div>
+							{/each}
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<div class="grid grid-cols-1 divide-y divide-gray-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+
+				<!-- Pending Approval -->
+				<div class="p-4">
+					<div class="mb-3 flex items-center justify-between">
+						<span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+							<Clock size={11} /> Pending Approval
+						</span>
+						<span class="text-xs font-bold text-amber-700">{requestsPending.length}</span>
+					</div>
+					{#if requestsPending.length === 0}
+						<div class="flex min-h-29 flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 py-4 text-center">
+							<Clock size={18} class="text-pink-600" />
+							<p class="mt-2 text-xs font-medium text-gray-500">No pending requests</p>
+						</div>
+					{:else}
+						<ul class="space-y-2">
+							{#each requestsPending.slice(0, 5) as req}
+									<li>
+										<a
+											href={getRequestDeepLink(req)}
+											class="group flex items-center gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2.5 transition-colors hover:border-amber-200 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+										>
+									<div class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-200 text-xs font-semibold text-amber-800">
+										{#if req.student?.profilePhotoUrl}
+											<img src={req.student.profilePhotoUrl} alt={studentName(req)} class="h-full w-full object-cover" />
+										{:else}
+											{studentInitials(req)}
+										{/if}
+									</div>
+									<div class="min-w-0 flex-1">
+										<p class="truncate text-xs font-semibold text-gray-900">{studentName(req)}</p>
+										<p class="text-xs text-gray-400">{req.items.length} item{req.items.length !== 1 ? 's' : ''} · Due {formatDate(req.returnDate)}</p>
+									</div>
+										<div class="shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-pink-500">
+											<ChevronRight size={14} />
+										</div>
+										</a>
+									</li>
+							{/each}
+							{#if requestsPending.length > 5}
+								<p class="pt-1 text-center text-xs text-gray-400">+{requestsPending.length - 5} more</p>
+							{/if}
+						</ul>
+					{/if}
+				</div>
+
+				<!-- In Fulfillment -->
+				<div class="p-4">
+					<div class="mb-3 flex items-center justify-between">
+						<span class="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">
+							<PackageOpen size={11} /> In Fulfillment
+						</span>
+						<span class="text-xs font-bold text-blue-700">{requestsFulfillment.length}</span>
+					</div>
+					{#if requestsFulfillment.length === 0}
+						<div class="flex min-h-29 flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 py-4 text-center">
+							<PackageOpen size={18} class="text-pink-600" />
+							<p class="mt-2 text-xs font-medium text-gray-500">All clear</p>
+						</div>
+					{:else}
+						<ul class="space-y-2">
+							{#each requestsFulfillment.slice(0, 5) as req}
+									<li>
+										<a
+											href={getRequestDeepLink(req)}
+											class="group flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2.5 transition-colors hover:border-blue-200 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+										>
+									<div class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-200 text-xs font-semibold text-blue-800">
+										{#if req.student?.profilePhotoUrl}
+											<img src={req.student.profilePhotoUrl} alt={studentName(req)} class="h-full w-full object-cover" />
+										{:else}
+											{studentInitials(req)}
+										{/if}
+									</div>
+									<div class="min-w-0 flex-1">
+										<p class="truncate text-xs font-semibold text-gray-900">{studentName(req)}</p>
+										<p class="text-xs text-gray-400">{req.items.length} item{req.items.length !== 1 ? 's' : ''} · {req.status === 'ready_for_pickup' ? 'Ready for pickup' : 'Approved'}</p>
+									</div>
+										<div class="shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-pink-500">
+											<ChevronRight size={14} />
+										</div>
+										</a>
+									</li>
+							{/each}
+							{#if requestsFulfillment.length > 5}
+								<p class="pt-1 text-center text-xs text-gray-400">+{requestsFulfillment.length - 5} more</p>
+							{/if}
+						</ul>
+					{/if}
+				</div>
+
+				<!-- Active Loans (overdue highlighted) -->
+				<div class="p-4">
+					<div class="mb-3 flex items-center justify-between">
+						<span class="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-800">
+							<Package size={11} /> Active Loans
+						</span>
+						<span class="text-xs font-bold text-violet-700">{requestsActive.length}</span>
+					</div>
+					{#if requestsActive.length === 0}
+						<div class="flex min-h-29 flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 py-4 text-center">
+							<Package size={18} class="text-pink-600" />
+							<p class="mt-2 text-xs font-medium text-gray-500">No active loans</p>
+						</div>
+					{:else}
+						<ul class="space-y-2">
+							{#each requestsActive.slice(0, 5) as req}
+								{@const overdue = new Date(req.returnDate) < new Date()}
+								{@const days = overdue ? daysOverdue(req) : daysUntilDue(req)}
+									<li>
+										<a
+											href={getRequestDeepLink(req)}
+											class="group flex items-center gap-3 rounded-lg border {overdue ? 'border-red-200 bg-red-50/50 hover:border-red-300 hover:bg-red-50' : 'border-violet-100 bg-violet-50/50 hover:border-violet-200 hover:bg-violet-50'} px-3 py-2.5 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+										>
+									<div class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full {overdue ? 'bg-red-200 text-red-800' : 'bg-violet-200 text-violet-800'} text-xs font-semibold">
+										{#if req.student?.profilePhotoUrl}
+											<img src={req.student.profilePhotoUrl} alt={studentName(req)} class="h-full w-full object-cover" />
+										{:else}
+											{studentInitials(req)}
+										{/if}
+									</div>
+									<div class="min-w-0 flex-1">
+										<p class="truncate text-xs font-semibold text-gray-900">{studentName(req)}</p>
+										<p class="text-xs {overdue ? 'text-red-500 font-medium' : 'text-gray-400'}">
+											{overdue ? `${days}d overdue` : `Due in ${days}d`}
+										</p>
+									</div>
+									{#if overdue}
+										<span class="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-bold text-red-700">!</span>
+									{/if}
+										<div class="shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-pink-500">
+											<ChevronRight size={14} />
+										</div>
+										</a>
+									</li>
+							{/each}
+							{#if requestsActive.length > 5}
+								<p class="pt-1 text-center text-xs text-gray-400">+{requestsActive.length - 5} more</p>
+							{/if}
+						</ul>
+					{/if}
+				</div>
+			</div>
+		{/if}
+	</div>
+
+		<!-- ── 2-col: Most Borrowed + Stock Alerts ─────────────────────────── -->
+		{#if mostBorrowedAlertsLoading}
+			<div class="grid grid-cols-1 gap-6 lg:grid-cols-2 animate-pulse">
+				{#each Array(2) as _}
+					<div class="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 space-y-4">
+						<div class="flex justify-between">
+							<Skeleton class="h-5 w-40" />
+							<Skeleton class="h-4 w-16" />
+						</div>
+						<div class="space-y-3">
+							{#each Array(4) as _}
+								<div class="flex items-center gap-4">
+									<div class="flex-1 space-y-2">
+										<Skeleton class="h-4 w-3/4" />
+										<Skeleton class="h-3 w-1/2" />
+									</div>
+									<Skeleton class="h-4 w-12" />
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/each}
+			</div>
+		{:else}
+			<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+			<!-- Most Borrowed Items -->
+			<div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+				<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+					<div class="flex items-center gap-2">
+						<TrendingUp size={16} class="text-pink-500" />
+						<h2 class="text-sm font-semibold text-gray-900">Most Borrowed</h2>
+					</div>
+					<a href="/instructor/reports" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
+						Reports & Analytics <ArrowRight size={13} />
+					</a>
+				</div>
+				{#if topBorrowedItems.length === 0}
+					<div class="flex h-72 items-center justify-center">
+						<div class="text-center">
+							<TrendingUp size={28} class="mx-auto text-pink-600" />
+							<p class="mt-3 text-sm text-gray-500">No borrow data for this period.</p>
+						</div>
+					</div>
+				{:else}
+					<div class="divide-y divide-gray-50 px-5 py-2">
+						{#each topBorrowedItems as item, idx}
+							<div class="flex items-center gap-3 py-3">
+								<span class="w-5 shrink-0 text-right text-xs font-bold text-gray-300">#{idx + 1}</span>
+								<div class="flex-1 min-w-0">
+									<div class="flex items-center justify-between mb-1">
+										<p class="truncate text-sm font-medium text-gray-900">{item.name}</p>
+										<span class="ml-2 shrink-0 text-xs text-gray-500">{item.totalQuantity}</span>
+									</div>
+									<div class="h-1.5 w-full rounded-full bg-gray-100">
+										<div class="h-1.5 rounded-full bg-pink-400 transition-all" style="width:{Math.round((item.totalQuantity / topBorrowedMax) * 100)}%"></div>
+									</div>
+									<p class="mt-0.5 text-xs text-gray-400">{item.category}</p>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
+			<!-- Stock Alerts -->
+			<div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+				<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+					<div class="flex items-center gap-2">
+						<AlertCircle size={16} class="text-orange-500" />
+						<h2 class="text-sm font-semibold text-gray-900">Equipment Availability Alerts</h2>
+						{#if stockAlertCount > 0}
+							<span class="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">{stockAlertCount}</span>
+						{/if}
+					</div>
+					<a href="/instructor/inventory" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
+						View inventory <ArrowRight size={13} />
+					</a>
+				</div>
+				{#if stockAlerts.length === 0}
+					<div class="flex h-72 items-center justify-center">
+						<div class="text-center">
+							<CheckCircle2 size={28} class="mx-auto text-pink-600" />
+							<p class="mt-3 text-sm text-gray-500">All equipment is well-stocked</p>
+						</div>
+					</div>
+				{:else}
+					<div class="divide-y divide-gray-50">
+						{#each stockAlerts.slice(0, 6) as alert}
+							{@const isOut = alert.status === 'Out of Stock' || alert.quantity === 0}
+							<div class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
+								<div class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg {isOut ? 'bg-red-100' : 'bg-orange-100'}">
+									{#if alert.picture}
+										<img src={alert.picture} alt={alert.name} class="h-full w-full object-cover" loading="lazy" />
+									{:else}
+										<Package size={14} class={isOut ? 'text-red-600' : 'text-orange-600'} />
+									{/if}
+								</div>
+								<div class="min-w-0 flex-1">
+									<p class="truncate text-xs font-semibold text-gray-900">{alert.name}</p>
+									<p class="text-xs text-gray-400">{alert.category}</p>
+								</div>
+								<span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold {isOut ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}">
+									{isOut ? 'Out of Stock' : `${alert.quantity} left`}
+								</span>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		</div>
+	{/if}
+</div>

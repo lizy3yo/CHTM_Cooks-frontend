@@ -1,0 +1,75 @@
+import type { ObjectId } from 'mongodb';
+
+export enum UserRole {
+	STUDENT = 'student',
+	CUSTODIAN = 'custodian',
+	INSTRUCTOR = 'instructor',
+	SUPERADMIN = 'superadmin'
+}
+
+export interface User {
+	_id?: ObjectId;
+	email: string;
+	password: string;
+	role: UserRole;
+	firstName: string;
+	lastName: string;
+	profilePhotoUrl?: string;
+	profilePhotoPublicId?: string;
+	isActive: boolean;
+	createdAt: Date;
+	updatedAt: Date;
+	lastLogin?: Date;
+	// Email verification fields
+	emailVerified: boolean;
+	emailVerificationToken?: string;
+	emailVerificationExpires?: Date;
+	// Password reset fields
+	passwordResetToken?: string;
+	passwordResetExpires?: Date;
+	// Student-specific fields
+	yearLevel?: string;
+	block?: string;
+	agreedToTerms?: boolean;
+	trustScore?: number;
+}
+
+export interface UserResponse {
+	id: string;
+	email: string;
+	role: UserRole;
+	firstName: string;
+	lastName: string;
+	profilePhotoUrl?: string;
+	isActive: boolean;
+	createdAt: Date;
+	// Student-specific fields
+	yearLevel?: string;
+	block?: string;
+	agreedToTerms?: boolean;
+	trustScore?: number;
+}
+
+export interface LoginRequest {
+	email: string;
+	password: string;
+	rememberMe?: boolean;
+}
+
+export interface RegisterRequest {
+	email: string;
+	password: string;
+	role: UserRole;
+	firstName: string;
+	lastName: string;
+	// Student-specific fields (required only when role is STUDENT)
+	yearLevel?: string;
+	block?: string;
+	agreedToTerms?: boolean;
+}
+
+export interface AuthResponse {
+	user: UserResponse;
+	accessToken: string;
+	refreshToken: string;
+}
