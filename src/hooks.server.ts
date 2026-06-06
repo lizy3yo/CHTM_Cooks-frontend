@@ -18,58 +18,232 @@ import {
 } from '$lib/server/errors/errorFormatter';
 import type { AppError } from '$lib/server/errors/AppError';
 import { securityHeadersMiddleware } from '$lib/server/middleware/security';
-import { initializeIndexes, getCriticalIndexes, indexManager } from '$lib/server/db/indexes';
-import { attachUser } from '$lib/server/middleware/auth/verify';
-import { getClientIp } from '$lib/server/middleware/auth/rememberMe';
+import { encrypt, decrypt } from '$lib/server/utils/crypto';
+import {
+	setAuthTokens,
+	clearAuthCookies,
+	getAccessTokenMaxAge,
+	TOKEN_EXPIRY,
+	setRememberMeCookie,
+	clearRememberMeCookie,
+	getClientIp
+} from '$lib/server/middleware/auth/cookies';
+
 
 /**
-	* Schedule index initialization without blocking server startup.
-	*
-	* Modes (INDEX_STARTUP_MODE):
-	* - off (default): don't run automatic index sync at boot
-	* - critical: create only critical indexes
-	* - all: create all defined indexes
-	*
-	* Optional delay (INDEX_STARTUP_DELAY_MS), default 15000ms.
+ * Simple cookie serializer for manual cookie setting when bypassing SvelteKit resolve
  */
-function scheduleStartupIndexInitialization(): void {
-	const rawMode = (env.INDEX_STARTUP_MODE || '').trim().toLowerCase();
-	const mode: 'off' | 'critical' | 'all' =
-		rawMode === 'critical' || rawMode === 'all' ? rawMode : 'off';
-
-	if (mode === 'off') {
-		logInfo('Startup index initialization is disabled (INDEX_STARTUP_MODE=off).');
-		return;
+function serializeCookie(name: string, value: string, options: any = {}): string {
+	let str = `${name}=${encodeURIComponent(value)}`;
+	if (options.maxAge !== undefined) {
+		str += `; Max-Age=${options.maxAge}`;
 	}
-
-	const delayMsRaw = Number(env.INDEX_STARTUP_DELAY_MS);
-	const delayMs = Number.isFinite(delayMsRaw) && delayMsRaw >= 0 ? delayMsRaw : 15000;
-
-	setTimeout(async () => {
-		try {
-			logInfo(`Running startup index initialization in ${mode} mode...`);
-
-			const result =
-				mode === 'critical'
-					? await indexManager.createIndexes(getCriticalIndexes())
-					: await initializeIndexes();
-
-			logInfo(
-				`Startup index initialization finished: ${result.created} created, ${result.existed} existed, ${result.failed} failed, ${result.pending} pending`
-			);
-
-			if (result.failed > 0) {
-				logWarn(
-					`Some indexes failed to create during startup (${result.failed} failures). Check logs for details.`
-				);
-			}
-		} catch (error) {
-			logError(error as Error, { context: 'index-initialization' });
-		}
-	}, delayMs);
+	if (options.expires) {
+		str += `; Expires=${options.expires.toUTCString()}`;
+	}
+	if (options.path) {
+		str += `; Path=${options.path}`;
+	}
+	if (options.secure) {
+		str += '; Secure';
+	}
+	if (options.httpOnly) {
+		str += '; HttpOnly';
+	}
+	if (options.sameSite) {
+		str += `; SameSite=${options.sameSite}`;
+	}
+	return str;
 }
 
-scheduleStartupIndexInitialization();
+/**
+ * Laravel API BFF Proxy Handler
+ * Intercepts all api requests, encrypts them, forwards them to the Laravel backend,
+ * decrypts the response, and returns it to the client.
+ */
+const laravelProxyHandler: Handle = async ({ event, resolve }) => {
+	if (event.url.pathname.startsWith('/api')) {
+		const laravelBaseUrl = env.LARAVEL_API_URL || 'http://127.0.0.1:8000';
+		const laravelUrl = `${laravelBaseUrl}${event.url.pathname}${event.url.search}`;
+		
+		const headers = new Headers();
+		
+		// Copy incoming headers, omitting specific connection/host headers
+		for (const [key, value] of event.request.headers.entries()) {
+			if (['host', 'connection', 'content-length'].includes(key.toLowerCase())) {
+				continue;
+			}
+			headers.set(key, value);
+		}
+
+		// Forward authentication cookie as Bearer token if available
+		const accessToken = event.cookies.get('access_token');
+		if (accessToken) {
+			headers.set('Authorization', `Bearer ${accessToken}`);
+		}
+		
+		headers.set('Accept', 'application/json');
+
+		const requestOptions: RequestInit = {
+			method: event.request.method,
+			headers
+		};
+
+		// Only read/encrypt body for non-safe methods
+		if (!['GET', 'HEAD', 'OPTIONS'].includes(event.request.method)) {
+			const contentType = event.request.headers.get('content-type') || '';
+			
+			if (contentType.includes('application/json')) {
+				try {
+					const bodyJson = await event.request.json();
+					const encryptedBody = encrypt(bodyJson);
+					requestOptions.body = JSON.stringify(encryptedBody);
+					headers.set('Content-Type', 'application/json');
+				} catch (e) {
+					console.error('Failed to parse and encrypt request body:', e);
+				}
+			} else if (contentType.includes('multipart/form-data')) {
+				// Forward files and multipart data directly
+				requestOptions.body = event.request.body;
+				headers.delete('content-type'); // Let fetch set boundary
+			} else {
+				// Fallback for other request bodies
+				try {
+					const rawBody = await event.request.text();
+					if (rawBody) {
+						requestOptions.body = rawBody;
+					}
+				} catch (e) {
+					// Ignore body errors
+				}
+			}
+		}
+
+		try {
+			const laravelResponse = await fetch(laravelUrl, requestOptions);
+			
+			const resHeaders = new Headers();
+			for (const [key, value] of laravelResponse.headers.entries()) {
+				if (['content-encoding', 'content-length', 'transfer-encoding'].includes(key.toLowerCase())) {
+					continue;
+				}
+				resHeaders.set(key, value);
+			}
+
+			// ── SSE / streaming passthrough ──────────────────────────────────────
+			// Streaming responses (e.g. /api/ai-chat) must NOT be buffered or
+			// decrypted — pipe the body directly back to the browser.
+			const contentType = laravelResponse.headers.get('content-type') ?? '';
+			if (contentType.includes('text/event-stream')) {
+				return new Response(laravelResponse.body, {
+					status: laravelResponse.status,
+					headers: resHeaders
+				});
+			}
+
+			// Buffer the response body for non-streaming routes
+			let responseData = await laravelResponse.text();
+
+			// Check if response payload is encrypted
+
+			const isEncrypted = laravelResponse.headers.get('X-Response-Encrypted') === 'true' ||
+								laravelResponse.headers.get('x-response-encrypted') === 'true';
+			
+			if (isEncrypted && responseData) {
+				try {
+					const encryptedJson = JSON.parse(responseData);
+					const decryptedData = decrypt(
+						encryptedJson.payload,
+						encryptedJson.iv,
+						encryptedJson.tag,
+						encryptedJson.timestamp
+					);
+					responseData = JSON.stringify(decryptedData);
+					resHeaders.set('Content-Type', 'application/json');
+					resHeaders.delete('X-Response-Encrypted'); // Remove internal encrypted header
+				} catch (e) {
+					console.error('Failed to decrypt Laravel response:', e);
+					return new Response(JSON.stringify({ error: 'Failed to decrypt secure backend response' }), {
+						status: 502,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+			}
+
+			// Intercept auth responses to set/clear cookies on SvelteKit side
+			const isAuthRoute = event.url.pathname.startsWith('/api/auth/');
+			if (isAuthRoute && responseData) {
+				try {
+					const jsonResponse = JSON.parse(responseData);
+					const isLogin = event.url.pathname === '/api/auth/login' || event.url.pathname === '/api/auth/shortcut-login';
+					const isRefresh = event.url.pathname === '/api/auth/refresh';
+					const isLogout = event.url.pathname === '/api/auth/logout';
+					const isAutoLogin = event.url.pathname === '/api/auth/auto-login';
+
+					const cookieOptions = {
+						path: '/',
+						httpOnly: true,
+						secure: !dev,
+						sameSite: 'lax'
+					};
+
+					if (isLogout) {
+						clearAuthCookies(event);
+						clearRememberMeCookie(event);
+						resHeaders.append('Set-Cookie', serializeCookie('access_token', '', { ...cookieOptions, maxAge: 0 }));
+						resHeaders.append('Set-Cookie', serializeCookie('refresh_token', '', { ...cookieOptions, maxAge: 0 }));
+						resHeaders.append('Set-Cookie', serializeCookie('remember_me', '', { ...cookieOptions, maxAge: 0 }));
+					} else if ((isLogin || isRefresh || isAutoLogin) && (jsonResponse.success || jsonResponse.user)) {
+						const { accessToken, refreshToken, user, rememberToken } = jsonResponse;
+						if (accessToken && refreshToken) {
+							const maxAge = user ? getAccessTokenMaxAge(user.role) : TOKEN_EXPIRY.ACCESS;
+							setAuthTokens(event, accessToken, refreshToken, maxAge);
+							
+							resHeaders.append('Set-Cookie', serializeCookie('access_token', accessToken, { ...cookieOptions, maxAge }));
+							resHeaders.append('Set-Cookie', serializeCookie('refresh_token', refreshToken, { ...cookieOptions, maxAge: TOKEN_EXPIRY.REFRESH }));
+
+							// Strip tokens from response body before forwarding to client browser
+							delete jsonResponse.accessToken;
+							delete jsonResponse.refreshToken;
+						}
+						
+						if (rememberToken && rememberToken.plainToken) {
+							const expiresAt = new Date(rememberToken.expiresAt);
+							const rememberMaxAge = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
+							setRememberMeCookie(event, rememberToken.plainToken, expiresAt);
+							
+							resHeaders.append('Set-Cookie', serializeCookie('remember_me', rememberToken.plainToken, {
+								...cookieOptions,
+								maxAge: rememberMaxAge,
+								expires: expiresAt
+							}));
+							
+							// Strip rememberToken from response body
+							delete jsonResponse.rememberToken;
+						}
+						
+						responseData = JSON.stringify(jsonResponse);
+					}
+				} catch (err) {
+					console.error('Failed to process auth cookies in BFF proxy:', err);
+				}
+			}
+
+			return new Response(responseData, {
+				status: laravelResponse.status,
+				headers: resHeaders
+			});
+		} catch (error) {
+			console.error('Error forwarding request to Laravel:', error);
+			return new Response(JSON.stringify({ error: 'Backend service unavailable' }), {
+				status: 503,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+	}
+
+	return resolve(event);
+};
 
 /**
  * Request Context Handler
@@ -119,12 +293,59 @@ const requestContextHandler: Handle = async ({ event, resolve }) => {
 
 /**
  * Authentication Handler
- * Attaches user to event.locals if authenticated
- * Uses httpOnly cookies for secure token storage
+ * Resolves user session context dynamically by querying Laravel's /api/auth/me API
+ * using the HTTP-only access_token cookie.
  */
 const authHandler: Handle = async ({ event, resolve }) => {
-	// Attach user from cookie-based auth
-	attachUser(event);
+	// Only resolve session for page loads (non-API routes)
+	if (!event.url.pathname.startsWith('/api')) {
+		const accessToken = event.cookies.get('access_token');
+		if (accessToken) {
+			try {
+				const laravelBaseUrl = env.LARAVEL_API_URL || 'http://127.0.0.1:8000';
+				const meResponse = await fetch(`${laravelBaseUrl}/api/auth/me`, {
+					headers: {
+						'Authorization': `Bearer ${accessToken}`,
+						'Accept': 'application/json'
+					}
+				});
+
+				if (meResponse.ok) {
+					const responseText = await meResponse.text();
+					const isEncrypted = meResponse.headers.get('X-Response-Encrypted') === 'true' ||
+										meResponse.headers.get('x-response-encrypted') === 'true';
+					
+					let data;
+					if (isEncrypted && responseText) {
+						const encryptedJson = JSON.parse(responseText);
+						data = decrypt(
+							encryptedJson.payload,
+							encryptedJson.iv,
+							encryptedJson.tag,
+							encryptedJson.timestamp
+						);
+					} else {
+						data = JSON.parse(responseText);
+					}
+
+					if (data && data.user) {
+						event.locals.user = {
+							userId: data.user.id,
+							email: data.user.email,
+							role: data.user.role
+						};
+						event.locals.userId = data.user.id;
+						event.locals.userRole = data.user.role;
+					}
+				} else if (meResponse.status === 401) {
+					// Access token is invalid/expired, clear cookies
+					clearAuthCookies(event);
+				}
+			} catch (error) {
+				console.error('Failed to retrieve user session from Laravel:', error);
+			}
+		}
+	}
 	
 	return resolve(event);
 };
@@ -245,6 +466,7 @@ const errorHandler: Handle = async ({ event, resolve }) => {
  */
 export const handle = sequence(
 	requestContextHandler,
+	laravelProxyHandler,
 	authHandler,
 	securityHeadersMiddleware,
 	corsHandler,

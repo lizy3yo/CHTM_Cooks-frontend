@@ -5,5 +5,3 @@
  */
 
 export * from './cookies';
-export * from './verify';
-export * from './rememberMe';

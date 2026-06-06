@@ -3,7 +3,7 @@ import DailyRotateFile from 'winston-daily-rotate-file';
 import { dev } from '$app/environment';
 import path from 'path';
 import fs from 'fs';
-import { getDatabase } from '$lib/server/db/mongodb';
+
 
 /**
  * Vercel and other serverless platforms have a read-only filesystem.
@@ -205,22 +205,13 @@ export interface RequestAuditEntry {
  * This is intentionally fire-and-forget so request handling is never blocked by audit storage.
  */
 export async function logRequestAudit(entry: Omit<RequestAuditEntry, 'timestamp'>): Promise<void> {
-	try {
-		const db = await getDatabase();
-		await db.collection<RequestAuditEntry>('request_audit_events').insertOne({
-			...entry,
-			timestamp: new Date()
-		});
-	} catch (error) {
-		// Keep request handling resilient even if audit persistence is unavailable.
-		logger.warn('Failed to persist request audit event', {
-			error: error instanceof Error ? error.message : String(error),
-			requestId: entry.requestId,
-			userId: entry.userId,
-			method: entry.method,
-			path: entry.path
-		});
-	}
+	// Persistence is fully handled by the Laravel backend. SvelteKit BFF logs locally via Winston.
+	logger.info(`[Audit] ${entry.method} ${entry.path} status=${entry.statusCode} duration=${entry.responseTimeMs}ms`, {
+		requestId: entry.requestId,
+		userId: entry.userId,
+		userRole: entry.userRole,
+		ipAddress: entry.ipAddress
+	});
 }
 
 /**

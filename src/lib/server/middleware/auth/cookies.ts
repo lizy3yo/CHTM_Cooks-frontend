@@ -10,7 +10,7 @@
 
 import type { RequestEvent } from '@sveltejs/kit';
 import { dev } from '$app/environment';
-import { type UserRole } from '$lib/server/models/User';
+export type UserRole = 'student' | 'custodian' | 'instructor' | 'superadmin';
 
 // Cookie configuration
 export const AUTH_COOKIES = {
@@ -108,3 +108,44 @@ export function setAuthTokens(
 	setAccessTokenCookie(event, accessToken, accessTokenMaxAge);
 	setRefreshTokenCookie(event, refreshToken);
 }
+
+/**
+ * Set remember-me cookie
+ */
+export function setRememberMeCookie(event: RequestEvent, token: string, expiresAt: Date): void {
+	const maxAge = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
+	event.cookies.set('remember_me', token, {
+		httpOnly: true,
+		secure: !dev,
+		sameSite: 'lax',
+		path: '/',
+		maxAge,
+		expires: expiresAt
+	});
+}
+
+/**
+ * Clear remember-me cookie
+ */
+export function clearRememberMeCookie(event: RequestEvent): void {
+	event.cookies.delete('remember_me', { path: '/' });
+}
+
+/**
+ * Get client IP address from request
+ */
+export function getClientIp(event: RequestEvent): string | undefined {
+	const forwarded = event.request.headers.get('x-forwarded-for');
+	if (forwarded) {
+		return forwarded.split(',')[0].trim();
+	}
+	
+	const realIp = event.request.headers.get('x-real-ip');
+	if (realIp) {
+		return realIp;
+	}
+	
+	return event.getClientAddress();
+}
+
+
