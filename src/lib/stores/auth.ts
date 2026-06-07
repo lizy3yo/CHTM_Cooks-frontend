@@ -34,83 +34,84 @@ const initialState: AuthState = {
 function createAuthStore() {
 	const { subscribe, set, update } = writable<AuthState>(initialState);
 
+	// Deduplication guard — ensures concurrent init() calls share one network request.
+	let initInFlight: Promise<void> | null = null;
+
 	return {
 		subscribe,
 
 		/**
-		 * Initialize authentication state
-		 * Checks if user is authenticated via cookies
-		 * 
-		 * Flow:
-		 * 1. Check for active session (access token)
-		 * 2. If no session, try auto-login with remember-me token
-		 * 3. If both fail, user needs to login manually
+		 * Initialize authentication state.
+		 *
+		 * Industry-standard guards applied:
+		 *   1. Skip if already authenticated — avoids redundant /api/auth/me call
+		 *      after a just-completed login().
+		 *   2. In-flight deduplication — concurrent calls (e.g. from multiple
+		 *      components mounting simultaneously) share a single network request.
 		 */
 		init: async () => {
 			if (!browser) return;
 
-			console.log('[AuthStore] Initializing authentication...');
-			
-			try {
-				// First, try to get current user (checks if access token is valid)
-				const meResponse = await fetch('/api/auth/me', {
-					credentials: 'include',
-					headers: {
-						'Cache-Control': 'no-cache'
+			// Guard 1: already authenticated — nothing to do.
+			let currentState: AuthState | undefined;
+			const unsub = authStore.subscribe((s) => { currentState = s; });
+			unsub();
+			if (currentState?.isAuthenticated) return;
+
+			// Guard 2: deduplicate concurrent init() calls.
+			if (initInFlight) return initInFlight;
+
+			initInFlight = (async () => {
+				try {
+					// Check for an active session via access token cookie.
+					const meResponse = await fetch('/api/auth/me', {
+						credentials: 'include',
+						headers: { 'Cache-Control': 'no-cache' }
+					});
+
+					if (meResponse.ok) {
+						const data = await meResponse.json();
+						update((state) => ({
+							...state,
+							user: data.user,
+							isAuthenticated: true,
+							isLoading: false
+						}));
+						return;
 					}
-				});
 
-				if (meResponse.ok) {
-					// User has valid access token
-					const data = await meResponse.json();
-					console.log('[AuthStore] Active session found for:', data.user.email);
-					update((state) => ({
-						...state,
-						user: data.user,
-						isAuthenticated: true,
-						isLoading: false
-					}));
-					return;
-				}
+					// No active session — attempt auto-login via remember-me cookie.
+					const autoLoginResponse = await fetch('/api/auth/auto-login', {
+						method: 'POST',
+						credentials: 'include',
+						headers: {
+							'Content-Type': 'application/json',
+							'Cache-Control': 'no-cache'
+						}
+					});
 
-				// No active session - try auto-login with remember-me token
-				console.log('[AuthStore] No active session, attempting auto-login...');
-				const autoLoginResponse = await fetch('/api/auth/auto-login', {
-					method: 'POST',
-					credentials: 'include',
-					headers: {
-						'Content-Type': 'application/json',
-						'Cache-Control': 'no-cache'
+					if (autoLoginResponse.ok) {
+						const data = await autoLoginResponse.json();
+						update((state) => ({
+							...state,
+							user: data.user,
+							isAuthenticated: true,
+							isLoading: false
+						}));
+						return;
 					}
-				});
 
-				if (autoLoginResponse.ok) {
-					const data = await autoLoginResponse.json();
-					console.log('[AuthStore] Auto-login successful for:', data.user.email);
-					update((state) => ({
-						...state,
-						user: data.user,
-						isAuthenticated: true,
-						isLoading: false
-					}));
-					return;
+					// Both methods failed — user must sign in manually.
+					update(() => ({ ...initialState, isLoading: false }));
+				} catch (error) {
+					console.error('[AuthStore] init error:', error);
+					update(() => ({ ...initialState, isLoading: false }));
+				} finally {
+					initInFlight = null;
 				}
+			})();
 
-				// Both methods failed - user needs to login
-				console.log('[AuthStore] No valid session or remember-me token found');
-				update((state) => ({
-					...initialState,
-					isLoading: false
-				}));
-
-			} catch (error) {
-				// Network error or unexpected error
-				console.error('[AuthStore] Authentication initialization error:', error);
-				update((state) => ({
-					...initialState,
-					isLoading: false
-				}));
-			}
+			return initInFlight;
 		},
 
 	/**
