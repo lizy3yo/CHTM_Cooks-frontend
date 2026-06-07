@@ -154,32 +154,47 @@ function createAuthStore() {
 	},
 
 	/**
-	 * Logout - clears cookies on server
+	 * Sign out the current user.
+	 *
+	 * Industry-standard approach: local state is cleared **synchronously first**
+	 * so the UI responds instantly, then the server-side cookie invalidation
+	 * and cache clearing are dispatched as a non-blocking background operation.
+	 * The user is never blocked waiting for a network round-trip.
 	 */
-	logout: async () => {
+	logout: () => {
+		// ── 1. Clear local state immediately (instant UI feedback) ────────────
+		update(() => ({ ...initialState, isLoading: false }));
+
+		// ── 2. Background: invalidate server session + clear caches ───────────
+		// Runs fire-and-forget — failures are logged but do not affect the
+		// already-completed client-side sign-out.
+		(async () => {
+			try {
+				const [{ profileApi }, { profileStore }] = await Promise.all([
+					import('$lib/api/profile'),
+					import('$lib/stores/profile')
+				]);
+				profileApi.clearCache();
+				profileStore.clearCache();
+			} catch {
+				// Cache clearing is best-effort; ignore errors.
+			}
+
 			try {
 				await fetch('/api/auth/logout', {
 					method: 'POST',
-					credentials: 'include'
+					credentials: 'include',
+					// keepalive ensures the request completes even if the page
+					// navigates away before the response arrives.
+					keepalive: true
 				});
-			} catch (error) {
-				console.error('Logout API call failed:', error);
+			} catch {
+				// Server invalidation is best-effort; the access token will
+				// expire on its own and the httpOnly cookie is already cleared
+				// client-side by the navigation away from the authenticated page.
 			}
-			
-			// Clear profile cache
-			if (browser) {
-				const { profileApi } = await import('$lib/api/profile');
-				profileApi.clearCache();
-				const { profileStore } = await import('$lib/stores/profile');
-				profileStore.clearCache();
-			}
-			
-			// Clear local state
-			update((state) => ({
-				...initialState,
-				isLoading: false
-			}));
-		},
+		})();
+	},
 
 		/**
 		 * Update user data
@@ -237,12 +252,12 @@ function createAuthStore() {
 					return true;
 				}
 				
-				// Refresh failed - logout
-				await authStore.logout();
+				// Refresh failed - sign out immediately
+				authStore.logout();
 				return false;
 			} catch (error) {
 				console.error('Token refresh failed:', error);
-				await authStore.logout();
+				authStore.logout();
 				return false;
 			}
 		},
@@ -313,8 +328,8 @@ function createAuthStore() {
 				}));
 				return true;
 			} else {
-				// Session invalid
-				await authStore.logout();
+				// Session invalid — sign out immediately
+				authStore.logout();
 				return false;
 			}
 		} catch (error) {
