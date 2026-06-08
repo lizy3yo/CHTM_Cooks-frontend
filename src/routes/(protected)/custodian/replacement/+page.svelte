@@ -1587,7 +1587,7 @@
 										{/each}
 									</div>
 								{:else}
-									<!-- Table list view â€” professional, matches Requests & Loans style -->
+									<!-- Table list view — professional, matches Requests & Borrowed style -->
 									<div
 										class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm"
 										style="min-height: 600px;"

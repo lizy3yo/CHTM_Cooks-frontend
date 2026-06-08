@@ -65,7 +65,7 @@
 	});
 
 	// ── derived KPIs ──────────────────────────────────────────────────────────
-	const activeLoans = $derived(
+	const currentlyBorrowedCount = $derived(
 		(report?.borrowRequests.statusBreakdown.find(s => s.status === 'borrowed')?.count ?? 0) +
 		(report?.borrowRequests.statusBreakdown.find(s => s.status === 'pending_return')?.count ?? 0)
 	);
@@ -356,7 +356,7 @@ const damageRateDisplay = $derived.by(() => {
 				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-violet-700">
 					<PackageOpen size={12} /> Currently Borrowed
 				</div>
-				<p class="mt-2 text-3xl font-bold text-violet-700">{activeLoans}</p>
+				<p class="mt-2 text-3xl font-bold text-violet-700">{currentlyBorrowedCount}</p>
 				<p class="mt-0.5 text-xs text-violet-500">{totalItemsOut} items currently out</p>
 			</button>
 

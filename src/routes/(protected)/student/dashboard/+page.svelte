@@ -56,7 +56,7 @@
 	let trustScoreLoading = $state(!initialStats);
 	let cardsLoading = $state(!initialRequests);
 	let returnPerfHealthReplLoading = $state(!initialStats);
-	let activeLoansNotificationsLoading = $state(!initialRequests);
+	let borrowedNotificationsLoading = $state(!initialRequests);
 	let pendingReqPerformanceLoading = $state(!initialRequests);
 	let recentHistoryLoading = $state(!initialRequests);
 	let allRequests = $state<DashboardRequest[]>([]);
@@ -159,7 +159,7 @@
 			trustScoreLoading = true;
 			cardsLoading = true;
 			returnPerfHealthReplLoading = true;
-			activeLoansNotificationsLoading = true;
+			borrowedNotificationsLoading = true;
 			notificationsLoading = true;
 			pendingReqPerformanceLoading = true;
 			recentHistoryLoading = true;
@@ -197,7 +197,7 @@
 			trustScoreLoading = false;
 			cardsLoading = false;
 			returnPerfHealthReplLoading = false;
-			activeLoansNotificationsLoading = false;
+			borrowedNotificationsLoading = false;
 			notificationsLoading = false;
 			pendingReqPerformanceLoading = false;
 			recentHistoryLoading = false;
@@ -227,7 +227,7 @@
 	// ── derived metrics ───────────────────────────────────────────────────────
 	const metrics = $derived({
 		totalRequests: allRequests.length,
-		activeLoans: allRequests.filter((r) => ['picked-up', 'pending-return'].includes(r.status))
+		currentlyBorrowed: allRequests.filter((r) => ['picked-up', 'pending-return'].includes(r.status))
 			.length,
 		pendingCount: allRequests.filter((r) => r.status === 'pending').length,
 		overdueCount: allRequests.filter((r) => r.isOverdue).length,
@@ -279,7 +279,7 @@
 			},
 			{
 				label: 'Active',
-				value: metrics.activeLoans,
+				value: metrics.currentlyBorrowed,
 				dot: 'bg-violet-500',
 				text: 'text-violet-700',
 				bar: 'bg-violet-500'
@@ -691,7 +691,7 @@
 						<Package size={12} />
 						<span>Currently Borrowed</span>
 					</div>
-					<p class="mt-2 text-3xl font-bold text-violet-700 sm:text-4xl">{metrics.activeLoans}</p>
+					<p class="mt-2 text-3xl font-bold text-violet-700 sm:text-4xl">{metrics.currentlyBorrowed}</p>
 					<p class="mt-0.5 text-xs text-violet-500">Borrowed or returning</p>
 				</button>
 
@@ -1019,7 +1019,7 @@
 			<!-- LEFT col ────────────────────────────────────────────────────── -->
 			<div class="space-y-6 lg:col-span-2">
 				<!-- Currently Borrowed -->
-				{#if activeLoansNotificationsLoading}
+				{#if borrowedNotificationsLoading}
 					<div class="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 animate-pulse">
 						<Skeleton class="h-5 w-40" />
 						<div class="space-y-2">

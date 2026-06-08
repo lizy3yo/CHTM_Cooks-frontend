@@ -71,7 +71,7 @@
 		{
 			question: 'How do I confirm a return?',
 			answer:
-				'When a student initiates a return, it will appear in your "Borrow Requests" queue under "Pending Return". Inspect the items for completeness and condition, then click "Confirm Return" to close the loan. If items are damaged or missing, flag them before confirming.'
+				'When a student initiates a return, it will appear in your "Borrow Requests" queue under "Pending Return". Inspect the items for completeness and condition, then click "Confirm Return" to complete the return. If items are damaged or missing, flag them before confirming.'
 		},
 		{
 			question: 'How do I flag a lost or damaged item?',
@@ -86,12 +86,12 @@
 		{
 			question: 'What do I do if a student does not return items on time?',
 			answer:
-				'Overdue loans are highlighted in the "Borrow Requests" page. You can use the Chat Support to escalate the matter to the system administrator, who can contact the student and take further action if necessary.'
+				'Overdue borrowings are highlighted in the "Borrow Requests" page. You can use the Chat Support to escalate the matter to the system administrator, who can contact the student and take further action if necessary.'
 		},
 		{
 			question: 'How do I view the borrowing history for a specific item?',
 			answer:
-				'Go to "Inventory", locate the item, and open its detail view. The item history shows all past loans, return dates, and any flagged incidents associated with that piece of equipment.'
+				'Go to "Inventory", locate the item, and open its detail view. The item history shows all past borrowings, return dates, and any flagged incidents associated with that piece of equipment.'
 		},
 		{
 			question: 'How do I handle a replacement obligation?',

@@ -128,7 +128,7 @@
 	let _pollInterval: ReturnType<typeof setInterval> | null = null;
 	let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-	type WorkflowFilter = 'all' | 'pending_approval' | 'active_loans' | 'ready_for_pickup' | 'currently_borrowed' | 'pending_return' | 'missing' | 'overdue' | 'history' | 'returned' | 'resolved' | 'rejected' | 'cancelled' | 'obligations';
+	type WorkflowFilter = 'all' | 'pending_approval' | 'active_borrowings' | 'ready_for_pickup' | 'currently_borrowed' | 'pending_return' | 'missing' | 'overdue' | 'history' | 'returned' | 'resolved' | 'rejected' | 'cancelled' | 'obligations';
 
 	function getWorkflowFilter(): WorkflowFilter {
 		if (activeTab === 'obligations') return 'obligations';
@@ -148,7 +148,7 @@
 			if (selectedStatus === 'borrowed') return 'currently_borrowed';
 			if (selectedStatus === 'pending_return') return 'pending_return';
 			if (selectedStatus === 'missing') return 'missing';
-			return 'active_loans';
+			return 'active_borrowings';
 		}
 
 		return 'all';
@@ -159,7 +159,7 @@
 		switch (val) {
 			case 'all': activeTab = 'all'; break;
 			case 'pending_approval': activeTab = 'pending'; break;
-			case 'active_loans': activeTab = 'active'; break;
+			case 'active_borrowings': activeTab = 'active'; break;
 			case 'ready_for_pickup': activeTab = 'active'; selectedStatus = 'ready_for_pickup'; break;
 			case 'currently_borrowed': activeTab = 'active'; selectedStatus = 'borrowed'; break;
 			case 'pending_return': activeTab = 'active'; selectedStatus = 'pending_return'; break;
@@ -187,7 +187,7 @@
 		
 		switch (filter) {
 			case 'pending_approval': return { label: 'Pending Approval Only', bg: 'bg-yellow-50', text: 'text-yellow-700', ring: 'ring-yellow-600/10', btn: 'text-yellow-500', btnHoverBg: 'hover:bg-yellow-100', btnHoverText: 'hover:text-yellow-700' };
-			case 'active_loans': return { label: 'Currently Borrowed Only', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
+			case 'active_borrowings': return { label: 'Currently Borrowed Only', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
 			case 'ready_for_pickup': return { label: 'Ready for Pickup', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
 			case 'currently_borrowed': return { label: 'Currently Borrowed', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
 			case 'pending_return': return { label: 'Confirm Pickup', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
@@ -412,7 +412,7 @@
 				switch (filterParam) {
 					case 'all': activeTab = 'all'; break;
 					case 'pending_approval': activeTab = 'pending'; break;
-					case 'active_loans': activeTab = 'active'; break;
+					case 'active_borrowings': activeTab = 'active'; break;
 					case 'ready_for_pickup': activeTab = 'active'; selectedStatus = 'ready_for_pickup'; break;
 					case 'currently_borrowed': activeTab = 'active'; selectedStatus = 'borrowed'; break;
 					case 'pending_return': activeTab = 'active'; selectedStatus = 'pending_return'; break;
@@ -957,9 +957,9 @@
 				</button>
 				<button 
 					type="button"
-					onclick={() => setWorkflowFilter('active_loans')}
+					onclick={() => setWorkflowFilter('active_borrowings')}
 					class="w-full text-left rounded-lg p-3 shadow transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-purple-500/20 cursor-pointer sm:p-5
-					{workflowFilter === 'active_loans' ? 'border border-purple-200 bg-purple-50/30 ring-1 ring-purple-200/50 shadow-md' : 'bg-white border border-transparent hover:shadow-md hover:border-purple-200/50 hover:bg-gray-50/50'}"
+					{workflowFilter === 'active_borrowings' ? 'border border-purple-200 bg-purple-50/30 ring-1 ring-purple-200/50 shadow-md' : 'bg-white border border-transparent hover:shadow-md hover:border-purple-200/50 hover:bg-gray-50/50'}"
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
@@ -1032,7 +1032,7 @@
 				<option value="all">All Requests</option>
 				<option value="pending_approval">Pending Approval</option>
 				<optgroup label="Currently Borrowed">
-					<option value="active_loans">All Currently Borrowed</option>
+					<option value="active_borrowings">All Currently Borrowed</option>
 					<option value="ready_for_pickup">Ready for Pickup</option>
 					<option value="currently_borrowed">Currently Borrowed</option>
 					<option value="pending_return">Confirm Pickup</option>

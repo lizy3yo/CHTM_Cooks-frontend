@@ -15,15 +15,15 @@
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import QRCode from 'qrcode';
 	import { ClipboardX, Package, AlertCircle, Clock, AlertTriangle, X, BookOpen, User, Calendar, FileText, QrCode, FileCheck, CheckCheck, PackageCheck, Truck, Home, CircleX, CalendarDays, UserCircle, CircleAlert, CornerDownLeft } from 'lucide-svelte';
-	type LoanFilter = 'all' | 'overdue' | 'due-soon' | 'on-track' | 'return-initiated' | 'unresolved';
-	type LoanSort = 'urgent' | 'due-date' | 'latest-borrowed';
+	type BorrowedFilter = 'all' | 'overdue' | 'due-soon' | 'on-track' | 'return-initiated' | 'unresolved';
+	type BorrowedSort = 'urgent' | 'due-date' | 'latest-borrowed';
 	type ViewMode = 'by-request' | 'by-item';
 	type ItemOperationalStatus = 'in-use' | 'return-in-progress' | 'returned' | 'damaged' | 'missing' | 'replaced' | 'payable' | 'paid' | 'unresolved-damaged' | 'unresolved-missing';
 
 	const PAGE_SIZE_BY_REQUEST = 5;
 	const PAGE_SIZE_BY_ITEM = 10;
 
-	interface LoanCard {
+	interface BorrowedCard {
 		id: string;
 		requestCode: string;
 		items: BorrowRequestRecord['items'];
@@ -33,7 +33,7 @@
 		isOverdue: boolean;
 		isDueSoon: boolean;
 		daysDelta: number;
-		loanPeriodDays: number;
+		borrowPeriodDays: number;
 		remainingProgress: number;
 		purpose: string;
 		instructorName: string;
@@ -75,16 +75,16 @@
 	let isLoading = $state(true);
 	let showQrModal = $state(false);
 	let qrDataUrl = $state<string | null>(null);
-	let qrLoan = $state<LoanCard | null>(null);
+	let qrBorrowed = $state<BorrowedCard | null>(null);
 	let actionLoadingId = $state<string | null>(null);
 	let search = $state('');
 	let viewMode = $state<ViewMode>('by-request');
-	let selectedLoan = $state<LoanCard | null>(null);
+	let selectedBorrowed = $state<BorrowedCard | null>(null);
 	let hasShownOverdueModal = $state(false);
-	let selectedFilter = $state<LoanFilter>('all');
-	let sortBy = $state<LoanSort>('urgent');
+	let selectedFilter = $state<BorrowedFilter>('all');
+	let sortBy = $state<BorrowedSort>('urgent');
 	let currentPage = $state(1);
-	let loans = $state<LoanCard[]>([]);
+	let borrowedRequests = $state<BorrowedCard[]>([]);
 	let liveSyncActive = $state(false);
 
 	let refreshInFlight = false;
@@ -113,19 +113,19 @@
 		return '📦';
 	}
 
-	function toLoanCard(request: BorrowRequestRecord): LoanCard {
+	function toBorrowedCard(request: BorrowRequestRecord): BorrowedCard {
 		const now = new Date();
 		const borrow = new Date(request.borrowDate);
 		const due = new Date(request.returnDate);
 
 		const msPerDay = 1000 * 60 * 60 * 24;
-		const loanPeriodDays = Math.max(1, Math.ceil((due.getTime() - borrow.getTime()) / msPerDay));
+		const borrowPeriodDays = Math.max(1, Math.ceil((due.getTime() - borrow.getTime()) / msPerDay));
 		const daysDelta = Math.ceil((due.getTime() - now.getTime()) / msPerDay);
 		const isOverdue = daysDelta < 0;
 		const isDueSoon = daysDelta >= 0 && daysDelta <= 2;
 
 		const elapsedDays = Math.max(0, Math.ceil((now.getTime() - borrow.getTime()) / msPerDay));
-		const remainingProgress = Math.max(0, Math.min(100, Math.round(((loanPeriodDays - elapsedDays) / loanPeriodDays) * 100)));
+		const remainingProgress = Math.max(0, Math.min(100, Math.round(((borrowPeriodDays - elapsedDays) / borrowPeriodDays) * 100)));
 
 		const returnedItems = request.items.filter((item) => item.inspection?.status === 'good').length;
 		const damagedItems = request.items.filter((item) => item.inspection?.status === 'damaged').length;
@@ -144,7 +144,7 @@
 			isOverdue,
 			isDueSoon,
 			daysDelta,
-			loanPeriodDays,
+			borrowPeriodDays,
 			remainingProgress,
 			purpose: request.purpose,
 			instructorName: request.instructor?.fullName || 'Assigned Instructor',
@@ -168,67 +168,67 @@
 		};
 	}
 
-	function getApprovalTimeline(loan: LoanCard) {
+	function getApprovalTimeline(borrowed: BorrowedCard) {
 		const timeline: Array<{ step: string; status: string; date: string | null; by: string; }> = [
-			{ step: 'Request Submitted', status: 'completed', date: loan.requestDate, by: 'You' }
+			{ step: 'Request Submitted', status: 'completed', date: borrowed.requestDate, by: 'You' }
 		];
 
 		timeline.push({
 			step: 'Approved',
 			status: 'completed',
-			date: loan.approvedDate || loan.requestDate,
-			by: loan.instructorName
+			date: borrowed.approvedDate || borrowed.requestDate,
+			by: borrowed.instructorName
 		});
 
 		timeline.push({
 			step: 'Custodian Approved',
 			status: 'completed',
-			date: loan.releasedDate || loan.borrowDate,
-			by: loan.custodianName
+			date: borrowed.releasedDate || borrowed.borrowDate,
+			by: borrowed.custodianName
 		});
 
 		timeline.push({
 			step: 'Pickup Confirmed',
 			status: 'completed',
-			date: loan.pickedUpDate || loan.borrowDate,
+			date: borrowed.pickedUpDate || borrowed.borrowDate,
 			by: 'Custodian'
 		});
 
-		if (loan.status === 'borrowed') {
+		if (borrowed.status === 'borrowed') {
 			timeline.push({ step: 'Awaiting Return', status: 'pending', date: null, by: 'Student' });
-		} else if (loan.status === 'pending_return') {
-			timeline.push({ step: 'Return Initiated', status: 'completed', date: loan.returnDate, by: 'You' });
+		} else if (borrowed.status === 'pending_return') {
+			timeline.push({ step: 'Return Initiated', status: 'completed', date: borrowed.returnDate, by: 'You' });
 			timeline.push({ step: 'Awaiting Inspection', status: 'pending', date: null, by: 'Custodian' });
-		} else if (loan.status === 'returned' || loan.status === 'resolved') {
+		} else if (borrowed.status === 'returned' || borrowed.status === 'resolved') {
 			timeline.push({
 				step: 'Returned',
 				status: 'completed',
-				date: loan.returnedDate || loan.returnDate,
+				date: borrowed.returnedDate || borrowed.returnDate,
 				by: 'Student'
 			});
 		} else {
-			const hasMissing = loan.status === 'missing' || loan.missingItems > 0;
-			const hasDamaged = loan.damagedItems > 0;
+			const hasMissing = borrowed.status === 'missing' || borrowed.missingItems > 0;
+			const hasDamaged = borrowed.damagedItems > 0;
 
 			if (hasMissing && hasDamaged) {
 				timeline.push({
 					step: 'Unresolved Incidents',
 					status: 'rejected',
-					date: loan.missingDate || loan.returnedDate || loan.returnDate,
+					date: borrowed.missingDate || borrowed.returnedDate || borrowed.returnDate,
 					by: 'Custodian'
 				});
 			} else if (hasMissing) {
 				timeline.push({
 					step: 'Item Missing',
 					status: 'rejected',
-					date: loan.missingDate || loan.returnDate,
+					date: borrowed.missingDate || borrowed.returnDate,
 					by: 'Custodian'
 				});
 			} else if (hasDamaged) {
 				timeline.push({
 					step: 'Item Damaged',
 					status: 'rejected',
-					date: loan.returnedDate || loan.returnDate,
+					date: borrowed.returnedDate || borrowed.returnDate,
 					by: 'Custodian'
 				});
 			}
@@ -237,9 +237,9 @@
 		return timeline;
 	}
 
-	function getItemStatus(item: BorrowRequestRecord['items'][number], loan: LoanCard): ItemOperationalStatus {
+	function getItemStatus(item: BorrowRequestRecord['items'][number], borrowed: BorrowedCard): ItemOperationalStatus {
 		const notes = (item.inspection?.notes || '').toLowerCase();
-		const hasUnresolvedIssue = unresolvedItemKeys.has(buildIssueKey(loan.id, item.itemId));
+		const hasUnresolvedIssue = unresolvedItemKeys.has(buildIssueKey(borrowed.id, item.itemId));
 		if (notes.includes('paid')) return 'paid';
 		if (notes.includes('replaced')) return 'replaced';
 		if (hasUnresolvedIssue && item.inspection?.status === 'damaged') return 'unresolved-damaged';
@@ -249,7 +249,7 @@
 		if (item.inspection?.status === 'damaged') return 'damaged';
 		if (item.inspection?.status === 'missing' && (notes.includes('pay') || notes.includes('charge'))) return 'payable';
 		if (item.inspection?.status === 'missing') return 'missing';
-		if (loan.status === 'pending_return') return 'return-in-progress';
+		if (borrowed.status === 'pending_return') return 'return-in-progress';
 		return 'in-use';
 	}
 
@@ -290,7 +290,7 @@
 	}
 
 	async function loadBorrowedItems(forceRefresh = false): Promise<void> {
-		const shouldShowLoading = loans.length === 0;
+		const shouldShowLoading = borrowedRequests.length === 0;
 		if (shouldShowLoading) {
 			isLoading = true;
 		}
@@ -321,15 +321,15 @@
 
 			const requests = requestResponse.requests;
 
-			loans = requests
+			borrowedRequests = requests
 				.filter((request) => request.status === 'borrowed' || request.status === 'pending_return' || (request.status === 'missing' && nextUnresolvedRequestIds.has(request.id)))
-				.map(toLoanCard);
+				.map(toBorrowedCard);
 			lastLoadError = '';
 
 			await backfillItemPictures();
-			syncSelectedLoan();
+			syncSelectedBorrowed();
 
-			const overdueCount = loans.filter((loan) => loan.isOverdue).length;
+			const overdueCount = borrowedRequests.filter((borrowed) => borrowed.isOverdue).length;
 			if (overdueCount > 0 && !hasShownOverdueModal) {
 				hasShownOverdueModal = true;
 				void confirmStore.warning(
@@ -351,25 +351,25 @@
 		}
 	}
 
-	function openLoanDetails(loan: LoanCard): void {
-		selectedLoan = loan;
+	function openBorrowedDetails(borrowed: BorrowedCard): void {
+		selectedBorrowed = borrowed;
 	}
 
-	function closeLoanDetails(): void {
-		selectedLoan = null;
+	function closeBorrowedDetails(): void {
+		selectedBorrowed = null;
 	}
 
-	function syncSelectedLoan(): void {
-		if (!selectedLoan) return;
-		const fresh = loans.find((loan) => loan.id === selectedLoan?.id);
-		selectedLoan = fresh ?? null;
+	function syncSelectedBorrowed(): void {
+		if (!selectedBorrowed) return;
+		const fresh = borrowedRequests.find((borrowed) => borrowed.id === selectedBorrowed?.id);
+		selectedBorrowed = fresh ?? null;
 	}
 
 	async function backfillItemPictures(): Promise<void> {
 		const missingIds = new Set<string>();
 
-		for (const loan of loans) {
-			for (const item of loan.items) {
+		for (const borrowed of borrowedRequests) {
+			for (const item of borrowed.items) {
 				if (item.itemId && !item.picture && !itemPictureCache.has(item.itemId)) {
 					missingIds.add(item.itemId);
 				}
@@ -422,69 +422,69 @@
 		}, 250);
 	}
 
-	function getLoanTone(loan: LoanCard): 'danger' | 'warning' | 'safe' | 'muted' {
-		if (loan.hasUnresolvedIssue) return 'danger';
-		if (loan.status === 'missing') return 'danger';
-		if (loan.status === 'pending_return') return 'muted';
-		if (loan.isOverdue) return 'danger';
-		if (loan.isDueSoon) return 'warning';
+	function getBorrowedTone(borrowed: BorrowedCard): 'danger' | 'warning' | 'safe' | 'muted' {
+		if (borrowed.hasUnresolvedIssue) return 'danger';
+		if (borrowed.status === 'missing') return 'danger';
+		if (borrowed.status === 'pending_return') return 'muted';
+		if (borrowed.isOverdue) return 'danger';
+		if (borrowed.isDueSoon) return 'warning';
 		return 'safe';
 	}
 
-	function getLoanBadgeClasses(loan: LoanCard): string {
-		const tone = getLoanTone(loan);
+	function getBorrowedBadgeClasses(borrowed: BorrowedCard): string {
+		const tone = getBorrowedTone(borrowed);
 		if (tone === 'danger') return 'bg-red-100 text-red-700 ring-red-200';
 		if (tone === 'warning') return 'bg-amber-100 text-amber-700 ring-amber-200';
 		if (tone === 'safe') return 'bg-emerald-100 text-emerald-700 ring-emerald-200';
 		return 'bg-slate-100 text-slate-700 ring-slate-200';
 	}
 
-	function getLoanCardBorderClasses(loan: LoanCard): string {
-		const tone = getLoanTone(loan);
+	function getBorrowedCardBorderClasses(borrowed: BorrowedCard): string {
+		const tone = getBorrowedTone(borrowed);
 		if (tone === 'danger') return 'border-l-red-500';
 		if (tone === 'warning') return 'border-l-amber-500';
 		if (tone === 'safe') return 'border-l-emerald-500';
 		return 'border-l-slate-400';
 	}
 
-	function getLoanStateLabel(loan: LoanCard): string {
-		if (loan.hasUnresolvedIssue || loan.status === 'missing') return 'Unresolved';
-		if (loan.status === 'pending_return') return 'Awaiting Return Confirmation';
-		if (loan.isOverdue) return 'Overdue';
-		if (loan.isDueSoon) return 'Due Soon';
+	function getBorrowedStateLabel(borrowed: BorrowedCard): string {
+		if (borrowed.hasUnresolvedIssue || borrowed.status === 'missing') return 'Unresolved';
+		if (borrowed.status === 'pending_return') return 'Awaiting Return Confirmation';
+		if (borrowed.isOverdue) return 'Overdue';
+		if (borrowed.isDueSoon) return 'Due Soon';
 		return 'Currently Borrowed';
 	}
 
-	function getLoanTimelineColorClasses(loan: LoanCard): string {
-		if (loan.isOverdue || loan.hasUnresolvedIssue || loan.status === 'missing') return 'bg-red-500';
-		if (loan.isDueSoon) return 'bg-amber-500';
+	function getBorrowedTimelineColorClasses(borrowed: BorrowedCard): string {
+		if (borrowed.isOverdue || borrowed.hasUnresolvedIssue || borrowed.status === 'missing') return 'bg-red-500';
+		if (borrowed.isDueSoon) return 'bg-amber-500';
 		return 'bg-emerald-500';
 	}
 
-	function getLoanSummary(loan: LoanCard): string {
-		if (loan.hasUnresolvedIssue) return `${loan.unresolvedItems} unresolved item ${loan.unresolvedItems === 1 ? 'case' : 'cases'}`;
-		if (loan.status === 'missing') return 'Marked as missing. Coordinate with custodian immediately.';
-		if (loan.status === 'pending_return') return 'Return awaiting custodian confirmation.';
-		if (loan.isOverdue) return `${Math.abs(loan.daysDelta)} day${Math.abs(loan.daysDelta) > 1 ? 's' : ''} overdue`;
-		if (loan.daysDelta === 0) return 'Due today';
-		if (loan.isDueSoon) return `Due in ${loan.daysDelta} day${loan.daysDelta > 1 ? 's' : ''}`;
-		return `${loan.daysDelta} days remaining`;
+	function getBorrowedSummary(borrowed: BorrowedCard): string {
+		if (borrowed.hasUnresolvedIssue) return `${borrowed.unresolvedItems} unresolved item ${borrowed.unresolvedItems === 1 ? 'case' : 'cases'}`;
+		if (borrowed.status === 'missing') return 'Marked as missing. Coordinate with custodian immediately.';
+		if (borrowed.status === 'pending_return') return 'Return awaiting custodian confirmation.';
+		if (borrowed.isOverdue) return `${Math.abs(borrowed.daysDelta)} day${Math.abs(borrowed.daysDelta) > 1 ? 's' : ''} overdue`;
+		if (borrowed.daysDelta === 0) return 'Due today';
+		if (borrowed.isDueSoon) return `Due in ${borrowed.daysDelta} day${borrowed.daysDelta > 1 ? 's' : ''}`;
+		return `${borrowed.daysDelta} days remaining`;
 	}
 
-	const filteredLoans = $derived.by(() => {
+	const filteredBorrowed = $derived.by(() => {
 		const normalizedSearch = search.trim().toLowerCase();
 
-		let output = loans.filter((loan) => {
-			if (selectedFilter === 'overdue' && !loan.isOverdue) return false;
-			if (selectedFilter === 'due-soon' && !loan.isDueSoon) return false;
-			if (selectedFilter === 'on-track' && (loan.isOverdue || loan.isDueSoon || loan.status !== 'borrowed')) return false;
-			if (selectedFilter === 'return-initiated' && loan.status !== 'pending_return') return false;
-			if (selectedFilter === 'unresolved' && !loan.hasUnresolvedIssue) return false;
+		let output = borrowedRequests.filter((borrowed) => {
+			if (selectedFilter === 'overdue' && !borrowed.isOverdue) return false;
+			if (selectedFilter === 'due-soon' && !borrowed.isDueSoon) return false;
+			if (selectedFilter === 'on-track' && (borrowed.isOverdue || borrowed.isDueSoon || borrowed.status !== 'borrowed')) return false;
+			if (selectedFilter === 'return-initiated' && borrowed.status !== 'pending_return') return false;
+			if (selectedFilter === 'unresolved' && !borrowed.hasUnresolvedIssue) return false;
 
 			if (!normalizedSearch) return true;
 
-			const itemNames = loan.items.map((item) => item.name).join(' ').toLowerCase();
-			const haystack = `${loan.requestCode} ${loan.purpose} ${loan.instructorName} ${itemNames}`.toLowerCase();
+			const itemNames = borrowed.items.map((item) => item.name).join(' ').toLowerCase();
+			const haystack = `${borrowed.requestCode} ${borrowed.purpose} ${borrowed.instructorName} ${itemNames}`.toLowerCase();
 			return haystack.includes(normalizedSearch);
 		});
 
@@ -507,21 +507,21 @@
 
 	const itemRows = $derived.by(() => {
 		const rows: ItemRow[] = [];
-		for (const loan of filteredLoans) {
-			for (const item of loan.items) {
+		for (const borrowed of filteredBorrowed) {
+			for (const item of borrowed.items) {
 				rows.push({
-					requestId: loan.id,
-					requestCode: loan.requestCode,
+					requestId: borrowed.id,
+					requestCode: borrowed.requestCode,
 					itemName: item.name,
 					quantity: item.quantity,
-					borrowDate: loan.borrowDate,
-					returnDate: loan.returnDate,
-					instructorName: loan.instructorName,
-					status: getItemStatus(item, loan),
-					settlementLabel: getSettlementLabel(item, loan.id),
-					isOverdue: loan.isOverdue,
-					daysDelta: loan.daysDelta,
-					hasUnresolvedIssue: unresolvedItemKeys.has(buildIssueKey(loan.id, item.itemId)),
+					borrowDate: borrowed.borrowDate,
+					returnDate: borrowed.returnDate,
+					instructorName: borrowed.instructorName,
+					status: getItemStatus(item, borrowed),
+					settlementLabel: getSettlementLabel(item, borrowed.id),
+					isOverdue: borrowed.isOverdue,
+					daysDelta: borrowed.daysDelta,
+					hasUnresolvedIssue: unresolvedItemKeys.has(buildIssueKey(borrowed.id, item.itemId)),
 					picture: item.picture ?? itemPictureCache.get(item.itemId) ?? null
 				});
 			}
@@ -537,14 +537,14 @@
 
 	const currentPageSize = $derived(viewMode === 'by-request' ? PAGE_SIZE_BY_REQUEST : PAGE_SIZE_BY_ITEM);
 
-	const totalEntries = $derived(viewMode === 'by-request' ? filteredLoans.length : itemRows.length);
+	const totalEntries = $derived(viewMode === 'by-request' ? filteredBorrowed.length : itemRows.length);
 
 	const totalPages = $derived(Math.max(1, Math.ceil(totalEntries / currentPageSize)));
 
-	const paginatedLoans = $derived.by(() => {
+	const paginatedBorrowed = $derived.by(() => {
 		const start = (currentPage - 1) * PAGE_SIZE_BY_REQUEST;
 		const end = start + PAGE_SIZE_BY_REQUEST;
-		return filteredLoans.slice(start, end);
+		return filteredBorrowed.slice(start, end);
 	});
 
 	const paginatedItemRows = $derived.by(() => {
@@ -574,16 +574,16 @@
 	});
 
 	const metrics = $derived({
-		totalActive: loans.length,
-		overdue: loans.filter((loan) => loan.isOverdue).length,
-		dueSoon: loans.filter((loan) => loan.isDueSoon).length,
-		unresolved: loans.filter((loan) => loan.hasUnresolvedIssue).length
+		totalActive: borrowedRequests.length,
+		overdue: borrowedRequests.filter((borrowed) => borrowed.isOverdue).length,
+		dueSoon: borrowedRequests.filter((borrowed) => borrowed.isDueSoon).length,
+		unresolved: borrowedRequests.filter((borrowed) => borrowed.hasUnresolvedIssue).length
 	});
 
 	afterNavigate(({ to }) => {
 		const filter = to?.url.searchParams.get('filter') ?? null;
 		if (filter && ['all', 'overdue', 'due-soon', 'on-track', 'return-initiated', 'unresolved'].includes(filter)) {
-			selectedFilter = filter as LoanFilter;
+			selectedFilter = filter as BorrowedFilter;
 		}
 	});
 
@@ -591,7 +591,7 @@
 		const params = new URLSearchParams(window.location.search);
 		const filter = params.get('filter');
 		if (filter && ['all', 'overdue', 'due-soon', 'on-track', 'return-initiated', 'unresolved'].includes(filter)) {
-			selectedFilter = filter as LoanFilter;
+			selectedFilter = filter as BorrowedFilter;
 		}
 
 		void loadBorrowedItems();
@@ -626,10 +626,10 @@
 		};
 	});
 
-	function getDetailModalStatusLabel(loan: LoanCard | null): string {
-		if (!loan) return '';
-		const hasMissing = loan.status === 'missing' || loan.items?.some((item: any) => item.inspection?.status === 'missing');
-		const hasDamaged = loan.items?.some((item: any) => item.inspection?.status === 'damaged');
+	function getDetailModalStatusLabel(borrowed: BorrowedCard | null): string {
+		if (!borrowed) return '';
+		const hasMissing = borrowed.status === 'missing' || borrowed.items?.some((item: any) => item.inspection?.status === 'missing');
+		const hasDamaged = borrowed.items?.some((item: any) => item.inspection?.status === 'damaged');
 
 		if (hasMissing && hasDamaged) {
 			return 'Unresolved Incidents';
@@ -638,13 +638,13 @@
 		} else if (hasDamaged) {
 			return 'Item Damaged';
 		}
-		return getLoanStateLabel(loan);
+		return getBorrowedStateLabel(borrowed);
 	}
 
-	function getDetailModalStatusColor(loan: LoanCard | null): string {
-		if (!loan) return 'bg-gray-100 text-gray-800';
-		const hasMissing = loan.status === 'missing' || loan.items?.some((item: any) => item.inspection?.status === 'missing');
-		const hasDamaged = loan.items?.some((item: any) => item.inspection?.status === 'damaged');
+	function getDetailModalStatusColor(borrowed: BorrowedCard | null): string {
+		if (!borrowed) return 'bg-gray-100 text-gray-800';
+		const hasMissing = borrowed.status === 'missing' || borrowed.items?.some((item: any) => item.inspection?.status === 'missing');
+		const hasDamaged = borrowed.items?.some((item: any) => item.inspection?.status === 'damaged');
 
 		if (hasMissing && hasDamaged) {
 			return 'bg-rose-100 text-rose-800';
@@ -653,23 +653,23 @@
 		} else if (hasDamaged) {
 			return 'bg-amber-100 text-amber-800';
 		}
-		return getLoanBadgeClasses(loan);
+		return getBorrowedBadgeClasses(borrowed);
 	}
 
-	function getDetailModalStatusIcon(loan: LoanCard | null): any {
-		if (!loan) return Clock;
-		const hasMissing = loan.status === 'missing' || loan.items?.some((item: any) => item.inspection?.status === 'missing');
-		const hasDamaged = loan.items?.some((item: any) => item.inspection?.status === 'damaged');
+	function getDetailModalStatusIcon(borrowed: BorrowedCard | null): any {
+		if (!borrowed) return Clock;
+		const hasMissing = borrowed.status === 'missing' || borrowed.items?.some((item: any) => item.inspection?.status === 'missing');
+		const hasDamaged = borrowed.items?.some((item: any) => item.inspection?.status === 'damaged');
 
 		if (hasMissing || hasDamaged) {
 			return CircleAlert;
 		}
-		if (loan.status === 'pending_return') return CornerDownLeft;
+		if (borrowed.status === 'pending_return') return CornerDownLeft;
 		return PackageCheck;
 	}
 
 	const SelectedStatusIcon = $derived.by(() =>
-		selectedLoan ? getDetailModalStatusIcon(selectedLoan) : Clock
+		selectedBorrowed ? getDetailModalStatusIcon(selectedBorrowed) : Clock
 	);
 </script>
 
@@ -852,7 +852,7 @@
 					</div>
 				</div>
 			</div>
-		{:else if filteredLoans.length === 0}
+		{:else if filteredBorrowed.length === 0}
 			<div class="flex min-h-90 flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-12 text-center">
 				<div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gray-100">
 					<ClipboardX size={26} class="text-pink-600" />
@@ -875,16 +875,16 @@
 						<span class="text-right">Actions</span>
 					</div>
 					<div class="divide-y divide-gray-100">
-						{#each paginatedLoans as loan, i}
+						{#each paginatedBorrowed as borrowed, i}
 							{@const rowNum = (currentPage - 1) * PAGE_SIZE_BY_REQUEST + i + 1}
-							<div class="grid gap-3 p-4 md:grid-cols-[32px_1.2fr_2fr_1fr_120px] md:items-start md:gap-4 transition-colors cursor-pointer hover:bg-gray-50" data-request-id={loan.id} onclick={() => openLoanDetails(loan)} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && openLoanDetails(loan)} aria-label="View details for {loan.requestCode}">
+							<div class="grid gap-3 p-4 md:grid-cols-[32px_1.2fr_2fr_1fr_120px] md:items-start md:gap-4 transition-colors cursor-pointer hover:bg-gray-50" data-request-id={borrowed.id} onclick={() => openBorrowedDetails(borrowed)} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && openBorrowedDetails(borrowed)} aria-label="View details for {borrowed.requestCode}">
 								<div class="hidden md:flex items-center justify-center pt-0.5"><span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-500">{rowNum}</span></div>
-								<div class="min-w-0 pt-0.5"><p class="font-mono text-xs font-bold tracking-widest text-gray-900 truncate">{loan.requestCode}</p><p class="mt-1 text-[11px] text-gray-500">{new Date(loan.borrowDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {new Date(loan.returnDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p></div>
-								<div class="min-w-0"><div class="flex flex-wrap gap-1.5 mb-1.5">{#each loan.items.slice(0,3) as item}{@const pic = item.picture ?? itemPictureCache.get(item.itemId)}<span class="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-700">{#if pic}<img src={pic} alt={item.name} class="h-3.5 w-3.5 rounded object-cover shrink-0" onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget as HTMLImageElement).nextElementSibling?.removeAttribute('style'); }} /><span class="h-3.5 w-3.5 shrink-0 overflow-hidden rounded" style="display:none"><ItemImagePlaceholder size="xs" /></span>{:else}<span class="h-3.5 w-3.5 shrink-0 overflow-hidden rounded"><ItemImagePlaceholder size="xs" /></span>{/if}<span class="truncate max-w-22.5">{item.name}</span></span>{/each}{#if loan.items.length > 3}<span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-600">+{loan.items.length - 3}</span>{/if}</div><p class="truncate text-xs text-gray-500"><span class="font-medium text-gray-700">Purpose:</span> {loan.purpose}</p><p class="mt-0.5 truncate text-[11px] text-gray-400">Instructor: {loan.instructorName}</p></div>
-								<div class="min-w-0"><span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold {getLoanBadgeClasses(loan)}">{getLoanStateLabel(loan)}</span></div>
+								<div class="min-w-0 pt-0.5"><p class="font-mono text-xs font-bold tracking-widest text-gray-900 truncate">{borrowed.requestCode}</p><p class="mt-1 text-[11px] text-gray-500">{new Date(borrowed.borrowDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {new Date(borrowed.returnDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p></div>
+								<div class="min-w-0"><div class="flex flex-wrap gap-1.5 mb-1.5">{#each borrowed.items.slice(0,3) as item}{@const pic = item.picture ?? itemPictureCache.get(item.itemId)}<span class="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-700">{#if pic}<img src={pic} alt={item.name} class="h-3.5 w-3.5 rounded object-cover shrink-0" onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget as HTMLImageElement).nextElementSibling?.removeAttribute('style'); }} /><span class="h-3.5 w-3.5 shrink-0 overflow-hidden rounded" style="display:none"><ItemImagePlaceholder size="xs" /></span>{:else}<span class="h-3.5 w-3.5 shrink-0 overflow-hidden rounded"><ItemImagePlaceholder size="xs" /></span>{/if}<span class="truncate max-w-22.5">{item.name}</span></span>{/each}{#if borrowed.items.length > 3}<span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-600">+{borrowed.items.length - 3}</span>{/if}</div><p class="truncate text-xs text-gray-500"><span class="font-medium text-gray-700">Purpose:</span> {borrowed.purpose}</p><p class="mt-0.5 truncate text-[11px] text-gray-400">Instructor: {borrowed.instructorName}</p></div>
+								<div class="min-w-0"><span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold {getBorrowedBadgeClasses(borrowed)}">{getBorrowedStateLabel(borrowed)}</span></div>
 								<div class="flex items-center justify-end gap-2 pt-0.5 shrink-0">
-									{#if loan.status === 'borrowed'}
-										<button onclick={(e) => { e.stopPropagation(); qrLoan = loan; qrDataUrl = null; QRCode.toDataURL(loan.id, { width: 240, margin: 2, color: { dark: '#111827', light: '#ffffff' }, errorCorrectionLevel: 'H' }).then(url => { qrDataUrl = url; }).catch(() => {}); showQrModal = true; }} class="inline-flex shrink-0 h-8 w-8 items-center justify-center rounded-full border border-pink-200 bg-white text-pink-600 shadow-sm transition-colors hover:bg-pink-50" title="View QR Code">
+									{#if borrowed.status === 'borrowed'}
+										<button onclick={(e) => { e.stopPropagation(); qrBorrowed = borrowed; qrDataUrl = null; QRCode.toDataURL(borrowed.id, { width: 240, margin: 2, color: { dark: '#111827', light: '#ffffff' }, errorCorrectionLevel: 'H' }).then(url => { qrDataUrl = url; }).catch(() => {}); showQrModal = true; }} class="inline-flex shrink-0 h-8 w-8 items-center justify-center rounded-full border border-pink-200 bg-white text-pink-600 shadow-sm transition-colors hover:bg-pink-50" title="View QR Code">
 											<QrCode size={14} strokeWidth={2} />
 										</button>
 										<span class="inline-flex shrink-0 items-center justify-center rounded-full bg-slate-100 px-4 py-1.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200">Return confirmed by custodian</span>
@@ -916,10 +916,10 @@
 							<!-- svelte-ignore a11y_no_static_element_interactions -->
 							<div
 								class="grid gap-3 p-4 md:grid-cols-[32px_1.5fr_1.2fr_1fr_1.2fr] md:items-start md:gap-4 transition-colors cursor-pointer hover:bg-gray-50"
-								onclick={() => { const _loan = loans.find(l => l.id === row.requestId); if (_loan) openLoanDetails(_loan); }}
+								onclick={() => { const _borrowed = borrowedRequests.find(b => b.id === row.requestId); if (_borrowed) openBorrowedDetails(_borrowed); }}
 								role="button"
 								tabindex="0"
-								onkeydown={(e) => e.key === 'Enter' && (() => { const _loan = loans.find(l => l.id === row.requestId); if (_loan) openLoanDetails(_loan); })()}
+								onkeydown={(e) => e.key === 'Enter' && (() => { const _borrowed = borrowedRequests.find(b => b.id === row.requestId); if (_borrowed) openBorrowedDetails(_borrowed); })()}
 							>
 								<div class="hidden md:flex items-center justify-center pt-0.5">
 									<span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-500">{(currentPage - 1) * PAGE_SIZE_BY_ITEM + i + 1}</span>
@@ -984,7 +984,7 @@
 		</div>
 	</div>
 
-	{#if showQrModal && selectedLoan}
+	{#if showQrModal && selectedBorrowed}
 		<div class="fixed inset-0 z-60 overflow-y-auto">
 			<div
 				class="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
@@ -1035,12 +1035,12 @@
 							<!-- Request ID Badge -->
 							<div class="w-full rounded-xl bg-linear-to-br from-gray-50 to-gray-100/50 p-3 sm:p-4 text-center ring-1 ring-gray-200/50">
 								<p class="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1 sm:mb-1.5">Request ID</p>
-								<p class="font-mono text-xl sm:text-2xl font-bold tracking-wider text-gray-900">{selectedLoan.requestCode}</p>
+								<p class="font-mono text-xl sm:text-2xl font-bold tracking-wider text-gray-900">{selectedBorrowed.requestCode}</p>
 							</div>
 
 							<!-- Status Badge -->
-							<div class="inline-flex items-center gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 {getLoanBadgeClasses(selectedLoan)} ring-1 ring-black/5">
-								<span class="text-xs sm:text-sm font-semibold">{getLoanStateLabel(selectedLoan)}</span>
+							<div class="inline-flex items-center gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 {getBorrowedBadgeClasses(selectedBorrowed)} ring-1 ring-black/5">
+								<span class="text-xs sm:text-sm font-semibold">{getBorrowedStateLabel(selectedBorrowed)}</span>
 							</div>
 
 							<!-- Instructions Card -->
@@ -1074,14 +1074,14 @@
 		</div>
 	{/if}
 
-	{#if selectedLoan}
+	{#if selectedBorrowed}
 		<!-- Modal Container -->
 		<div class="fixed inset-0 z-50 overflow-y-auto">
 			<!-- Backdrop -->
 			<button
 				type="button"
 				class="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
-				onclick={closeLoanDetails}
+				onclick={closeBorrowedDetails}
 				aria-label="Close borrowed details modal"
 				tabindex="-1"
 			></button>
@@ -1091,7 +1091,7 @@
 				<div
 					class="animate-scaleIn relative w-full max-w-3xl overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
 					role="dialog"
-					aria-labelledby="loan-modal-title"
+					aria-labelledby="borrowing-modal-title"
 					aria-modal="true"
 				>
 					<!-- Header -->
@@ -1106,27 +1106,27 @@
 								</div>
 								
 								<div class="min-w-0 flex-1">
-									<h2 id="loan-modal-title" class="text-base font-bold text-gray-900 sm:text-lg lg:text-xl">Request Details</h2>
-									<p class="mt-0.5 font-mono text-xs font-semibold text-pink-600 sm:text-sm">{selectedLoan.requestCode}</p>
+									<h2 id="borrowing-modal-title" class="text-base font-bold text-gray-900 sm:text-lg lg:text-xl">Request Details</h2>
+									<p class="mt-0.5 font-mono text-xs font-semibold text-pink-600 sm:text-sm">{selectedBorrowed.requestCode}</p>
 									<div
 										class="mt-2 inline-flex items-center gap-2 rounded-full px-2.5 py-1 sm:px-3 sm:py-1.5 {getDetailModalStatusColor(
-											selectedLoan
+											selectedBorrowed
 										)} shadow-sm ring-1 ring-black/5"
 									>
 										<SelectedStatusIcon size={12} strokeWidth={2.5} class="sm:hidden" />
 										<SelectedStatusIcon size={14} strokeWidth={2.5} class="hidden sm:block" />
 										<span class="text-[10px] font-bold sm:text-xs"
-											>{getDetailModalStatusLabel(selectedLoan)}</span
+											>{getDetailModalStatusLabel(selectedBorrowed)}</span
 										>
 									</div>
 								</div>
 							</div>
 
 							<div class="flex items-center gap-1.5 shrink-0">
-								{#if selectedLoan.status === 'borrowed'}
+								{#if selectedBorrowed.status === 'borrowed'}
 									<button
 										type="button"
-										onclick={() => { qrLoan = selectedLoan; qrDataUrl = null; QRCode.toDataURL(selectedLoan!.id, { width: 240, margin: 2, color: { dark: '#111827', light: '#ffffff' }, errorCorrectionLevel: 'H' }).then(url => { qrDataUrl = url; }).catch(() => {}); showQrModal = true; }}
+										onclick={() => { qrBorrowed = selectedBorrowed; qrDataUrl = null; QRCode.toDataURL(selectedBorrowed!.id, { width: 240, margin: 2, color: { dark: '#111827', light: '#ffffff' }, errorCorrectionLevel: 'H' }).then(url => { qrDataUrl = url; }).catch(() => {}); showQrModal = true; }}
 										class="shrink-0 rounded-xl p-2 text-pink-600 transition-all hover:bg-pink-50 active:scale-95 sm:p-2.5"
 										title="View QR Code"
 										aria-label="View QR Code"
@@ -1137,7 +1137,7 @@
 								{/if}
 								<button
 									type="button"
-									onclick={closeLoanDetails}
+									onclick={closeBorrowedDetails}
 									class="shrink-0 rounded-xl p-2 text-gray-400 transition-all hover:bg-gray-100 hover:text-gray-600 active:scale-95 sm:p-2.5"
 									aria-label="Close modal"
 								>
@@ -1157,8 +1157,8 @@
 									<div class="relative">
 										<!-- SVG Background for connector lines -->
 										<svg class="pointer-events-none absolute inset-0 h-16 w-full" style="z-index: 0;">
-											{#each getApprovalTimeline(selectedLoan) as step, idx}
-												{@const stepCount = getApprovalTimeline(selectedLoan).length}
+											{#each getApprovalTimeline(selectedBorrowed) as step, idx}
+												{@const stepCount = getApprovalTimeline(selectedBorrowed).length}
 												{@const isLastStep = idx === stepCount - 1}
 												{@const stepWidth = 100 / stepCount}
 												{@const x1 = stepWidth * (idx + 0.5)}
@@ -1183,7 +1183,7 @@
 
 										<!-- Timeline steps -->
 										<div class="relative flex items-start justify-between gap-1 sm:gap-2" style="z-index: 1;">
-											{#each getApprovalTimeline(selectedLoan) as step, idx}
+											{#each getApprovalTimeline(selectedBorrowed) as step, idx}
 												{@const isCompleted = step.status === 'completed'}
 												{@const isPending = step.status === 'pending'}
 												{@const isCancelled = step.status === 'cancelled'}
@@ -1291,7 +1291,7 @@
 											</p>
 										</div>
 										<p class="text-sm font-bold text-gray-900 sm:text-base">
-											{new Date(selectedLoan.requestDate).toLocaleDateString('en-US', {
+											{new Date(selectedBorrowed.requestDate).toLocaleDateString('en-US', {
 												month: 'short',
 												day: 'numeric',
 												year: 'numeric'
@@ -1311,10 +1311,10 @@
 											</p>
 										</div>
 										<p class="text-sm font-bold text-gray-900 sm:text-base">
-											{new Date(selectedLoan.borrowDate).toLocaleDateString('en-US', {
+											{new Date(selectedBorrowed.borrowDate).toLocaleDateString('en-US', {
 												month: 'short',
 												day: 'numeric'
-											})} – {new Date(selectedLoan.returnDate).toLocaleDateString('en-US', {
+											})} – {new Date(selectedBorrowed.returnDate).toLocaleDateString('en-US', {
 												month: 'short',
 												day: 'numeric',
 												year: 'numeric'
@@ -1334,10 +1334,10 @@
 											</p>
 										</div>
 										<p class="text-sm font-bold text-gray-900 sm:text-base">
-											{selectedLoan.classCodeString}
+											{selectedBorrowed.classCodeString}
 										</p>
 										<p class="mt-0.5 truncate text-[10px] text-gray-500 sm:text-xs">
-											{selectedLoan.classSubjectString}
+											{selectedBorrowed.classSubjectString}
 										</p>
 									</div>
 									<div
@@ -1356,23 +1356,23 @@
 											<div
 												class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-pink-100 text-xs font-semibold text-pink-700 ring-1 ring-pink-200"
 											>
-												{#if selectedLoan.instructorPhoto}
+												{#if selectedBorrowed.instructorPhoto}
 													<img
-														src={selectedLoan.instructorPhoto}
-														alt={selectedLoan.instructorName}
+														src={selectedBorrowed.instructorPhoto}
+														alt={selectedBorrowed.instructorName}
 														class="h-full w-full object-cover"
 														loading="lazy"
 													/>
 												{:else}
-													{selectedLoan.instructorName.charAt(0).toUpperCase()}
+													{selectedBorrowed.instructorName.charAt(0).toUpperCase()}
 												{/if}
 											</div>
 											<p class="text-sm font-bold text-gray-900 sm:text-base">
-												{selectedLoan.instructorName}
+												{selectedBorrowed.instructorName}
 											</p>
 										</div>
 									</div>
-									{#if selectedLoan.custodianName && selectedLoan.custodianName !== 'Pending Custodian'}
+									{#if selectedBorrowed.custodianName && selectedBorrowed.custodianName !== 'Pending Custodian'}
 										<div
 											class="group rounded-xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-3 transition-all hover:border-pink-200 hover:shadow-md sm:p-4"
 										>
@@ -1389,19 +1389,19 @@
 												<div
 													class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-pink-100 text-xs font-semibold text-pink-700 ring-1 ring-pink-200"
 												>
-													{#if selectedLoan.custodianPhoto}
+													{#if selectedBorrowed.custodianPhoto}
 														<img
-															src={selectedLoan.custodianPhoto}
-															alt={selectedLoan.custodianName}
+															src={selectedBorrowed.custodianPhoto}
+															alt={selectedBorrowed.custodianName}
 															class="h-full w-full object-cover"
 															loading="lazy"
 														/>
 													{:else}
-														{selectedLoan.custodianName.charAt(0).toUpperCase()}
+														{selectedBorrowed.custodianName.charAt(0).toUpperCase()}
 													{/if}
 												</div>
 												<p class="text-sm font-bold text-gray-900 sm:text-base">
-													{selectedLoan.custodianName}
+													{selectedBorrowed.custodianName}
 												</p>
 											</div>
 										</div>
@@ -1419,7 +1419,7 @@
 											</p>
 										</div>
 										<p class="text-sm font-bold text-gray-900 sm:text-base">
-											{selectedLoan.purpose}
+											{selectedBorrowed.purpose}
 										</p>
 									</div>
 								</div>
@@ -1441,7 +1441,7 @@
 									
 									<!-- Table Rows -->
 									<div class="divide-y divide-gray-100">
-										{#each selectedLoan.items as item}
+										{#each selectedBorrowed.items as item}
 											{@const pic = item.picture ?? itemPictureCache.get(item.itemId)}
 											{@const code = item.itemId ? item.itemId.slice(-6).toUpperCase() : 'N/A'}
 											<div class="grid items-center gap-3 bg-white p-3 sm:grid-cols-12 sm:p-4 transition-colors hover:bg-gray-50/50">
@@ -1506,7 +1506,7 @@
 							</div>
 
 							<!-- Overdue Banner -->
-							{#if selectedLoan.isOverdue}
+							{#if selectedBorrowed.isOverdue}
 								<div
 									class="rounded-2xl border-2 border-red-200 bg-linear-to-br from-red-50 to-red-100/50 p-5"
 								>
@@ -1519,10 +1519,10 @@
 										<div class="min-w-0 flex-1">
 											<p class="text-sm font-bold text-red-900">Overdue Notification</p>
 											<p class="mt-1.5 text-sm leading-relaxed text-red-800">
-												This borrowing is overdue by {Math.abs(selectedLoan.daysDelta)} day{Math.abs(selectedLoan.daysDelta) > 1 ? 's' : ''}. Please proceed to the custodian desk immediately.
+												This borrowing is overdue by {Math.abs(selectedBorrowed.daysDelta)} day{Math.abs(selectedBorrowed.daysDelta) > 1 ? 's' : ''}. Please proceed to the custodian desk immediately.
 											</p>
 											<p class="mt-1 text-xs text-red-600">
-												Due date: {new Date(selectedLoan.returnDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+												Due date: {new Date(selectedBorrowed.returnDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
 											</p>
 										</div>
 									</div>
@@ -1530,7 +1530,7 @@
 							{/if}
 
 							<!-- Replacement Obligations Table -->
-							{#if selectedLoan.items.some((item: any) => item.inspection && (item.inspection.replacementQuantity || 0) > 0)}
+							{#if selectedBorrowed.items.some((item: any) => item.inspection && (item.inspection.replacementQuantity || 0) > 0)}
 								<div class="mt-8 animate-fadeIn">
 									<h3 class="mb-4 flex items-center gap-2 text-sm font-bold tracking-wider text-gray-900 uppercase">
 										<div class="h-1 w-1 rounded-full bg-amber-500"></div>
@@ -1546,7 +1546,7 @@
 										
 										<!-- Table Rows -->
 										<div class="divide-y divide-amber-100/50">
-											{#each selectedLoan.items.filter((item: any) => item.inspection && (item.inspection.replacementQuantity || 0) > 0) as item}
+											{#each selectedBorrowed.items.filter((item: any) => item.inspection && (item.inspection.replacementQuantity || 0) > 0) as item}
 												{@const pic = item.picture ?? itemPictureCache.get(item.itemId)}
 												{@const code = item.itemId ? item.itemId.slice(-6).toUpperCase() : 'N/A'}
 												<div class="grid items-center gap-3 bg-white p-3 sm:grid-cols-12 sm:p-4 hover:bg-amber-50/30 transition-colors">
@@ -1588,7 +1588,7 @@
 						</div>
 
 					<!-- Footer -->
-					{#if selectedLoan.hasUnresolvedIssue}
+					{#if selectedBorrowed.hasUnresolvedIssue}
 						<div
 							class="safe-area-bottom sticky bottom-0 border-t border-gray-200 bg-white/95 px-4 py-3.5 backdrop-blur-sm sm:px-8 sm:py-4"
 						>
@@ -1604,7 +1604,7 @@
 	{/if}
 
 	<!-- QR Code Modal -->
-	{#if showQrModal && qrLoan}
+	{#if showQrModal && qrBorrowed}
 		<div class="fixed inset-0 z-60 overflow-y-auto">
 			<div
 				class="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
@@ -1654,12 +1654,12 @@
 							<!-- Request ID Badge -->
 							<div class="w-full rounded-xl bg-linear-to-br from-gray-50 to-gray-100/50 p-3 sm:p-4 text-center ring-1 ring-gray-200/50">
 								<p class="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1 sm:mb-1.5">Request ID</p>
-								<p class="font-mono text-xl sm:text-2xl font-bold tracking-wider text-gray-900">{qrLoan.requestCode}</p>
+								<p class="font-mono text-xl sm:text-2xl font-bold tracking-wider text-gray-900">{qrBorrowed.requestCode}</p>
 							</div>
 
 							<!-- Status Badge -->
-							<div class="inline-flex items-center gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 ring-1 ring-black/5 {getLoanBadgeClasses(qrLoan)}">
-								<span class="text-xs sm:text-sm font-semibold">{getLoanStateLabel(qrLoan)}</span>
+							<div class="inline-flex items-center gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 ring-1 ring-black/5 {getBorrowedBadgeClasses(qrBorrowed)}">
+								<span class="text-xs sm:text-sm font-semibold">{getBorrowedStateLabel(qrBorrowed)}</span>
 							</div>
 
 							<!-- Instructions Card -->

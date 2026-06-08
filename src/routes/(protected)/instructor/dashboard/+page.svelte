@@ -36,7 +36,7 @@
 	const pendingApprovalCount = $derived(
 		liveRequests.filter(r => r.status === 'pending_instructor').length
 	);
-	const activeLoans = $derived(
+	const currentlyBorrowedCount = $derived(
 		liveRequests.filter(r => r.status === 'borrowed' || r.status === 'pending_return').length
 	);
 	const overdueCount = $derived(
@@ -266,7 +266,7 @@
 				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-violet-700">
 					<Package size={12} /> Currently Borrowed
 				</div>
-				<p class="mt-2 text-3xl font-bold text-violet-700">{activeLoans}</p>
+				<p class="mt-2 text-3xl font-bold text-violet-700">{currentlyBorrowedCount}</p>
 				<p class="mt-0.5 text-xs text-violet-500">Currently borrowed</p>
 			</button>
 
@@ -290,8 +290,8 @@
 				<div class="flex items-center gap-2">
 					<ClipboardList size={16} class="text-pink-500" />
 					<h2 class="text-sm font-semibold text-gray-900">Requests Needing Action</h2>
-					{#if !requestsNeedingActionLoading && pendingApprovalCount + fulfillmentCount + activeLoans > 0}
-						<span class="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-semibold text-pink-700">{pendingApprovalCount + fulfillmentCount + activeLoans}</span>
+					{#if !requestsNeedingActionLoading && pendingApprovalCount + fulfillmentCount + currentlyBorrowedCount > 0}
+						<span class="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-semibold text-pink-700">{pendingApprovalCount + fulfillmentCount + currentlyBorrowedCount}</span>
 					{/if}
 				</div>
 				<a href="/instructor/requests" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">

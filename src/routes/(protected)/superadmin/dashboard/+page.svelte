@@ -83,7 +83,7 @@
 
 	let totalRequests = $state(0);
 	let pendingRequests = $state(0);
-	let activeLoans = $state(0);
+	let currentlyBorrowedCount = $state(0);
 	let overdueRequests = $state(0);
 	let recentRequests = $state<BorrowRequestRecord[]>([]);
 
@@ -122,7 +122,7 @@
 		pendingRequests = cachedRequests.requests.filter(
 			(r: BorrowRequestRecord) => r.status === 'pending_instructor'
 		).length;
-		activeLoans = cachedRequests.requests.filter(
+		currentlyBorrowedCount = cachedRequests.requests.filter(
 			(r: BorrowRequestRecord) => r.status === 'borrowed' || r.status === 'pending_return'
 		).length;
 		overdueRequests = cachedRequests.requests.filter(
@@ -280,7 +280,7 @@
 				pendingRequests = requestsResVal.requests.filter(
 					(r: BorrowRequestRecord) => r.status === 'pending_instructor'
 				).length;
-				activeLoans = requestsResVal.requests.filter(
+				currentlyBorrowedCount = requestsResVal.requests.filter(
 					(r: BorrowRequestRecord) => r.status === 'borrowed' || r.status === 'pending_return'
 				).length;
 				overdueRequests = requestsResVal.requests.filter(
@@ -559,7 +559,7 @@
 
 			<button
 				type="button"
-				onclick={() => goto('/superadmin/requests?filter=active_loans')}
+				onclick={() => goto('/superadmin/requests?filter=active_borrowings')}
 				class="w-full text-left rounded-xl border border-violet-200 bg-violet-50 p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 focus:outline-none focus:ring-2 focus:ring-violet-500/20 cursor-pointer sm:p-5"
 			>
 				<div class="flex items-center justify-between gap-2">
@@ -567,7 +567,7 @@
 						<p class="truncate text-xs font-semibold tracking-wide text-violet-700 uppercase">
 							Currently Borrowed
 						</p>
-						<p class="mt-1 text-2xl font-bold text-violet-700 sm:mt-2 sm:text-3xl">{activeLoans}</p>
+						<p class="mt-1 text-2xl font-bold text-violet-700 sm:mt-2 sm:text-3xl">{currentlyBorrowedCount}</p>
 						<p class="mt-0.5 text-xs text-violet-600">Currently borrowed</p>
 					</div>
 					<div
