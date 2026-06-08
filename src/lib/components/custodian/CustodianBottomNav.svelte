@@ -73,7 +73,7 @@
 		const map: Record<string, string> = {
 			approved_instructor: 'Pending Release',
 			ready_for_pickup: 'Ready for Pickup',
-			borrowed: 'Active Loan',
+			borrowed: 'Currently Borrowed',
 			pending_return: 'Pending Return',
 			missing: 'Missing',
 			returned: 'Returned'

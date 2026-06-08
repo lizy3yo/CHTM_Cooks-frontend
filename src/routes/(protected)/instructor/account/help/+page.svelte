@@ -77,7 +77,7 @@
 		{
 			question: 'Can I see which students are currently borrowing equipment?',
 			answer:
-				'Yes. The "Borrow Requests" page shows all active loans associated with your class codes. You can filter by status to see items that are currently borrowed, pending return, or overdue.'
+				'Yes. The "Borrow Requests" page shows all currently borrowed equipment associated with your class codes. You can filter by status to see items that are currently borrowed, pending return, or overdue.'
 		},
 		{
 			question: 'What happens when a student loses or damages an item?',
@@ -103,7 +103,7 @@
 
 	const quickQuestions = [
 		'How do I approve a request?',
-		'View active loans',
+		'View currently borrowed items',
 		'Request approval history'
 	];
 

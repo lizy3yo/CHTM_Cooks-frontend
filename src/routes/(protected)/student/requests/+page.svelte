@@ -560,7 +560,7 @@
 			pending: 'Under Review',
 			approved: 'Approved',
 			ready: 'Ready for Pickup',
-			'picked-up': 'Active Loan',
+			'picked-up': 'Currently Borrowed',
 			'pending-return': 'Return Initiated',
 			missing: 'Item Missing',
 			unresolved: 'Unresolved Case',
@@ -1197,7 +1197,7 @@
 						<option value="pending">Under Review</option>
 						<option value="approved">Approved</option>
 						<option value="ready">Ready for Pickup</option>
-						<option value="active">Active Loans</option>
+						<option value="active">Currently Borrowed</option>
 						<option value="unresolved">Unresolved Incidents</option>
 						<option value="history">History & Resolved</option>
 					</select>

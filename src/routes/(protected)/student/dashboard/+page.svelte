@@ -108,7 +108,7 @@
 			pending: 'Under Review',
 			approved: 'Approved',
 			ready: 'Ready for Pickup',
-			'picked-up': 'Active Loan',
+			'picked-up': 'Currently Borrowed',
 			'pending-return': 'Return Initiated',
 			missing: 'Item Missing',
 			returned: 'Returned',
@@ -689,7 +689,7 @@
 						class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-violet-700 uppercase"
 					>
 						<Package size={12} />
-						<span>Active Loans</span>
+						<span>Currently Borrowed</span>
 					</div>
 					<p class="mt-2 text-3xl font-bold text-violet-700 sm:text-4xl">{metrics.activeLoans}</p>
 					<p class="mt-0.5 text-xs text-violet-500">Borrowed or returning</p>
@@ -1018,7 +1018,7 @@
 		<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
 			<!-- LEFT col ────────────────────────────────────────────────────── -->
 			<div class="space-y-6 lg:col-span-2">
-				<!-- Active Loans -->
+				<!-- Currently Borrowed -->
 				{#if activeLoansNotificationsLoading}
 					<div class="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 animate-pulse">
 						<Skeleton class="h-5 w-40" />
@@ -1032,7 +1032,7 @@
 					<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
 						<div class="flex items-center gap-2">
 							<PackageOpen size={18} class="text-violet-600" />
-							<h2 class="text-sm font-semibold text-gray-900">Active Loans</h2>
+							<h2 class="text-sm font-semibold text-gray-900">Currently Borrowed</h2>
 						</div>
 						<a
 							href="/student/borrowed"
@@ -1045,7 +1045,7 @@
 					{#if activeRequests.length === 0}
 						<div class="flex min-h-48 flex-col items-center justify-center px-5 py-10 text-center">
 							<PackageCheck size={32} class="mx-auto text-pink-600" />
-							<p class="mt-2 text-sm text-gray-500">No active loans</p>
+							<p class="mt-2 text-sm text-gray-500">No currently borrowed items</p>
 						</div>
 					{:else}
 						<ul class="divide-y divide-gray-50">

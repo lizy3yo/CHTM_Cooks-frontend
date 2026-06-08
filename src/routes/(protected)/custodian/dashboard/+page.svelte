@@ -354,7 +354,7 @@ const damageRateDisplay = $derived.by(() => {
 				class="rounded-xl border border-violet-200 bg-violet-50 p-4 shadow-sm hover:shadow-md hover:border-violet-300/60 hover:bg-violet-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-violet-500/20"
 			>
 				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-violet-700">
-					<PackageOpen size={12} /> Active Loans
+					<PackageOpen size={12} /> Currently Borrowed
 				</div>
 				<p class="mt-2 text-3xl font-bold text-violet-700">{activeLoans}</p>
 				<p class="mt-0.5 text-xs text-violet-500">{totalItemsOut} items currently out</p>
@@ -527,18 +527,18 @@ const damageRateDisplay = $derived.by(() => {
 						{/if}
 					</div>
 
-					<!-- Active Loans (overdue highlighted) -->
+					<!-- Currently Borrowed (overdue highlighted) -->
 					<div class="p-4">
 						<div class="mb-3 flex items-center justify-between">
 							<span class="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-800">
-								<Package size={11} /> Active Loans
+								<Package size={11} /> Currently Borrowed
 							</span>
 							<span class="text-xs font-bold text-violet-700">{requestsActive.length}</span>
 						</div>
 						{#if requestsActive.length === 0}
 							<div class="flex min-h-29 flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 py-4 text-center">
 								<Package size={18} class="text-pink-600" />
-								<p class="mt-2 text-xs font-medium text-gray-500">No active loans</p>
+								<p class="mt-2 text-xs font-medium text-gray-500">No currently borrowed items</p>
 							</div>
 						{:else}
 							<ul class="space-y-2 overflow-y-auto">

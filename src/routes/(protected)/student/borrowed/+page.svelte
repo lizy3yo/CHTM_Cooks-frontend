@@ -333,7 +333,7 @@
 			if (overdueCount > 0 && !hasShownOverdueModal) {
 				hasShownOverdueModal = true;
 				void confirmStore.warning(
-					`You currently have ${overdueCount} overdue loan${overdueCount > 1 ? 's' : ''}. Please proceed to the custodian desk for return confirmation.`,
+					`You currently have ${overdueCount} overdue item${overdueCount > 1 ? 's' : ''}. Please proceed to the custodian desk for return confirmation.`,
 					'Immediate Attention Required',
 					'Understood',
 					'Later'
@@ -452,7 +452,7 @@
 		if (loan.status === 'pending_return') return 'Awaiting Return Confirmation';
 		if (loan.isOverdue) return 'Overdue';
 		if (loan.isDueSoon) return 'Due Soon';
-		return 'Active Loan';
+		return 'Currently Borrowed';
 	}
 
 	function getLoanTimelineColorClasses(loan: LoanCard): string {
@@ -680,7 +680,7 @@
 <div class="space-y-6">
 	<div>
 		<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">My Borrowed Items</h1>
-		<p class="mt-1 text-sm text-gray-500">Track your active equipment loans</p>
+		<p class="mt-1 text-sm text-gray-500">Track your currently borrowed equipment</p>
 	</div>
 
 	<!-- Statistics Cards -->
@@ -691,7 +691,7 @@
 		>
 			<div class="flex items-center justify-between gap-2">
 				<div class="min-w-0">
-					<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Active Loans</p>
+					<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Currently Borrowed</p>
 					<p class="mt-1 text-2xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">{metrics.totalActive}</p>
 				</div>
 				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 sm:h-12 sm:w-12">
@@ -773,7 +773,7 @@
 		<!-- Row 2: filter + sort selects -->
 		<div class="mt-2 flex gap-2">
 			<select bind:value={selectedFilter} class="flex-1 min-w-0 rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500">
-				<option value="all">All Loans</option>
+				<option value="all">Currently Borrowed</option>
 				<option value="overdue">Overdue</option>
 				<option value="due-soon">Due Soon</option>
 				<option value="on-track">On Track</option>
@@ -1519,7 +1519,7 @@
 										<div class="min-w-0 flex-1">
 											<p class="text-sm font-bold text-red-900">Overdue Notification</p>
 											<p class="mt-1.5 text-sm leading-relaxed text-red-800">
-												This loan is overdue by {Math.abs(selectedLoan.daysDelta)} day{Math.abs(selectedLoan.daysDelta) > 1 ? 's' : ''}. Please proceed to the custodian desk immediately.
+												This borrowing is overdue by {Math.abs(selectedLoan.daysDelta)} day{Math.abs(selectedLoan.daysDelta) > 1 ? 's' : ''}. Please proceed to the custodian desk immediately.
 											</p>
 											<p class="mt-1 text-xs text-red-600">
 												Due date: {new Date(selectedLoan.returnDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}

@@ -1182,7 +1182,7 @@
 					<option value="pending_instructor">Under Review</option>
 					<option value="approved_instructor">Approved</option>
 					<option value="ready_for_pickup">Ready for Pickup</option>
-					<option value="borrowed">Active Loan</option>
+					<option value="borrowed">Currently Borrowed</option>
 					<option value="pending_return">Confirm Pickup</option>
 					<option value="returned">Returned</option>
 					<option value="rejected">Declined</option>

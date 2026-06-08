@@ -76,7 +76,7 @@
 		{
 			question: 'How do I flag a lost or damaged item?',
 			answer:
-				'Open the active loan from "Borrow Requests" and use the "Flag Item" option to mark the item as lost or damaged. This will issue a replacement obligation to the student and notify the system administrator. Do not confirm the return until the issue is resolved.'
+				'Open the borrowed request from "Borrow Requests" and use the "Flag Item" option to mark the item as lost or damaged. This will issue a replacement obligation to the student and notify the system administrator. Do not confirm the return until the issue is resolved.'
 		},
 		{
 			question: 'How do I manage inventory?',

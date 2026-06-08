@@ -513,7 +513,7 @@ html.dark .overflow-hidden.rounded-xl.bg-white.shadow-sm .divide-y li .text-gray
 }
 
 /* ── Custodian Dashboard: KPI stat cards and metric cards ───────────────── */
-/* KPI cards (Active Loans, Pending, Overdue, Stock Alerts, Replacements) */
+/* KPI cards (Currently Borrowed, Pending, Overdue, Stock Alerts, Replacements) */
 html.dark .rounded-xl.border.border-violet-200.bg-violet-50 {
 	background-color: rgba(139,92,246,0.10) !important;
 	border-color: rgba(139,92,246,0.20) !important;
@@ -549,7 +549,7 @@ html.dark .rounded-xl.border.border-pink-100.bg-pink-50 {
 	border-color: rgba(236,72,153,0.20) !important;
 }
 
-/* Request list items (Ready for Pickup, Active Loans) */
+/* Request list items (Ready for Pickup, Currently Borrowed) */
 html.dark .rounded-lg.border.border-indigo-100.bg-indigo-50\/50 {
 	background-color: rgba(99,102,241,0.08) !important;
 	border-color: rgba(99,102,241,0.15) !important;
@@ -1223,7 +1223,7 @@ html.dark [role="dialog"] .border-emerald-200.bg-emerald-50 {
 
 /* ── Dashboard colored-tint cards (student dashboard KPI / trust score) ── */
 
-/* Violet (Active Loans card) */
+/* Violet (Currently Borrowed card) */
 html.dark .bg-violet-50 {
 	background-color: rgba(139,92,246,0.06) !important;
 }
@@ -1378,7 +1378,7 @@ html.dark .bg-emerald-100 {
 	background-color: rgba(16,185,129,0.08) !important;
 }
 
-/* Violet status badge (Active Loan) */
+/* Violet status badge (Currently Borrowed) */
 html.dark .bg-violet-100 {
 	background-color: rgba(139,92,246,0.08) !important;
 }

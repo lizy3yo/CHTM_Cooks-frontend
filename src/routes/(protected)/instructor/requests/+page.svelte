@@ -593,7 +593,7 @@
 			case 'fulfillment': 
 				return { label: 'In Preparation Only', bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-600/10', btn: 'text-blue-500', btnHoverBg: 'hover:bg-blue-100', btnHoverText: 'hover:text-blue-700' };
 			case 'borrowed': 
-				return { label: 'Active Loans Only', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
+				return { label: 'Currently Borrowed Only', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
 			case 'overdue': 
 				return { label: 'Overdue Only', bg: 'bg-red-50', text: 'text-red-700', ring: 'ring-red-600/10', btn: 'text-red-500', btnHoverBg: 'hover:bg-red-100', btnHoverText: 'hover:text-red-700' };
 			case 'unresolved': 
@@ -943,7 +943,7 @@
 			return rawStatus === 'ready_for_pickup' ? 'Ready for Pickup' : 'In Preparation';
 		if (status === 'borrowed') {
 			if (rawStatus === 'pending_return') return 'Return Requested';
-			return 'Active Loan';
+			return 'Currently Borrowed';
 		}
 		if (status === 'unresolved') return 'Unresolved';
 		if (status === 'history') {
@@ -1373,7 +1373,7 @@
 							<option value="all">All Statuses</option>
 							<option value="pending">Pending Approval</option>
 							<option value="fulfillment">Approved / Ready</option>
-							<option value="borrowed">Active Loans</option>
+							<option value="borrowed">Currently Borrowed</option>
 							<option value="overdue">Overdue Only</option>
 							<option value="unresolved">Unresolved Issues</option>
 							<option value="resolved_completed">Resolved / Completed</option>

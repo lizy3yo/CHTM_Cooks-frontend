@@ -187,7 +187,7 @@
 		
 		switch (filter) {
 			case 'pending_approval': return { label: 'Pending Approval Only', bg: 'bg-yellow-50', text: 'text-yellow-700', ring: 'ring-yellow-600/10', btn: 'text-yellow-500', btnHoverBg: 'hover:bg-yellow-100', btnHoverText: 'hover:text-yellow-700' };
-			case 'active_loans': return { label: 'Active Loans Only', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
+			case 'active_loans': return { label: 'Currently Borrowed Only', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
 			case 'ready_for_pickup': return { label: 'Ready for Pickup', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
 			case 'currently_borrowed': return { label: 'Currently Borrowed', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
 			case 'pending_return': return { label: 'Confirm Pickup', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
@@ -264,7 +264,7 @@
 			return { text: custodianStatus === 'Ready for Pickup' ? 'Ready for Pickup' : 'With Custodian', color: 'bg-blue-100 text-blue-800' };
 		}
 		if (status === 'borrowed' || status === 'pending_return') {
-			return { text: 'Active Loan', color: 'bg-purple-100 text-purple-800' };
+			return { text: 'Currently Borrowed', color: 'bg-purple-100 text-purple-800' };
 		}
 		if (status === 'returned' || status === 'resolved') {
 			return { text: 'Completed', color: 'bg-emerald-100 text-emerald-800' };
@@ -669,7 +669,7 @@
 			pending_instructor: 'Under Review',
 			approved_instructor: 'Approved',
 			ready_for_pickup: 'Ready for Pickup',
-			borrowed: 'Active Loan',
+			borrowed: 'Currently Borrowed',
 			pending_return: 'Confirm Pickup',
 			missing: 'Item Missing',
 			returned: 'Returned',
@@ -963,7 +963,7 @@
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Active Loans</p>
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Currently Borrowed</p>
 							<p class="mt-1 text-2xl font-semibold text-purple-600 sm:mt-2 sm:text-3xl">{stats.active}</p>
 						</div>
 						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 sm:h-12 sm:w-12">
@@ -1031,8 +1031,8 @@
 			>
 				<option value="all">All Requests</option>
 				<option value="pending_approval">Pending Approval</option>
-				<optgroup label="Active Loans">
-					<option value="active_loans">All Active Loans</option>
+				<optgroup label="Currently Borrowed">
+					<option value="active_loans">All Currently Borrowed</option>
 					<option value="ready_for_pickup">Ready for Pickup</option>
 					<option value="currently_borrowed">Currently Borrowed</option>
 					<option value="pending_return">Confirm Pickup</option>

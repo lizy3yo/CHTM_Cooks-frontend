@@ -934,7 +934,7 @@
 			case 'active':
 				return rawStatus === 'pending_return'
 					? { text: 'Awaiting Return Confirmation', color: 'bg-orange-100 text-orange-800' }
-					: { text: 'On Loan', color: 'bg-purple-100 text-purple-800' };
+					: { text: 'Currently Borrowed', color: 'bg-purple-100 text-purple-800' };
 			case 'unresolved':
 				return { text: 'Unresolved', color: 'bg-amber-100 text-amber-800' };
 			case 'history':
@@ -1002,7 +1002,7 @@
 				}
 
 				return {
-					text: 'This equipment is currently on loan and should be monitored until return.',
+					text: 'This equipment is currently borrowed and should be monitored until return.',
 					color: 'text-purple-700'
 				};
 			case 'unresolved':
@@ -1074,7 +1074,7 @@
 			case 'ready': 
 				return { label: 'Ready for Pickup Only', bg: 'bg-green-50', text: 'text-green-700', ring: 'ring-green-600/10', btn: 'text-green-500', btnHoverBg: 'hover:bg-green-100', btnHoverText: 'hover:text-green-700' };
 			case 'active': 
-				return { label: 'On Loan Only', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
+				return { label: 'Currently Borrowed Only', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
 			case 'pending_return': 
 				return { label: 'Confirm Return Only', bg: 'bg-orange-50', text: 'text-orange-700', ring: 'ring-orange-600/10', btn: 'text-orange-500', btnHoverBg: 'hover:bg-orange-100', btnHoverText: 'hover:text-orange-700' };
 			case 'overdue': 
@@ -1091,13 +1091,13 @@
 </script>
 
 <svelte:head>
-	<title>Requests & Loans - Custodian Portal</title>
+	<title>Requests & Borrowed Items - Custodian Portal</title>
 </svelte:head>
 
 	<div class="space-y-6">
 		<!-- Header -->
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Requests & Loans</h1>
+			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Requests & Borrowed Items</h1>
 			<p class="mt-1 text-sm text-gray-500">Prepare, distribute, and receive borrowed equipment</p>
 		</div>
 
@@ -1318,7 +1318,7 @@
 							<option value="all">All Statuses</option>
 							<option value="pending">Pending Preparation</option>
 							<option value="ready">Ready for Pickup (Confirm Pickup)</option>
-							<option value="active">On Loan (Active)</option>
+							<option value="active">Currently Borrowed</option>
 							<option value="pending_return">Confirm Return</option>
 							<option value="overdue">Overdue</option>
 							<option value="unresolved">Unresolved Obligations</option>
@@ -1643,7 +1643,7 @@
 											{:else if activeTab === 'ready'}
 												No items ready for pickup
 											{:else if activeTab === 'active'}
-												No active loans
+												No currently borrowed items
 											{:else if activeTab === 'unresolved'}
 												No unresolved items
 											{:else}
@@ -1871,7 +1871,7 @@
 											{:else if activeTab === 'ready'}
 												No items ready for pickup
 											{:else if activeTab === 'active'}
-												No active loans
+												No currently borrowed items
 											{:else if activeTab === 'unresolved'}
 												No unresolved items
 											{:else}

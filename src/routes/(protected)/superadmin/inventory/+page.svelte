@@ -5010,7 +5010,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 												)?.count || 0}
 											</p>
 											<p class="text-[10px] font-bold tracking-wider text-gray-500 uppercase">
-												Active<br />Loans
+												Currently<br />Borrowed
 											</p>
 										</div>
 									</div>

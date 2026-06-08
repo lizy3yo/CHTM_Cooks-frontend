@@ -276,7 +276,7 @@
 		hasShownObligationDialog = true;
 		void confirmStore
 			.warning(
-				`You have ${unresolvedObligationCount} unresolved replacement obligation${unresolvedObligationCount === 1 ? '' : 's'} from a previous loan. Please settle all outstanding cases before submitting a new request.`,
+				`You have ${unresolvedObligationCount} unresolved replacement obligation${unresolvedObligationCount === 1 ? '' : 's'} from a previous borrowing. Please settle all outstanding cases before submitting a new request.`,
 				'Request temporarily on hold',
 				'Review Obligations',
 				'Dismiss'
