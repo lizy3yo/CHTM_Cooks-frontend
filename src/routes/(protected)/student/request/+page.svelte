@@ -988,6 +988,11 @@
 	}
 
 	function addItemToCart(item: RequestItemOption) {
+		if (hasNoEnrollment || availableClassCodes.length === 0) {
+			toastStore.error('You must be enrolled in a class to add items.', 'Restricted');
+			return;
+		}
+
 		requestCartStore.addItem({
 			itemId: item.id,
 			name: item.name,
@@ -1808,6 +1813,24 @@
 			<!-- Selected Items -->
 			{#if currentStep === 1}
 				<div class="animate-fadeIn rounded-lg bg-white p-4 shadow sm:p-6">
+					{#if hasNoEnrollment || availableClassCodes.length === 0}
+						<div class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4">
+							<div class="flex gap-3">
+								<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500 text-white shadow-sm">
+									<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+									</svg>
+								</div>
+								<div class="flex-1 min-w-0">
+									<h3 class="text-sm font-bold text-red-900">Enrollment Required</h3>
+									<p class="mt-1 text-xs text-red-700 leading-relaxed">
+										You are not currently enrolled in any active class. You must be enrolled in at least one class to request equipment. Please contact your instructor or administrator to be added to a class.
+									</p>
+								</div>
+							</div>
+						</div>
+					{/if}
+
 					<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<div>
 							<h2 class="text-base font-semibold text-gray-900 sm:text-lg">Selected Items</h2>
@@ -1820,6 +1843,7 @@
 						<!-- Search Button -->
 						<div class="search-dropdown-container relative w-full sm:w-auto">
 							<button
+								disabled={hasNoEnrollment || availableClassCodes.length === 0}
 								onclick={() => {
 									showItemSelector = !showItemSelector;
 									if (showItemSelector) {
@@ -1832,7 +1856,7 @@
 										}, 100);
 									}
 								}}
-								class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-pink-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 focus:outline-none sm:w-auto"
+								class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-pink-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 focus:outline-none sm:w-auto disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-pink-600"
 							>
 								<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path
@@ -2309,7 +2333,7 @@
 																const newQty = Math.max(1, item.requestedQuantity - 1);
 																updateItemQuantity(item.id, String(newQty));
 															}}
-															disabled={item.requestedQuantity <= 1}
+															disabled={item.requestedQuantity <= 1 || hasNoEnrollment || availableClassCodes.length === 0}
 															class="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:border-pink-500 hover:bg-pink-50 hover:text-pink-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:bg-white disabled:hover:text-gray-700"
 															title="Decrease quantity"
 														>
@@ -2337,6 +2361,7 @@
 																	? Math.min(item.maxQuantityPerRequest, item.available)
 																	: item.available}
 																value={item.requestedQuantity}
+																disabled={hasNoEnrollment || availableClassCodes.length === 0}
 																onchange={(e) =>
 																	updateItemQuantity(
 																		item.id,
@@ -2345,7 +2370,7 @@
 																	)}
 																class="w-14 rounded-md border {item.isrequired
 																	? 'border-emerald-300 bg-emerald-50 text-emerald-900'
-																	: 'border-gray-300 bg-white text-gray-900'} px-1.5 py-1 text-center text-xs font-bold focus:border-pink-500 focus:ring-1 focus:ring-pink-500/20"
+																	: 'border-gray-300 bg-white text-gray-900'} px-1.5 py-1 text-center text-xs font-bold focus:border-pink-500 focus:ring-1 focus:ring-pink-500/20 disabled:cursor-not-allowed disabled:opacity-60"
 																title={item.maxQuantityPerRequest
 																	? `Maximum ${item.maxQuantityPerRequest} per request`
 																	: `Maximum ${item.available} available`}
@@ -2365,7 +2390,7 @@
 															disabled={item.requestedQuantity >=
 																(item.maxQuantityPerRequest
 																	? Math.min(item.maxQuantityPerRequest, item.available)
-																	: item.available)}
+																	: item.available) || hasNoEnrollment || availableClassCodes.length === 0}
 															class="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:border-pink-500 hover:bg-pink-50 hover:text-pink-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:bg-white disabled:hover:text-gray-700"
 															title="Increase quantity"
 														>
@@ -2395,8 +2420,9 @@
 												<!-- Remove Button -->
 												{#if !item.isrequired}
 													<button
+														disabled={hasNoEnrollment || availableClassCodes.length === 0}
 														onclick={() => removeItemFromCart(item.id)}
-														class="flex h-7 w-7 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition-all hover:border-red-300 hover:bg-red-100 hover:text-red-700"
+														class="flex h-7 w-7 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition-all hover:border-red-300 hover:bg-red-100 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
 														title="Remove item"
 													>
 														<svg
@@ -3647,8 +3673,9 @@
 		{#if currentStep < totalSteps}
 			<button
 				type="button"
+				disabled={hasNoEnrollment || availableClassCodes.length === 0}
 				onclick={handleStepNext}
-				class="inline-flex items-center gap-2 rounded-lg bg-pink-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:outline-none"
+				class="inline-flex items-center gap-2 rounded-lg bg-pink-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-pink-600"
 			>
 				Continue
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

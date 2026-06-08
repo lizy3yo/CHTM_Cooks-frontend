@@ -26,6 +26,34 @@
 		return $requestCartItems.find((entry) => entry.itemId === itemId) ?? null;
 	});
 	let hasShownUnauthorizedToast = $state(false);
+	let hasNoEnrollment = $state(false);
+	let loadingClassCodes = $state(false);
+	let availableClassCodes = $state<any[]>([]);
+
+	async function loadStudentClassCodes() {
+		loadingClassCodes = true;
+		hasNoEnrollment = false;
+		try {
+			const response = await fetch('/api/class-codes/my-classes', {
+				method: 'GET',
+				credentials: 'include',
+				headers: {
+					'Content-Type': 'application/json'
+				}
+			});
+			if (!response.ok) throw new Error('Failed to fetch class codes');
+			const data = await response.json();
+			availableClassCodes = data.classCodes || [];
+			if (availableClassCodes.length === 0) {
+				hasNoEnrollment = true;
+			}
+		} catch (error) {
+			console.error('[CLASS-CODES] Failed to load class codes:', error);
+			hasNoEnrollment = true;
+		} finally {
+			loadingClassCodes = false;
+		}
+	}
 
 	// Filter State
 	let searchQuery = $state('');
@@ -296,6 +324,11 @@
 	 * Add item to request cart (shop-style behavior without redirect).
 	 */
 	async function requestItem(item: CatalogItem): Promise<void> {
+		if (hasNoEnrollment || availableClassCodes.length === 0) {
+			toastStore.error('You must be enrolled in a class to request equipment.', 'Restricted');
+			return;
+		}
+
 		if (item.status === 'Out of Stock') {
 			toastStore.error('This item is currently out of stock', 'Cannot Request Item');
 			return;
@@ -457,6 +490,9 @@
 	 * Load catalog on component mount
 	 */
 	onMount(() => {
+		// Load student's class codes
+		loadStudentClassCodes();
+
 		// Initialize cart from database
 		requestCartStore.init().catch((error) => {
 			console.error('Failed to initialize cart:', error);
@@ -607,8 +643,9 @@
 					{#if !selectedItem?.isrequired}
 						<button
 							type="button"
+							disabled={hasNoEnrollment}
 							onclick={() => selectedItem && removeItemFromRequest(selectedItem)}
-							class="inline-flex h-10 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition-colors hover:border-red-300 hover:bg-red-100"
+							class="inline-flex h-10 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition-colors hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
 							aria-label="Remove from request list"
 							title="Remove from request list"
 						>
@@ -631,7 +668,7 @@
 							type="button"
 							onclick={() =>
 								updateSelectedItemQuantity(Math.max(1, selectedItemRequestEntry.quantity - 1))}
-							disabled={selectedItemRequestEntry.quantity <= 1}
+							disabled={selectedItemRequestEntry.quantity <= 1 || hasNoEnrollment}
 							class="flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:border-pink-500 hover:bg-pink-50 hover:text-pink-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:bg-white disabled:hover:text-gray-700"
 							aria-label="Decrease requested quantity"
 							title="Decrease quantity"
@@ -652,6 +689,7 @@
 								min="1"
 								max={selectedItemRequestEntry.maxQuantity}
 								value={selectedItemRequestEntry.quantity}
+								disabled={hasNoEnrollment}
 								onchange={(e) =>
 									updateSelectedItemQuantity(
 										parseInt((e.target as HTMLInputElement).value, 10) || 1,
@@ -659,7 +697,7 @@
 									)}
 								class="w-14 rounded-md border {selectedItem?.isrequired
 									? 'border-emerald-300 bg-emerald-50 text-emerald-900'
-									: 'border-gray-300 bg-white text-gray-900'} px-1.5 py-1 text-center text-sm font-bold focus:border-pink-500 focus:ring-1 focus:ring-pink-500/20"
+									: 'border-gray-300 bg-white text-gray-900'} px-1.5 py-1 text-center text-sm font-bold focus:border-pink-500 focus:ring-1 focus:ring-pink-500/20 disabled:cursor-not-allowed disabled:opacity-60"
 								title="Enter desired quantity"
 							/>
 						</div>
@@ -673,7 +711,7 @@
 										selectedItemRequestEntry.quantity + 1
 									)
 								)}
-							disabled={selectedItemRequestEntry.quantity >= selectedItemRequestEntry.maxQuantity}
+							disabled={selectedItemRequestEntry.quantity >= selectedItemRequestEntry.maxQuantity || hasNoEnrollment}
 							class="flex h-8 w-8 items-center justify-center rounded-md bg-pink-600 text-white transition-all hover:bg-pink-700 disabled:cursor-not-allowed disabled:bg-pink-300"
 							aria-label="Increase requested quantity"
 							title="Increase quantity"
@@ -693,7 +731,7 @@
 				<button
 					type="button"
 					onclick={() => selectedItem && requestItem(selectedItem)}
-					disabled={selectedItem!.status === 'Out of Stock'}
+					disabled={selectedItem!.status === 'Out of Stock' || hasNoEnrollment}
 					class="min-w-0 flex-1 rounded-lg bg-pink-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
 				>
 					{selectedItem!.status === 'Out of Stock' ? 'Out of Stock' : 'Add to Request List'}
@@ -711,15 +749,26 @@
 			<p class="mt-1 text-sm text-gray-500">Browse and request available cooking equipment</p>
 		</div>
 		<div class="flex items-center gap-2">
-			<a
-				href="/student/request"
-				class="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-pink-600 px-3 py-2 text-xs font-medium text-white shadow-sm transition-colors hover:bg-pink-700 sm:px-4 sm:text-sm"
-				aria-label="Go to request equipment"
-				title="Go to request equipment"
-			>
-				<ClipboardList size={13} />
-				Request Equipment
-			</a>
+			{#if hasNoEnrollment || availableClassCodes.length === 0}
+				<button
+					disabled
+					class="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-pink-600 px-3 py-2 text-xs font-medium text-white shadow-sm transition-colors opacity-60 cursor-not-allowed sm:px-4 sm:text-sm"
+					title="You must be enrolled in at least one class to request equipment"
+				>
+					<ClipboardList size={13} />
+					Request Equipment
+				</button>
+			{:else}
+				<a
+					href="/student/request"
+					class="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-pink-600 px-3 py-2 text-xs font-medium text-white shadow-sm transition-colors hover:bg-pink-700 sm:px-4 sm:text-sm"
+					aria-label="Go to request equipment"
+					title="Go to request equipment"
+				>
+					<ClipboardList size={13} />
+					Request Equipment
+				</a>
+			{/if}
 
 			<!-- View Mode Toggle -->
 			<div class="flex overflow-hidden rounded-lg border border-gray-300">
@@ -855,6 +904,24 @@
 			</select>
 		</div>
 	</div>
+
+	{#if hasNoEnrollment}
+		<div class="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm animate-fadeIn">
+			<div class="flex gap-3">
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500 text-white shadow-sm">
+					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+					</svg>
+				</div>
+				<div class="flex-1 min-w-0">
+					<h3 class="text-sm font-bold text-red-900">Enrollment Required</h3>
+					<p class="mt-1 text-xs text-red-700 leading-relaxed">
+						You are not currently enrolled in any active class. You must be enrolled in at least one class to request equipment. Please contact your instructor or administrator to be added to a class.
+					</p>
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<!-- Error State -->
 	{#if error}
@@ -1043,12 +1110,13 @@
 									{@const entryQuantity = cartEntryFor(item.id)?.quantity ?? 0}
 									{#if !item.isrequired}
 										<button
+											disabled={hasNoEnrollment}
 											onclick={(e) => {
 												e.stopPropagation();
 												removeItemFromRequest(item);
 											}}
 											title="Remove from request list"
-											class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition-all hover:border-red-300 hover:bg-red-100 hover:text-red-700"
+											class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition-all hover:border-red-300 hover:bg-red-100 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
 											aria-label="Remove from request list"
 										>
 											<svg
@@ -1068,12 +1136,13 @@
 									{/if}
 
 									<button
+										disabled={hasNoEnrollment}
 										onclick={(e) => {
 											e.stopPropagation();
 											decrementItem(item);
 										}}
 										title="Decrease quantity"
-										class="rounded-md bg-gray-100 px-3 py-1.5 text-[13px] font-semibold text-gray-800 hover:bg-gray-200"
+										class="rounded-md bg-gray-100 px-3 py-1.5 text-[13px] font-semibold text-gray-800 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
 									>
 										−
 									</button>
@@ -1084,6 +1153,7 @@
 											min="1"
 											max={maxQuantityForItem(item)}
 											value={cartEntryFor(item.id)?.quantity ?? 1}
+											disabled={hasNoEnrollment}
 											onchange={(e) =>
 												handleQuantityInput(
 													item,
@@ -1092,7 +1162,7 @@
 												)}
 											class="w-12 rounded-md border {item.isrequired
 												? 'border-emerald-300 bg-emerald-50 text-emerald-900'
-												: 'border-gray-300 bg-white text-gray-900'} px-1 py-1 text-center text-xs font-bold focus:border-pink-500 focus:ring-1 focus:ring-pink-500/20"
+												: 'border-gray-300 bg-white text-gray-900'} px-1 py-1 text-center text-xs font-bold focus:border-pink-500 focus:ring-1 focus:ring-pink-500/20 disabled:cursor-not-allowed disabled:opacity-60"
 											title="Enter desired quantity"
 										/>
 									</div>
@@ -1102,7 +1172,7 @@
 											e.stopPropagation();
 											incrementItem(item);
 										}}
-										disabled={entryQuantity >= maxQuantityForItem(item)}
+										disabled={entryQuantity >= maxQuantityForItem(item) || hasNoEnrollment}
 										title="Increase quantity"
 										class="rounded-md bg-pink-600 px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-40"
 									>
@@ -1114,8 +1184,8 @@
 											e.stopPropagation();
 											requestItem(item);
 										}}
-										disabled={item.status === 'Out of Stock'}
-										class="flex-1 rounded-md bg-pink-600 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-40 sm:text-xs"
+										disabled={item.status === 'Out of Stock' || hasNoEnrollment}
+										class="flex-1 rounded-md bg-pink-600 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-45 sm:text-xs disabled:hover:bg-pink-600"
 									>
 										Request
 									</button>
@@ -1219,11 +1289,12 @@
 								<div class="inline-flex items-center gap-2">
 									{#if !item.isrequired}
 										<button
+											disabled={hasNoEnrollment}
 											onclick={(e) => {
 												e.stopPropagation();
 												removeItemFromRequest(item);
 											}}
-											class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition-all hover:border-red-300 hover:bg-red-100 hover:text-red-700"
+											class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition-all hover:border-red-300 hover:bg-red-100 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
 											aria-label="Remove from request list"
 											title="Remove from request list"
 										>
@@ -1244,11 +1315,12 @@
 									{/if}
 
 									<button
+										disabled={hasNoEnrollment}
 										onclick={(e) => {
 											e.stopPropagation();
 											decrementItem(item);
 										}}
-										class="rounded-md bg-gray-100 px-2 py-1 text-sm font-semibold text-gray-800 hover:bg-gray-200"
+										class="rounded-md bg-gray-100 px-2 py-1 text-sm font-semibold text-gray-800 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
 									>
 										−
 									</button>
@@ -1258,6 +1330,7 @@
 											min="1"
 											max={maxQuantityForItem(item)}
 											value={cartEntryFor(item.id)?.quantity ?? 1}
+											disabled={hasNoEnrollment}
 											onchange={(e) =>
 												handleQuantityInput(
 													item,
@@ -1266,7 +1339,7 @@
 												)}
 											class="w-12 rounded-md border {item.isrequired
 												? 'border-emerald-300 bg-emerald-50 text-emerald-900'
-												: 'border-gray-300 bg-white text-gray-900'} px-1 py-1 text-center text-xs font-bold focus:border-pink-500 focus:ring-1 focus:ring-pink-500/20"
+												: 'border-gray-300 bg-white text-gray-900'} px-1 py-1 text-center text-xs font-bold focus:border-pink-500 focus:ring-1 focus:ring-pink-500/20 disabled:cursor-not-allowed disabled:opacity-60"
 											title="Enter desired quantity"
 										/>
 									</div>
@@ -1275,7 +1348,7 @@
 											e.stopPropagation();
 											incrementItem(item);
 										}}
-										disabled={entryQuantity >= maxQuantityForItem(item)}
+										disabled={entryQuantity >= maxQuantityForItem(item) || hasNoEnrollment}
 										class="rounded-md bg-pink-600 px-2 py-1 text-sm font-semibold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-40"
 									>
 										+
@@ -1287,8 +1360,8 @@
 										e.stopPropagation();
 										requestItem(item);
 									}}
-									disabled={item.status === 'Out of Stock'}
-									class="rounded-md bg-pink-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-40 sm:text-xs"
+									disabled={item.status === 'Out of Stock' || hasNoEnrollment}
+									class="rounded-md bg-pink-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-45 sm:text-xs disabled:hover:bg-pink-600"
 								>
 									Request
 								</button>

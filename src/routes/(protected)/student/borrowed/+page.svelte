@@ -86,6 +86,34 @@
 	let currentPage = $state(1);
 	let borrowedRequests = $state<BorrowedCard[]>([]);
 	let liveSyncActive = $state(false);
+	let hasNoEnrollment = $state(false);
+	let loadingClassCodes = $state(false);
+	let availableClassCodes = $state<any[]>([]);
+
+	async function loadStudentClassCodes() {
+		loadingClassCodes = true;
+		hasNoEnrollment = false;
+		try {
+			const response = await fetch('/api/class-codes/my-classes', {
+				method: 'GET',
+				credentials: 'include',
+				headers: {
+					'Content-Type': 'application/json'
+				}
+			});
+			if (!response.ok) throw new Error('Failed to fetch class codes');
+			const data = await response.json();
+			availableClassCodes = data.classCodes || [];
+			if (availableClassCodes.length === 0) {
+				hasNoEnrollment = true;
+			}
+		} catch (error) {
+			console.error('[CLASS-CODES] Failed to load class codes:', error);
+			hasNoEnrollment = true;
+		} finally {
+			loadingClassCodes = false;
+		}
+	}
 
 	let refreshInFlight = false;
 	let pendingRefresh = false;
@@ -595,6 +623,7 @@
 		}
 
 		void loadBorrowedItems();
+		void loadStudentClassCodes();
 
 		const unsubscribeSSE = borrowRequestsAPI.subscribeToChanges((_event: BorrowRequestRealtimeEvent) => {
 			scheduleRefresh();
@@ -796,6 +825,24 @@
 			/>
 		</div>
 		</div>
+
+		{#if hasNoEnrollment}
+			<div class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm animate-fadeIn">
+				<div class="flex gap-3">
+					<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500 text-white shadow-sm">
+						<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+						</svg>
+					</div>
+					<div class="flex-1 min-w-0">
+						<h3 class="text-sm font-bold text-red-900">Enrollment Required</h3>
+						<p class="mt-1 text-xs text-red-700 leading-relaxed">
+							You are not currently enrolled in any active class. You must be enrolled in at least one class to request equipment. Please contact your instructor or administrator to be added to a class.
+						</p>
+					</div>
+				</div>
+			</div>
+		{/if}
 
 		<div class="min-h-150 flex flex-col">
 		<div class="flex-1 space-y-4">
