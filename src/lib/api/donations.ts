@@ -262,7 +262,7 @@ export const donationsAPI = {
 	 * Safe to call from SSR context (no-ops when not in browser).
 	 * EventSource automatically reconnects on connection loss.
 	 */
-	subscribeToChanges(callback: () => void): () => void {
+	subscribeToChanges(callback: (event?: any) => void): () => void {
 		if (!browser) {
 			console.log('[DONATION-SSE] Not in browser, skipping subscription');
 			return () => {};
@@ -285,7 +285,7 @@ export const donationsAPI = {
 				const eventData = JSON.parse(e.data);
 				console.log('[DONATION-SSE] Parsed event data:', eventData);
 				console.log('[DONATION-SSE] Calling callback function...');
-				callback();
+				callback(eventData);
 				console.log('[DONATION-SSE] Callback completed');
 			} catch (err) {
 				console.error('[DONATION-SSE] ✗ Error handling event:', err);
@@ -297,9 +297,12 @@ export const donationsAPI = {
 		});
 
 		source.addEventListener('error', (e) => {
-			console.error('[DONATION-SSE] ✗ Connection error:', e);
-			console.error('[DONATION-SSE] ReadyState:', source.readyState);
-			// EventSource will attempt to reconnect automatically
+			if (source.readyState === EventSource.CONNECTING) {
+				console.warn('[DONATION-SSE] Connection closed or lost. Attempting to reconnect... (readyState: CONNECTING)');
+			} else {
+				console.error('[DONATION-SSE] ✗ Permanent error event:', e);
+				console.error('[DONATION-SSE] EventSource readyState:', source.readyState);
+			}
 		});
 
 		console.log('[DONATION-SSE] EventSource created, readyState:', source.readyState);

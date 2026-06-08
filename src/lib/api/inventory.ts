@@ -551,9 +551,13 @@ export function subscribeToInventoryChanges(
 
 	// Errors: EventSource does automatic reconnects; notify consumer
 	source.addEventListener('error', (e) => {
-		console.error('[INVENTORY-SSE-CLIENT] ✗ Error event:', e);
-		console.error('[INVENTORY-SSE-CLIENT] EventSource readyState:', source.readyState);
-		options?.onError?.(e);
+		if (source.readyState === EventSource.CONNECTING) {
+			console.warn('[INVENTORY-SSE-CLIENT] Connection closed or lost. Attempting to reconnect... (readyState: CONNECTING)');
+		} else {
+			console.error('[INVENTORY-SSE-CLIENT] ✗ Permanent error event:', e);
+			console.error('[INVENTORY-SSE-CLIENT] EventSource readyState:', source.readyState);
+			options?.onError?.(e);
+		}
 	});
 
 	console.log('[INVENTORY-SSE-CLIENT] ✓ Event listeners attached');

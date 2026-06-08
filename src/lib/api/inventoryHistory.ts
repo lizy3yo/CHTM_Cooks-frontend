@@ -202,7 +202,12 @@ export const inventoryHistoryAPI = {
 		});
 
 		source.addEventListener('error', (e) => {
-			console.error('[INVENTORY-HISTORY-STREAM] Error', e);
+			if (source.readyState === EventSource.CONNECTING) {
+				console.warn('[INVENTORY-HISTORY-STREAM] Connection closed or lost. Attempting to reconnect... (readyState: CONNECTING)');
+			} else {
+				console.error('[INVENTORY-HISTORY-STREAM] ✗ Permanent error event:', e);
+				console.error('[INVENTORY-HISTORY-STREAM] EventSource readyState:', source.readyState);
+			}
 		});
 
 		return () => {

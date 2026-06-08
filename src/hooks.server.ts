@@ -65,9 +65,9 @@ const laravelProxyHandler: Handle = async ({ event, resolve }) => {
 	if (event.url.pathname.startsWith('/api')) {
 		const laravelBaseUrl = env.LARAVEL_API_URL || 'http://127.0.0.1:8000';
 		const laravelUrl = `${laravelBaseUrl}${event.url.pathname}${event.url.search}`;
-		
+
 		const headers = new Headers();
-		
+
 		// Copy incoming headers, omitting specific connection/host headers
 		for (const [key, value] of event.request.headers.entries()) {
 			if (['host', 'connection', 'content-length'].includes(key.toLowerCase())) {
@@ -81,7 +81,7 @@ const laravelProxyHandler: Handle = async ({ event, resolve }) => {
 		if (accessToken) {
 			headers.set('Authorization', `Bearer ${accessToken}`);
 		}
-		
+
 		headers.set('Accept', 'application/json');
 
 		const requestOptions: RequestInit = {
@@ -92,7 +92,7 @@ const laravelProxyHandler: Handle = async ({ event, resolve }) => {
 		// Only read/encrypt body for non-safe methods
 		if (!['GET', 'HEAD', 'OPTIONS'].includes(event.request.method)) {
 			const contentType = event.request.headers.get('content-type') || '';
-			
+
 			if (contentType.includes('application/json')) {
 				try {
 					const bodyJson = await event.request.json();
@@ -105,7 +105,9 @@ const laravelProxyHandler: Handle = async ({ event, resolve }) => {
 			} else if (contentType.includes('multipart/form-data')) {
 				// Forward files and multipart data directly
 				requestOptions.body = event.request.body;
-				headers.delete('content-type'); // Let fetch set boundary
+				// Node.js fetch requires the 'duplex' option to be set when body is a stream.
+				// We must also retain the Content-Type header containing the boundary parameters.
+				Object.assign(requestOptions, { duplex: 'half' });
 			} else {
 				// Fallback for other request bodies
 				try {
@@ -121,7 +123,7 @@ const laravelProxyHandler: Handle = async ({ event, resolve }) => {
 
 		try {
 			const laravelResponse = await fetch(laravelUrl, requestOptions);
-			
+
 			const resHeaders = new Headers();
 			for (const [key, value] of laravelResponse.headers.entries()) {
 				if (['content-encoding', 'content-length', 'transfer-encoding'].includes(key.toLowerCase())) {
@@ -147,8 +149,8 @@ const laravelProxyHandler: Handle = async ({ event, resolve }) => {
 			// Check if response payload is encrypted
 
 			const isEncrypted = laravelResponse.headers.get('X-Response-Encrypted') === 'true' ||
-								laravelResponse.headers.get('x-response-encrypted') === 'true';
-			
+				laravelResponse.headers.get('x-response-encrypted') === 'true';
+
 			if (isEncrypted && responseData) {
 				try {
 					const encryptedJson = JSON.parse(responseData);
@@ -198,7 +200,7 @@ const laravelProxyHandler: Handle = async ({ event, resolve }) => {
 						if (accessToken && refreshToken) {
 							const maxAge = user ? getAccessTokenMaxAge(user.role) : TOKEN_EXPIRY.ACCESS;
 							setAuthTokens(event, accessToken, refreshToken, maxAge);
-							
+
 							resHeaders.append('Set-Cookie', serializeCookie('access_token', accessToken, { ...cookieOptions, maxAge }));
 							resHeaders.append('Set-Cookie', serializeCookie('refresh_token', refreshToken, { ...cookieOptions, maxAge: TOKEN_EXPIRY.REFRESH }));
 
@@ -206,22 +208,22 @@ const laravelProxyHandler: Handle = async ({ event, resolve }) => {
 							delete jsonResponse.accessToken;
 							delete jsonResponse.refreshToken;
 						}
-						
+
 						if (rememberToken && rememberToken.plainToken) {
 							const expiresAt = new Date(rememberToken.expiresAt);
 							const rememberMaxAge = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
 							setRememberMeCookie(event, rememberToken.plainToken, expiresAt);
-							
+
 							resHeaders.append('Set-Cookie', serializeCookie('remember_me', rememberToken.plainToken, {
 								...cookieOptions,
 								maxAge: rememberMaxAge,
 								expires: expiresAt
 							}));
-							
+
 							// Strip rememberToken from response body
 							delete jsonResponse.rememberToken;
 						}
-						
+
 						responseData = JSON.stringify(jsonResponse);
 					}
 				} catch (err) {
@@ -313,8 +315,8 @@ const authHandler: Handle = async ({ event, resolve }) => {
 				if (meResponse.ok) {
 					const responseText = await meResponse.text();
 					const isEncrypted = meResponse.headers.get('X-Response-Encrypted') === 'true' ||
-										meResponse.headers.get('x-response-encrypted') === 'true';
-					
+						meResponse.headers.get('x-response-encrypted') === 'true';
+
 					let data;
 					if (isEncrypted && responseText) {
 						const encryptedJson = JSON.parse(responseText);
@@ -346,7 +348,7 @@ const authHandler: Handle = async ({ event, resolve }) => {
 			}
 		}
 	}
-	
+
 	return resolve(event);
 };
 
