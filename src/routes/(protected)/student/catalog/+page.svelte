@@ -13,7 +13,7 @@
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import CatalogItemModal from '$lib/components/ui/CatalogItemModal.svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
-	import { ClipboardList } from 'lucide-svelte';
+	import { ClipboardList, Package, PackageOpen, ShoppingCart } from 'lucide-svelte';
 
 	// UI State Management
 	let viewMode = $state<'grid' | 'list'>('grid');
@@ -809,6 +809,7 @@
 		</div>
 	</div>
 
+
 	<!-- Search and Filters -->
 	<div class="rounded-lg bg-white p-3 shadow sm:p-4">
 		<!-- Search — always full width -->
@@ -1095,13 +1096,13 @@
 									title={item.specification}
 									aria-label="Specification"
 								>
-									{item.specification}
+									<span class="font-semibold text-gray-500">Specification:</span> {item.specification}
 								</p>
 							{/if}
 
 							<!-- Qty -->
 							<p class="mt-1 text-[10px] text-gray-600">
-								Qty: {displayedQuantityForItem(item)} / Max: {item.maxQuantityPerRequest || displayedQuantityForItem(item)}
+								Total: {availableQuantityForItem(item)} | Available: {Math.max(0, availableQuantityForItem(item) - (cartEntryFor(item.id)?.quantity ?? 0))}
 							</p>
 
 							<!-- Actions — stop propagation so they don't open the modal -->
@@ -1254,7 +1255,11 @@
 								class="truncate text-sm text-gray-800"
 								title={item.specification || getCategoryName(item.categoryId)}
 							>
-								{item.specification || getCategoryName(item.categoryId)}
+								{#if item.specification}
+									<span class="font-semibold text-gray-500">Specification:</span> {item.specification}
+								{:else}
+									{getCategoryName(item.categoryId)}
+								{/if}
 							</p>
 							<div class="mt-1 flex flex-wrap items-center gap-1">
 								{#if item.isrequired}
@@ -1275,7 +1280,7 @@
 									)}">{item.status}</span
 								>
 								<span class="text-[10px] text-gray-600">
-									Qty: {displayedQuantityForItem(item)} / Max: {item.maxQuantityPerRequest || displayedQuantityForItem(item)}
+									Total: {availableQuantityForItem(item)} | Available: {Math.max(0, availableQuantityForItem(item) - (cartEntryFor(item.id)?.quantity ?? 0))}
 								</span>
 							</div>
 						</div>
