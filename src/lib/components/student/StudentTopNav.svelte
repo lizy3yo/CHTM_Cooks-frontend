@@ -265,7 +265,7 @@
 			quantity: cartItem.maxQuantity,
 			eomCount: 0,
 			variance: 0,
-			status: cartItem.maxQuantity === 0 ? 'Out of Stock' : cartItem.maxQuantity <= 5 ? 'Low Stock' : 'In Stock',
+			status: '',
 			archived: false,
 			isrequired: catalogItem?.isrequired ?? false,
 			maxQuantityPerRequest: catalogItem?.maxQuantityPerRequest,

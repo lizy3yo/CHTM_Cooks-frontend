@@ -59,17 +59,6 @@
 		return cat?.name ?? 'Uncategorized';
 	}
 
-	function getAvailabilityColor(status: string): string {
-		switch (status) {
-			case 'In Stock':    return 'bg-green-100 text-green-800';
-			case 'Available':   return 'bg-blue-100 text-blue-800';
-			case 'Low Stock':   return 'bg-yellow-100 text-yellow-800';
-			case 'Out of Stock':return 'bg-red-100 text-red-800';
-			case 'Maintenance': return 'bg-orange-100 text-orange-800';
-			default:            return 'bg-gray-100 text-gray-800';
-		}
-	}
-
 	const currentCount = $derived(item.currentCount ?? (item.quantity + (item.donations ?? 0)));
 </script>
 
@@ -127,9 +116,6 @@
 										REQUIRED
 									</span>
 								{/if}
-								<span class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold {getAvailabilityColor(item.status)}">
-									{item.status}
-								</span>
 								<span class="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
 									Qty: {currentCount}
 								</span>

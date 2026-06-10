@@ -29,8 +29,7 @@
 	let sheets = $state({
 		'all-items': true,
 		'items-tab': false,
-		'required-tab': false,
-		'low-stock': false
+		'required-tab': false
 	});
 
 	// Local states for column checkboxes
@@ -43,30 +42,19 @@
 
 	// Filter items based on selected sheets to populate sub-selection lists dynamically
 	const activeItemsForDrawers = $derived.by(() => {
-		// If all-items or items-tab is selected, or if no sheets are selected at all, use all items
 		if (
 			sheets['all-items'] ||
 			sheets['items-tab'] ||
-			(!sheets['all-items'] && !sheets['items-tab'] && !sheets['required-tab'] && !sheets['low-stock'])
+			(!sheets['all-items'] && !sheets['items-tab'] && !sheets['required-tab'])
 		) {
 			return items;
 		}
 
-		// Otherwise, get the union of items in required-tab and low-stock
 		const matchingItems = new Set<any>();
 
 		if (sheets['required-tab']) {
 			items.forEach((item) => {
 				if (item.isrequired) {
-					matchingItems.add(item);
-				}
-			});
-		}
-
-		if (sheets['low-stock']) {
-			items.forEach((item) => {
-				const total = (item.quantity ?? 0) + (item.donations ?? 0);
-				if (total <= 5) {
 					matchingItems.add(item);
 				}
 			});
@@ -98,7 +86,6 @@
 				sheets['all-items'] = true;
 				sheets['items-tab'] = false;
 				sheets['required-tab'] = false;
-				sheets['low-stock'] = false;
 
 				columns.category = false;
 				columns.specification = false;
@@ -144,7 +131,7 @@
 
 	// Derived selection checks to enable/disable generate button
 	const hasAnySheet = $derived(
-		sheets['all-items'] || sheets['items-tab'] || sheets['required-tab'] || sheets['low-stock']
+		sheets['all-items'] || sheets['items-tab'] || sheets['required-tab']
 	);
 
 	// Select / clear helper for sheets
@@ -152,7 +139,6 @@
 		sheets['all-items'] = val;
 		sheets['items-tab'] = val;
 		sheets['required-tab'] = val;
-		sheets['low-stock'] = val;
 	}
 
 	// Select / clear helper for columns
@@ -345,18 +331,7 @@
 								</div>
 							</label>
 
-							<!-- Low Stock -->
-							<label class="flex items-start gap-3 cursor-pointer rounded-xl border border-gray-200 p-3 hover:bg-pink-50/20 hover:border-pink-200 transition-all select-none">
-								<input
-									type="checkbox"
-									bind:checked={sheets['low-stock']}
-									class="mt-1 h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
-								/>
-								<div class="min-w-0 flex-1">
-									<p class="text-xs font-bold text-gray-900">Low & Out of Stock</p>
-									<p class="text-[11px] leading-relaxed text-gray-500">Items needing restocking or immediate attention</p>
-								</div>
-							</label>
+
 						</div>
 					</div>
 

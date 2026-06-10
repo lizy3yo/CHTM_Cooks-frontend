@@ -346,7 +346,7 @@ const damageRateDisplay = $derived.by(() => {
 		</div>
 	{:else}
 		<!-- ── KPI strip ───────────────────────────────────────────────────── -->
-		<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+		<div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
 
 			<button
 				type="button"
@@ -386,20 +386,8 @@ const damageRateDisplay = $derived.by(() => {
 
 			<button
 				type="button"
-				onclick={() => goto('/custodian/inventory?status=low-or-out')}
-				class="rounded-xl border {stockAlertCount > 0 ? 'border-orange-200 bg-orange-50 hover:border-orange-300/60 hover:bg-orange-100/30 focus:ring-orange-500/20' : 'border-gray-200 bg-gray-50 hover:border-gray-300/60 hover:bg-gray-100/30 focus:ring-gray-500/20'} p-4 shadow-sm transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2"
-			>
-				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide {stockAlertCount > 0 ? 'text-orange-700' : 'text-gray-600'}">
-					<ShieldAlert size={12} /> Stock Alerts
-				</div>
-				<p class="mt-2 text-3xl font-bold {stockAlertCount > 0 ? 'text-orange-700' : 'text-gray-700'}">{stockAlertCount}</p>
-				<p class="mt-0.5 text-xs {stockAlertCount > 0 ? 'text-orange-500' : 'text-gray-500'}">Low / out of stock</p>
-			</button>
-
-			<button
-				type="button"
 				onclick={() => goto('/custodian/replacement?tab=replacements')}
-				class="col-span-2 rounded-xl border sm:col-span-1 {pendingObligations > 0 ? 'border-rose-200 bg-rose-50 hover:border-rose-300/60 hover:bg-rose-100/30 focus:ring-rose-500/20' : 'border-gray-200 bg-gray-50 hover:border-gray-300/60 hover:bg-gray-100/30 focus:ring-gray-500/20'} p-4 shadow-sm transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2"
+				class="rounded-xl border {pendingObligations > 0 ? 'border-rose-200 bg-rose-50 hover:border-rose-300/60 hover:bg-rose-100/30 focus:ring-rose-500/20' : 'border-gray-200 bg-gray-50 hover:border-gray-300/60 hover:bg-gray-100/30 focus:ring-gray-500/20'} p-4 shadow-sm transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2"
 			>
 				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide {pendingObligations > 0 ? 'text-rose-700' : 'text-gray-600'}">
 					<AlertCircle size={12} /> Replacements

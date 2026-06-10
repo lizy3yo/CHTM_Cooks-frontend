@@ -45,7 +45,7 @@
 
 	let activeTab = $state<Tab>('all-items');
 	let requiredFilter = $state<'all' | 'required' | 'regular'>('all');
-	let statusFilter = $state<'all' | 'in-stock' | 'low-stock' | 'out-of-stock' | 'low-or-out'>('all');
+	let statusFilter = $state('all');
 	let showAddItemModal = $state(false);
 
 	// Stock adjustment modal states
@@ -345,11 +345,6 @@
 
 		if (typeof window !== 'undefined') {
 			const urlParams = new URLSearchParams(window.location.search);
-			const tabParam = urlParams.get('tab') as Tab | null;
-			const statusParam = urlParams.get('status') as any;
-			const requiredParam = urlParams.get('required') as any;
-			if (tabParam) activeTab = tabParam;
-			if (statusParam) statusFilter = statusParam;
 			if (requiredParam) requiredFilter = requiredParam;
 		}
 
@@ -953,21 +948,15 @@
 		newCategoryPicture = URL.createObjectURL(file);
 	}
 
-	function getItemStatus(item: InventoryItem): 'In Stock' | 'Low Stock' | 'Out of Stock' | 'Archived' {
+	function getItemStatus(item: InventoryItem): 'In Stock' | 'Out of Stock' | 'Archived' {
 		if (item.archived) return 'Archived';
 		const total = (item.quantity ?? 0) + (item.donations ?? 0);
 		if (total === 0) return 'Out of Stock';
-		if (total <= 5) return 'Low Stock';
 		return 'In Stock';
 	}
 
 	const activeItems = $derived(items.filter((item) => !item.archived));
-	const lowStockItems = $derived(
-		activeItems.filter((item) => {
-			const status = getItemStatus(item);
-			return status === 'Low Stock';
-		})
-	);
+	const lowStockItems = $derived([]);
 	const requiredItems = $derived(activeItems.filter((item) => item.isrequired === true));
 
 	function switchTab(tab: Tab) {
@@ -1034,12 +1023,8 @@
 			
 			if (statusFilter === 'in-stock') {
 				matchesStatus = itemStatus === 'In Stock';
-			} else if (statusFilter === 'low-stock') {
-				matchesStatus = itemStatus === 'Low Stock';
 			} else if (statusFilter === 'out-of-stock') {
 				matchesStatus = itemStatus === 'Out of Stock';
-			} else if (statusFilter === 'low-or-out') {
-				matchesStatus = itemStatus === 'Low Stock' || itemStatus === 'Out of Stock';
 			}
 
 			return isActive && matchesCategory && matchesQuery && matchesRequired && matchesStatus;
@@ -3211,17 +3196,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 										</h2>
 										<p class="mt-0.5 text-xs text-gray-500 sm:text-sm">{selectedItem.category}</p>
 										<div class="mt-2 flex flex-wrap items-center gap-1.5 sm:gap-2">
-											<span
-												class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 shadow-sm ring-1 ring-black/5 sm:px-2.5 sm:py-1 {status ===
-												'In Stock'
-													? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10'
-													: status === 'Low Stock'
-														? 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/15'
-														: 'bg-red-50 text-red-700 ring-1 ring-red-600/10'}"
-											>
-												<span class="h-1.5 w-1.5 rounded-full bg-current"></span>
-												<span class="text-[10px] font-bold sm:text-xs">{status}</span>
-											</span>
+
 											{#if selectedItem.isrequired}
 												<span
 													class="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-purple-800 shadow-sm ring-1 ring-purple-200 sm:px-2.5 sm:py-1"
@@ -3546,23 +3521,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							<div class="px-4 py-3 sm:px-6 sm:py-4 lg:px-8 lg:py-5">
 								<div class="flex items-center justify-between gap-3">
 									<!-- Left: status alert or empty -->
-									{#if status === 'Low Stock' || status === 'Out of Stock'}
-										<div class="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2 ring-1
-											{status === 'Out of Stock'
-												? 'bg-red-50 ring-red-200 text-red-700'
-												: 'bg-amber-50 ring-amber-200 text-amber-700'}">
-											<AlertTriangle class="h-4 w-4 shrink-0" />
-											<p class="truncate text-xs font-medium leading-snug">
-												{#if status === 'Out of Stock'}
-													This item is currently out of stock. Consider restocking or marking as unavailable for requests.
-												{:else}
-													Stock levels are running low. Consider restocking this item soon to maintain availability.
-												{/if}
-											</p>
-										</div>
-									{:else}
-										<span></span>
-									{/if}
+									<span></span>
 									<!-- Right: actions -->
 									<ActionMenu
 										align="right"
@@ -3712,8 +3671,8 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 	{:else}
 		<!-- Stats Overview -->
 		{#if cardsLoading}
-			<div class="grid grid-cols-2 gap-3 lg:grid-cols-4 animate-pulse">
-				{#each Array(4) as _}
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-3 animate-pulse">
+				{#each Array(3) as _}
 					<div class="rounded-lg bg-white p-3 shadow sm:p-5 h-20 sm:h-28">
 						<div class="flex items-center justify-between gap-2 h-full">
 							<div class="space-y-2 flex-1">
@@ -3726,7 +3685,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 				{/each}
 			</div>
 		{:else}
-			<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
 				<button
 					type="button"
 					onclick={() => {
@@ -3776,30 +3735,6 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 						>
 							<FolderTree size={18} class="text-purple-600 sm:hidden" />
 							<FolderTree size={24} class="hidden text-purple-600 sm:block" />
-						</div>
-					</div>
-				</button>
-				<button
-					type="button"
-					onclick={() => {
-						switchTab('all-items');
-						statusFilter = 'low-stock';
-						requiredFilter = 'all';
-					}}
-					class="w-full text-left rounded-lg bg-white p-3 shadow sm:p-5 hover:shadow-md hover:border-pink-200/50 hover:bg-gray-50/50 border border-transparent transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-pink-500/20 cursor-pointer"
-				>
-					<div class="flex items-center justify-between gap-2">
-						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Low Stock</p>
-							<p class="mt-1 text-2xl font-semibold text-red-600 sm:mt-2 sm:text-3xl">
-								{lowStockItems.length}
-							</p>
-						</div>
-						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 sm:h-12 sm:w-12"
-						>
-							<AlertTriangle size={18} class="text-red-600 sm:hidden" />
-							<AlertTriangle size={24} class="hidden text-red-600 sm:block" />
 						</div>
 					</div>
 				</button>
@@ -3943,24 +3878,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 									</div>
 								</div>
 
-								<!-- Stock Status Filter -->
-								<div class="relative w-full">
-									<select
-										bind:value={statusFilter}
-										class="w-full rounded-lg border border-gray-200 py-2.5 pl-3.5 pr-10 text-sm text-gray-700 bg-white shadow-sm transition-all hover:bg-gray-50/80 hover:border-gray-300 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none appearance-none cursor-pointer"
-									>
-										<option value="all">All Statuses</option>
-										<option value="in-stock">In Stock</option>
-										<option value="low-stock">Low Stock</option>
-										<option value="out-of-stock">Out of Stock</option>
-										<option value="low-or-out">Low / Out of Stock</option>
-									</select>
-									<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-										<svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-										</svg>
-									</div>
-								</div>
+
 
 								<!-- Alphabetical Sort Filter -->
 								<div class="relative w-full">
@@ -4007,16 +3925,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 									</span>
 								{/if}
 
-								{#if statusFilter !== 'all'}
-									<span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-amber-600/10">
-										Status: {statusFilter === 'in-stock' ? 'In Stock' : statusFilter === 'low-stock' ? 'Low Stock' : statusFilter === 'out-of-stock' ? 'Out of Stock' : 'Low / Out of Stock'}
-										<button onclick={() => statusFilter = 'all'} class="group rounded-full p-0.5 hover:bg-amber-100" aria-label="Clear status filter">
-											<svg class="h-3 w-3 text-amber-600 group-hover:text-amber-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-											</svg>
-										</button>
-									</span>
-								{/if}
+
 
 								<button
 									onclick={() => {
@@ -4142,13 +4051,6 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 														<span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>
 														Out of Stock
 													</span>
-												{:else if status === 'Low Stock'}
-													<span
-														class="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-600/15"
-													>
-														<span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-														Low Stock
-													</span>
 												{:else}
 													<span
 														class="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-600/10"
@@ -4205,10 +4107,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
 											>Current Count</th
 										>
-										<th
-											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
-											>Status</th
-										>
+
 										<th
 											class="px-6 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase"
 											>Actions</th
@@ -4272,48 +4171,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 												>{item.currentCount ??
 													getCurrentCount(item.quantity, item.donations ?? 0)}</td
 											>
-											<td class="px-6 py-4 whitespace-nowrap">
-												{#if status === 'Out of Stock'}
-													<span
-														class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-600/10"
-													>
-														<svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20"
-															><path
-																fill-rule="evenodd"
-																d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-																clip-rule="evenodd"
-															/></svg
-														>
-														Out of Stock
-													</span>
-												{:else if status === 'Low Stock'}
-													<span
-														class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-600/15"
-													>
-														<svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20"
-															><path
-																fill-rule="evenodd"
-																d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-																clip-rule="evenodd"
-															/></svg
-														>
-														Low Stock
-													</span>
-												{:else}
-													<span
-														class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-600/10"
-													>
-														<svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20"
-															><path
-																fill-rule="evenodd"
-																d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-																clip-rule="evenodd"
-															/></svg
-														>
-														In Stock
-													</span>
-												{/if}
-											</td>
+
 											<!-- Actions cell -->
 											<td
 												class="px-4 py-4 text-right whitespace-nowrap"

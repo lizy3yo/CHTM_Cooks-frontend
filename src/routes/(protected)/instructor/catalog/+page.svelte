@@ -65,8 +65,8 @@
 	 */
 	const conditionStatusMap: Record<string, string[]> = {
 		Excellent: ['In Stock'],
-		Good:      ['In Stock', 'Low Stock'],
-		Fair:      ['Low Stock'],
+		Good:      ['In Stock'],
+		Fair:      ['In Stock'],
 		Poor:      ['Out of Stock'],
 		Damaged:   ['Out of Stock']
 	};
@@ -116,16 +116,7 @@
 		{ value: 'updated', label: 'Recently Updated' }
 	];
 
-	function getAvailabilityColor(status: string): string {
-		switch (status) {
-			case 'In Stock': return 'bg-green-100 text-green-800';
-			case 'Available': return 'bg-blue-100 text-blue-800';
-			case 'Low Stock': return 'bg-yellow-100 text-yellow-800';
-			case 'Out of Stock': return 'bg-red-100 text-red-800';
-			case 'Maintenance': return 'bg-orange-100 text-orange-800';
-			default: return 'bg-gray-100 text-gray-800';
-		}
-	}
+
 
 	function getConditionColor(condition: string): string {
 		switch (condition) {
@@ -788,10 +779,7 @@
 									required
 								</span>
 							{/if}
-							<!-- Status badge — top right -->
-							<span class="absolute right-1.5 top-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-tight {getAvailabilityColor(item.status)}">
-								{item.status === 'In Stock' ? 'In Stock' : item.status === 'Out of Stock' ? 'Out' : item.status}
-							</span>
+
 						</div>
 						<div class="flex flex-1 flex-col p-2">
 							<h3 class="line-clamp-2 text-xs font-semibold leading-snug text-gray-900 sm:text-sm">{item.name}</h3>
@@ -852,7 +840,7 @@
 										required
 									</span>
 								{/if}
-								<span class="rounded px-1.5 py-0.5 text-[10px] font-semibold {getAvailabilityColor(item.status)}">{item.status}</span>
+
 								<span class="text-[10px] text-gray-400">Qty: {item.currentCount ?? (item.quantity + (item.donations ?? 0))}</span>
 							</div>
 						</div>

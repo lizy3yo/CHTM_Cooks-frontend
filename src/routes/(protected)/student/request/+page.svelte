@@ -135,7 +135,7 @@
 			eomCount: 0,
 			variance: 0,
 			status:
-				item.available === 0 ? 'Out of Stock' : item.available <= 5 ? 'Low Stock' : 'In Stock',
+				item.available === 0 ? 'Out of Stock' : 'In Stock',
 			archived: false,
 			isrequired: item.isrequired,
 			maxQuantityPerRequest: item.maxQuantityPerRequest,

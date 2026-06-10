@@ -121,40 +121,7 @@
 	/**
 	 * Get color utility classes based on availability status
 	 */
-	function getAvailabilityColor(status: string): string {
-		switch (status) {
-			case 'In Stock':
-				return 'bg-green-100 text-green-800';
-			case 'Available':
-				return 'bg-blue-100 text-blue-800';
-			case 'Low Stock':
-				return 'bg-yellow-100 text-yellow-800';
-			case 'Out of Stock':
-				return 'bg-red-100 text-red-800';
-			case 'Maintenance':
-				return 'bg-orange-100 text-orange-800';
-			default:
-				return 'bg-gray-100 text-gray-800';
-		}
-	}
 
-	/** Solid opaque colors for badges rendered over images */
-	function getOverlayStatusColor(status: string): string {
-		switch (status) {
-			case 'In Stock':
-				return 'bg-emerald-600 text-white';
-			case 'Available':
-				return 'bg-blue-600 text-white';
-			case 'Low Stock':
-				return 'bg-amber-500 text-white';
-			case 'Out of Stock':
-				return 'bg-red-600 text-white';
-			case 'Maintenance':
-				return 'bg-orange-500 text-white';
-			default:
-				return 'bg-gray-700 text-white';
-		}
-	}
 
 	/**
 	 * Get category name by ID
@@ -329,7 +296,7 @@
 			return;
 		}
 
-		if (item.status === 'Out of Stock') {
+		if (availableQuantityForItem(item) === 0) {
 			toastStore.error('This item is currently out of stock', 'Cannot Request Item');
 			return;
 		}
@@ -731,10 +698,10 @@
 				<button
 					type="button"
 					onclick={() => selectedItem && requestItem(selectedItem)}
-					disabled={selectedItem!.status === 'Out of Stock' || hasNoEnrollment}
+					disabled={availableQuantityForItem(selectedItem!) === 0 || hasNoEnrollment}
 					class="min-w-0 flex-1 rounded-lg bg-pink-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
 				>
-					{selectedItem!.status === 'Out of Stock' ? 'Out of Stock' : 'Add to Request List'}
+					{availableQuantityForItem(selectedItem!) === 0 ? 'Out of Stock' : 'Add to Request List'}
 				</button>
 			{/if}
 		{/snippet}
@@ -838,7 +805,7 @@
 		</div>
 
 		<!-- Filters — 2 cols on mobile, 3 on sm+ -->
-		<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+		<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
 			<select
 				id="category"
 				value={selectedCategory}
@@ -856,21 +823,7 @@
 				{/each}
 			</select>
 
-			<select
-				id="availability"
-				value={selectedAvailability}
-				onchange={(e) => {
-					selectedAvailability = (e.target as HTMLSelectElement).value;
-					handleFilterChange();
-				}}
-				class="block w-full rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-pink-500 focus:ring-pink-500"
-				aria-label="Filter by availability"
-				disabled={isLoading}
-			>
-				{#each availabilityOptions as option}
-					<option value={option.value}>{option.label}</option>
-				{/each}
-			</select>
+
 
 			<select
 				id="required"
@@ -1060,18 +1013,7 @@
 									REQUIRED
 								</span>
 							{/if}
-							<!-- Status badge — top right -->
-							<span
-								class="absolute top-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-[10px] leading-tight font-semibold shadow-sm {getOverlayStatusColor(
-									item.status
-								)}"
-							>
-								{item.status === 'In Stock'
-									? 'In Stock'
-									: item.status === 'Out of Stock'
-										? 'Out'
-										: item.status}
-							</span>
+
 						</div>
 
 						<!-- Content -->
@@ -1274,11 +1216,7 @@
 										REQUIRED
 									</span>
 								{/if}
-								<span
-									class="rounded px-1.5 py-0.5 text-[10px] font-semibold {getAvailabilityColor(
-										item.status
-									)}">{item.status}</span
-								>
+
 								<span class="text-[10px] text-gray-600">
 									Total: {availableQuantityForItem(item)} | Available: {Math.max(0, availableQuantityForItem(item) - (cartEntryFor(item.id)?.quantity ?? 0))}
 								</span>
@@ -1365,7 +1303,7 @@
 										e.stopPropagation();
 										requestItem(item);
 									}}
-									disabled={item.status === 'Out of Stock' || hasNoEnrollment}
+									disabled={availableQuantityForItem(item) === 0 || hasNoEnrollment}
 									class="rounded-md bg-pink-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-45 sm:text-xs disabled:hover:bg-pink-600"
 								>
 									Request

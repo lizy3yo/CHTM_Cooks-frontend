@@ -485,7 +485,7 @@
 				{/each}
 			</div>
 		{:else}
-			<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+			<div class="grid grid-cols-1 gap-6">
 
 			<!-- Most Borrowed Items -->
 			<div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
@@ -526,51 +526,7 @@
 				{/if}
 			</div>
 
-			<!-- Stock Alerts -->
-			<div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
-				<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-					<div class="flex items-center gap-2">
-						<AlertCircle size={16} class="text-orange-500" />
-						<h2 class="text-sm font-semibold text-gray-900">Equipment Availability Alerts</h2>
-						{#if stockAlertCount > 0}
-							<span class="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">{stockAlertCount}</span>
-						{/if}
-					</div>
-					<a href="/instructor/inventory" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
-						View inventory <ArrowRight size={13} />
-					</a>
-				</div>
-				{#if stockAlerts.length === 0}
-					<div class="flex h-72 items-center justify-center">
-						<div class="text-center">
-							<CheckCircle2 size={28} class="mx-auto text-pink-600" />
-							<p class="mt-3 text-sm text-gray-500">All equipment is well-stocked</p>
-						</div>
-					</div>
-				{:else}
-					<div class="divide-y divide-gray-50">
-						{#each stockAlerts.slice(0, 6) as alert}
-							{@const isOut = alert.status === 'Out of Stock' || alert.quantity === 0}
-							<div class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
-								<div class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg {isOut ? 'bg-red-100' : 'bg-orange-100'}">
-									{#if alert.picture}
-										<img src={alert.picture} alt={alert.name} class="h-full w-full object-cover" loading="lazy" />
-									{:else}
-										<Package size={14} class={isOut ? 'text-red-600' : 'text-orange-600'} />
-									{/if}
-								</div>
-								<div class="min-w-0 flex-1">
-									<p class="truncate text-xs font-semibold text-gray-900">{alert.name}</p>
-									<p class="text-xs text-gray-400">{alert.category}</p>
-								</div>
-								<span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold {isOut ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}">
-									{isOut ? 'Out of Stock' : `${alert.quantity} left`}
-								</span>
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</div>
+
 		</div>
 	{/if}
 </div>

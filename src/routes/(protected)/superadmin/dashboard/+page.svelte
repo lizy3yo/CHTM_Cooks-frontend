@@ -532,7 +532,7 @@
 		</div>
 
 		<!-- ── System Health & Alerts ────────────────────────────────────────── -->
-		<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+		<div class="grid grid-cols-2 gap-3 lg:grid-cols-3">
 			<button
 				type="button"
 				onclick={() => goto('/superadmin/requests?filter=pending_approval')}
@@ -603,29 +603,7 @@
 				</div>
 			</button>
 
-			<button
-				type="button"
-				onclick={() => goto('/superadmin/inventory?status=low-or-out')}
-				class="w-full text-left rounded-xl border border-orange-200 bg-orange-50 p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 focus:outline-none focus:ring-2 focus:ring-orange-500/20 cursor-pointer sm:p-5"
-			>
-				<div class="flex items-center justify-between gap-2">
-					<div class="min-w-0">
-						<p class="truncate text-xs font-semibold tracking-wide text-orange-700 uppercase">
-							Stock Alerts
-						</p>
-						<p class="mt-1 text-2xl font-bold text-orange-700 sm:mt-2 sm:text-3xl">
-							{lowStockItems + outOfStockItems}
-						</p>
-						<p class="mt-0.5 text-xs text-orange-600">Low / out of stock</p>
-					</div>
-					<div
-						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100 sm:h-12 sm:w-12"
-					>
-						<ShieldAlert size={18} class="text-orange-600 sm:hidden" aria-hidden="true" />
-						<ShieldAlert size={24} class="hidden text-orange-600 sm:block" aria-hidden="true" />
-					</div>
-				</div>
-			</button>
+
 		</div>
 	{/if}
 
@@ -856,16 +834,8 @@
 							<p class="mt-1 text-xs text-gray-500">Total Items</p>
 						</div>
 						<div class="rounded-lg border border-gray-100 bg-gray-50 p-4 text-center">
-							<p class="text-2xl font-bold text-emerald-600">{totalCategories}</p>
+							<p class="text-2xl font-bold text-blue-600">{totalCategories}</p>
 							<p class="mt-1 text-xs text-gray-500">Categories</p>
-						</div>
-						<div class="rounded-lg border border-orange-100 bg-orange-50 p-4 text-center">
-							<p class="text-2xl font-bold text-orange-600">{lowStockItems}</p>
-							<p class="mt-1 text-xs text-orange-600">Low Stock</p>
-						</div>
-						<div class="rounded-lg border border-red-100 bg-red-50 p-4 text-center">
-							<p class="text-2xl font-bold text-red-600">{outOfStockItems}</p>
-							<p class="mt-1 text-xs text-red-600">Out of Stock</p>
 						</div>
 					</div>
 				</div>
