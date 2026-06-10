@@ -1118,7 +1118,7 @@
 			>
 				<div class="flex items-center justify-between gap-2">
 					<div class="min-w-0">
-						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Active</p>
+						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Currently Borrowed</p>
 						<p class="mt-1 text-2xl font-semibold text-green-600 sm:mt-2 sm:text-3xl">
 							{stats.activeCount}
 						</p>

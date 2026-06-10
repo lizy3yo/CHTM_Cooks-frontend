@@ -278,7 +278,7 @@
 				bar: 'bg-emerald-500'
 			},
 			{
-				label: 'Active',
+				label: 'Currently Borrowed',
 				value: metrics.currentlyBorrowed,
 				dot: 'bg-violet-500',
 				text: 'text-violet-700',
