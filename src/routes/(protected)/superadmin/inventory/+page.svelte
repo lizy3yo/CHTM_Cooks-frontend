@@ -345,7 +345,10 @@
 
 		if (typeof window !== 'undefined') {
 			const urlParams = new URLSearchParams(window.location.search);
-			if (requiredParam) requiredFilter = requiredParam;
+			const requiredParam = urlParams.get('required');
+			if (requiredParam === 'required' || requiredParam === 'regular' || requiredParam === 'all') {
+				requiredFilter = requiredParam;
+			}
 		}
 
 		// Check if we should force refresh based on navigation

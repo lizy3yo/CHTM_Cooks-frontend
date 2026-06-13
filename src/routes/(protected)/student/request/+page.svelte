@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { get } from 'svelte/store';
@@ -43,6 +43,16 @@
 	// Loading state - Initialize based on cache availability (industry standard: instant render)
 	let isLoading = $state(true);
 	let isSubmitting = $state(false);
+	let showTermsModal = $state(false);
+	let scrollContainer = $state<HTMLDivElement | null>(null);
+
+	$effect(() => {
+		if (showTermsModal && scrollContainer) {
+			void tick().then(() => {
+				if (scrollContainer) scrollContainer.scrollTop = 0;
+			});
+		}
+	});
 	let availableEquipment = $state<RequestItemOption[]>([]);
 	let requiredItems = $state<RequestItemOption[]>([]);
 	let showItemSelector = $state(false);
@@ -3633,7 +3643,18 @@
 								class="mt-1 h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
 							/>
 							<span class="text-sm text-gray-700">
-								I acknowledge and agree to the terms and conditions
+								I acknowledge and agree to the
+								<button
+									type="button"
+									class="font-medium text-pink-600 hover:text-pink-500 underline focus:outline-none"
+									onclick={(e) => {
+										e.preventDefault();
+										e.stopPropagation();
+										showTermsModal = true;
+									}}
+								>
+									terms and conditions
+								</button>
 								<span class="text-red-500">*</span>
 							</span>
 						</label>
@@ -3800,6 +3821,110 @@
 				class="max-h-[90vh] max-w-full rounded-lg shadow-2xl"
 			/>
 			<p class="mt-3 text-center text-sm font-medium text-white/80">{previewPhoto.alt}</p>
+		</div>
+	</div>
+{/if}
+
+{#if showTermsModal}
+	<div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+		<div class="flex items-center justify-center min-h-screen px-4 py-6">
+			<!-- Background overlay -->
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div 
+				class="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" 
+				onclick={() => (showTermsModal = false)}
+				aria-hidden="true"
+			></div>
+
+			<!-- Modal panel -->
+			<div class="relative bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all w-full max-w-3xl z-10 border border-gray-200 animate-scaleIn">
+				<div class="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
+					<h3 class="text-lg font-bold text-gray-900" id="modal-title">
+						Terms and Conditions
+					</h3>
+					<button
+						type="button"
+						onclick={() => (showTermsModal = false)}
+						class="text-gray-400 hover:text-gray-600 focus:outline-none rounded-lg p-1"
+						aria-label="Close modal"
+					>
+						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				</div>
+
+				<div bind:this={scrollContainer} class="px-6 py-5 max-h-[60vh] overflow-y-auto space-y-4 text-sm text-gray-600 leading-relaxed">
+					<p class="text-xs text-gray-400">Last updated: May 24, 2026</p>
+					
+					<div>
+						<h4 class="text-base font-bold text-gray-900 mb-1">1. Acceptance of Terms</h4>
+						<p>
+							By accessing and using the CHTM Cooks platform, you accept and agree to be bound by the terms and provisions of this agreement. If you do not agree to these terms, please do not use this service.
+						</p>
+					</div>
+
+					<div>
+						<h4 class="text-base font-bold text-gray-900 mb-1">2. User Account</h4>
+						<p>
+							You must provide accurate and complete information when creating your account. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account.
+						</p>
+					</div>
+
+					<div>
+						<h4 class="text-base font-bold text-gray-900 mb-1">3. Acceptable Use</h4>
+						<p>
+							You agree to use the platform only for lawful purposes and in accordance with these Terms. You must not use the platform in any way that violates any applicable laws or regulations, infringes on the rights of others, or could damage or impair the service.
+						</p>
+					</div>
+
+					<div>
+						<h4 class="text-base font-bold text-gray-900 mb-1">4. Intellectual Property</h4>
+						<p>
+							The platform and its original content, features, and functionality are owned by CHTM Cooks and are protected by international copyright, trademark, and other intellectual property laws.
+						</p>
+					</div>
+
+					<div>
+						<h4 class="text-base font-bold text-gray-900 mb-1">5. Termination</h4>
+						<p>
+							We may terminate or suspend your account and access to the platform immediately, without prior notice or liability, for any reason, including if you breach these Terms and Conditions.
+						</p>
+					</div>
+
+					<div>
+						<h4 class="text-base font-bold text-gray-900 mb-1">6. Limitation of Liability</h4>
+						<p>
+							In no event shall CHTM Cooks, its directors, employees, or partners be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use or inability to use the service.
+						</p>
+					</div>
+
+					<div>
+						<h4 class="text-base font-bold text-gray-900 mb-1">7. Changes to Terms</h4>
+						<p>
+							We reserve the right to modify or replace these Terms at any time. We will provide notice of any significant changes. Your continued use of the platform after any such changes constitutes your acceptance of the new Terms.
+						</p>
+					</div>
+
+					<div>
+						<h4 class="text-base font-bold text-gray-900 mb-1">8. Contact Information</h4>
+						<p>
+							If you have any questions about these Terms and Conditions, please contact us at support@chtmcooks.edu.ph
+						</p>
+					</div>
+				</div>
+				
+				<div class="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+					<button
+						type="button"
+						onclick={() => (showTermsModal = false)}
+						class="w-full sm:w-auto rounded-lg bg-pink-600 hover:bg-pink-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-pink-500/20 active:scale-[0.98]"
+					>
+						Close
+					</button>
+				</div>
+			</div>
 		</div>
 	</div>
 {/if}
