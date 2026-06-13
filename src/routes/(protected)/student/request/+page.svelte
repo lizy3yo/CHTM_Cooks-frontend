@@ -144,8 +144,7 @@
 			quantity: item.available,
 			eomCount: 0,
 			variance: 0,
-			status:
-				item.available === 0 ? 'Out of Stock' : 'In Stock',
+			status: item.available === 0 ? 'Out of Stock' : 'In Stock',
 			archived: false,
 			isrequired: item.isrequired,
 			maxQuantityPerRequest: item.maxQuantityPerRequest,
@@ -232,6 +231,23 @@
 	let trustTierLabel = $state<string>('');
 	let hasLowTrust = $state(false);
 	let hasShownTrustDialog = $state(false);
+
+	// Active request gate: prevent duplicate borrow requests
+	let hasPendingRequest = $state(false);
+	let hasShownPendingDialog = $state(false);
+
+	async function checkPendingRequest(): Promise<void> {
+		try {
+			const res = await borrowRequestsAPI.list({
+				statuses: ['pending_instructor', 'approved_instructor', 'ready_for_pickup', 'pending_return', 'pending_appeal'],
+				limit: 1
+			});
+			hasPendingRequest = res.total > 0;
+		} catch (err) {
+			hasPendingRequest = false;
+			console.error('[PENDING-CHECK] Failed to load pending request status:', err);
+		}
+	}
 
 	// Operating hours: 8:00 AM – 5:00 PM (08:00–17:00)
 	const OPERATING_START = '08:00'; // 8:00 AM
@@ -322,6 +338,56 @@
 			});
 	});
 
+	// Notify and block when student has a pending request
+	$effect(() => {
+		if (!hasPendingRequest) {
+			hasShownPendingDialog = false;
+			return;
+		}
+
+		if (hasShownPendingDialog) return;
+
+		hasShownPendingDialog = true;
+		void confirmStore
+			.warning(
+				`You already have a pending borrow request awaiting action. You cannot submit a new request until your current request is resolved.`,
+				'Active Request Pending',
+				'View Requests',
+				'Dismiss'
+			)
+			.then((confirmed) => {
+				if (confirmed) {
+					void goto('/student/requests');
+				}
+			});
+	});
+
+	let hasShownEnrollmentDialog = $state(false);
+
+	// Notify and block when student is unenrolled
+	$effect(() => {
+		if (!hasNoEnrollment) {
+			hasShownEnrollmentDialog = false;
+			return;
+		}
+
+		if (hasShownEnrollmentDialog) return;
+
+		hasShownEnrollmentDialog = true;
+		void confirmStore
+			.warning(
+				`You are not currently enrolled in any active class. You must be enrolled in at least one class to request equipment.`,
+				'Enrollment Required',
+				'View Dashboard',
+				'Dismiss'
+			)
+			.then((confirmed) => {
+				if (confirmed) {
+					void goto('/student/dashboard');
+				}
+			});
+	});
+
 	// Reactive effect: Sync selected items when cart items change
 	$effect(() => {
 		// Watch for changes in cart items
@@ -351,6 +417,7 @@
 			case 1:
 				if (errors.items) count++;
 				if (errors.obligations) count++;
+				if (errors.pendingRequest) count++;
 				break;
 			case 2:
 				if (errors.borrowDate) count++;
@@ -379,6 +446,8 @@
 				stepErrors.items = `Out of stock items must be removed: ${outOfStock.map((i) => i.name).join(', ')}`;
 			if (hasUnresolvedObligations)
 				stepErrors.obligations = `You have ${unresolvedObligationCount} unresolved obligation${unresolvedObligationCount > 1 ? 's' : ''}. Please settle before continuing.`;
+			if (hasPendingRequest)
+				stepErrors.pendingRequest = 'You already have a pending borrow request awaiting action.';
 		} else if (currentStep === 2) {
 			if (!borrowDate) stepErrors.borrowDate = 'Borrow date is required';
 			else if (borrowDate < today) stepErrors.borrowDate = 'Borrow date cannot be in the past';
@@ -1147,7 +1216,12 @@
 
 		// Block submission if student has unresolved replacement obligations
 		if (hasUnresolvedObligations) {
-			errors.obligations = `You have ${unresolvedObligationCount} unresolved replacement obligation${unresolvedObligationCount > 1 ? 's' : ''}. Please settle all outstanding cases before submitting a new request.`;
+			errors.obligations = `You have ${unresolvedObligationCount} unresolved replacement obligation${unresolvedObligationCount > 1 ? '' : 's'} from a previous borrowing. Please settle all outstanding cases before submitting a new request.`;
+		}
+
+		// Block submission if student has active pending requests
+		if (hasPendingRequest) {
+			errors.pendingRequest = 'You already have a pending borrow request awaiting action.';
 		}
 
 		if (selectedItems.length === 0) {
@@ -1398,6 +1472,7 @@
 			// Check if student has no enrollment
 			if (availableClassCodes.length === 0) {
 				hasNoEnrollment = true;
+				errors.classCode = 'You must be enrolled in at least one class to submit equipment requests.';
 				toastStore.error(
 					'You must be enrolled in at least one class to submit equipment requests. Please contact your administrator.',
 					'Enrollment Required'
@@ -1487,6 +1562,8 @@
 			await loadObligationStatus();
 			// Check trust score eligibility (Poor/Critical -> block requests)
 			await loadTrustScoreStatus();
+			// Check for active pending request
+			await checkPendingRequest();
 
 			if (cached) {
 				// Cache path: sync cart and revalidate in background
@@ -1826,15 +1903,49 @@
 					{#if hasNoEnrollment || availableClassCodes.length === 0}
 						<div class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4">
 							<div class="flex gap-3">
-								<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500 text-white shadow-sm">
+								<div
+									class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500 text-white shadow-sm"
+								>
 									<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+										/>
 									</svg>
 								</div>
-								<div class="flex-1 min-w-0">
+								<div class="min-w-0 flex-1">
 									<h3 class="text-sm font-bold text-red-900">Enrollment Required</h3>
-									<p class="mt-1 text-xs text-red-700 leading-relaxed">
-										You are not currently enrolled in any active class. You must be enrolled in at least one class to request equipment. Please contact your instructor or administrator to be added to a class.
+									<p class="mt-1 text-xs leading-relaxed text-red-700">
+										You are not currently enrolled in any active class. You must be enrolled in at
+										least one class to request equipment. Please contact your instructor or
+										administrator to be added to a class.
+									</p>
+								</div>
+							</div>
+						</div>
+					{/if}
+
+					{#if hasPendingRequest}
+						<div class="mb-4 rounded-xl border border-pink-200 bg-pink-50 p-4">
+							<div class="flex gap-3">
+								<div
+									class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-600 text-white shadow-sm"
+								>
+									<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+										/>
+									</svg>
+								</div>
+								<div class="min-w-0 flex-1">
+									<h3 class="text-sm font-bold text-pink-900">Active Request Pending</h3>
+									<p class="mt-1 text-xs leading-relaxed text-pink-700">
+										You currently have a pending borrow request awaiting action in the system. You cannot select or add items, modify quantities, or submit a new request until your current request is processed or resolved.
 									</p>
 								</div>
 							</div>
@@ -1853,7 +1964,8 @@
 						<!-- Search Button -->
 						<div class="search-dropdown-container relative w-full sm:w-auto">
 							<button
-								disabled={hasNoEnrollment || availableClassCodes.length === 0}
+								disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasPendingRequest}
+								title={hasPendingRequest ? 'You already have a pending borrow request' : ''}
 								onclick={() => {
 									showItemSelector = !showItemSelector;
 									if (showItemSelector) {
@@ -1866,7 +1978,7 @@
 										}, 100);
 									}
 								}}
-								class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-pink-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 focus:outline-none sm:w-auto disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-pink-600"
+								class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-pink-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-pink-600 sm:w-auto"
 							>
 								<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path
@@ -2343,7 +2455,10 @@
 																const newQty = Math.max(1, item.requestedQuantity - 1);
 																updateItemQuantity(item.id, String(newQty));
 															}}
-															disabled={item.requestedQuantity <= 1 || hasNoEnrollment || availableClassCodes.length === 0}
+															disabled={item.requestedQuantity <= 1 ||
+																hasNoEnrollment ||
+																availableClassCodes.length === 0 ||
+																hasPendingRequest}
 															class="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:border-pink-500 hover:bg-pink-50 hover:text-pink-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:bg-white disabled:hover:text-gray-700"
 															title="Decrease quantity"
 														>
@@ -2371,7 +2486,7 @@
 																	? Math.min(item.maxQuantityPerRequest, item.available)
 																	: item.available}
 																value={item.requestedQuantity}
-																disabled={hasNoEnrollment || availableClassCodes.length === 0}
+																disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasPendingRequest}
 																onchange={(e) =>
 																	updateItemQuantity(
 																		item.id,
@@ -2400,7 +2515,10 @@
 															disabled={item.requestedQuantity >=
 																(item.maxQuantityPerRequest
 																	? Math.min(item.maxQuantityPerRequest, item.available)
-																	: item.available) || hasNoEnrollment || availableClassCodes.length === 0}
+																	: item.available) ||
+																hasNoEnrollment ||
+																availableClassCodes.length === 0 ||
+																hasPendingRequest}
 															class="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:border-pink-500 hover:bg-pink-50 hover:text-pink-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:bg-white disabled:hover:text-gray-700"
 															title="Increase quantity"
 														>
@@ -2430,7 +2548,7 @@
 												<!-- Remove Button -->
 												{#if !item.isrequired}
 													<button
-														disabled={hasNoEnrollment || availableClassCodes.length === 0}
+														disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasPendingRequest}
 														onclick={() => removeItemFromCart(item.id)}
 														class="flex h-7 w-7 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition-all hover:border-red-300 hover:bg-red-100 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
 														title="Remove item"
@@ -3467,9 +3585,9 @@
 				</div>
 
 				<!-- Purpose & Usage and Summary 1:1 Side-by-Side Grid with Equal Heights -->
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+				<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
 					<!-- Purpose & Usage — read-only summary -->
-					<div class="flex flex-col justify-between rounded-lg bg-white p-4 shadow sm:p-6 h-full">
+					<div class="flex h-full flex-col justify-between rounded-lg bg-white p-4 shadow sm:p-6">
 						<div>
 							<div class="mb-3 flex items-center justify-between">
 								<h2 class="text-base font-semibold text-gray-900 sm:text-lg">Purpose & Usage</h2>
@@ -3491,7 +3609,7 @@
 							</div>
 							<div class="space-y-3 text-sm">
 								<div>
-									<p class="mb-0.5 text-xs font-medium uppercase tracking-wide text-gray-400">
+									<p class="mb-0.5 text-xs font-medium tracking-wide text-gray-400 uppercase">
 										Purpose Type
 									</p>
 									<p class="font-medium text-gray-900">
@@ -3499,7 +3617,7 @@
 									</p>
 								</div>
 								<div>
-									<p class="mb-0.5 text-xs font-medium uppercase tracking-wide text-gray-400">
+									<p class="mb-0.5 text-xs font-medium tracking-wide text-gray-400 uppercase">
 										Usage Location
 									</p>
 									<p class="font-medium text-gray-900">
@@ -3507,7 +3625,7 @@
 									</p>
 								</div>
 								<div>
-									<p class="mb-0.5 text-xs font-medium uppercase tracking-wide text-gray-400">
+									<p class="mb-0.5 text-xs font-medium tracking-wide text-gray-400 uppercase">
 										Purpose Details
 									</p>
 									<p class="font-medium text-gray-900">{purposeDetails || '—'}</p>
@@ -3517,7 +3635,7 @@
 					</div>
 
 					<!-- Summary -->
-					<div class="flex flex-col justify-between rounded-lg bg-white p-4 shadow sm:p-6 h-full">
+					<div class="flex h-full flex-col justify-between rounded-lg bg-white p-4 shadow sm:p-6">
 						<div>
 							<h2 class="mb-3 text-base font-semibold text-gray-900 sm:text-lg">Summary</h2>
 							<div class="space-y-2 text-sm">
@@ -3646,7 +3764,7 @@
 								I acknowledge and agree to the
 								<button
 									type="button"
-									class="font-medium text-pink-600 hover:text-pink-500 underline focus:outline-none"
+									class="font-medium text-pink-600 underline hover:text-pink-500 focus:outline-none"
 									onclick={(e) => {
 										e.preventDefault();
 										e.stopPropagation();
@@ -3694,7 +3812,7 @@
 		{#if currentStep < totalSteps}
 			<button
 				type="button"
-				disabled={hasNoEnrollment || availableClassCodes.length === 0}
+				disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasPendingRequest}
 				onclick={handleStepNext}
 				class="inline-flex items-center gap-2 rounded-lg bg-pink-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-pink-600"
 			>
@@ -3707,7 +3825,11 @@
 			<div class="flex items-center gap-3">
 				<button
 					onclick={resetForm}
-					disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasUnresolvedObligations || hasLowTrust}
+					disabled={hasNoEnrollment ||
+						availableClassCodes.length === 0 ||
+						hasUnresolvedObligations ||
+						hasLowTrust ||
+						hasPendingRequest}
 					class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 focus:ring-2 focus:ring-pink-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
 				>
 					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3726,15 +3848,18 @@
 						hasNoEnrollment ||
 						availableClassCodes.length === 0 ||
 						hasUnresolvedObligations ||
-						hasLowTrust}
+						hasLowTrust ||
+						hasPendingRequest}
 					class="inline-flex items-center gap-2 rounded-lg bg-pink-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-pink-600"
-					title={hasLowTrust
-						? 'Your Trust Score is below the eligibility threshold; requests are temporarily restricted.'
-						: hasUnresolvedObligations
-							? 'Resolve all outstanding obligations before submitting'
-							: hasNoEnrollment || availableClassCodes.length === 0
-								? 'You must be enrolled in a class to submit requests'
-								: ''}
+					title={hasPendingRequest
+						? 'You currently have a pending request awaiting action.'
+						: hasLowTrust
+							? 'Your Trust Score is below the eligibility threshold; requests are temporarily restricted.'
+							: hasUnresolvedObligations
+								? 'Resolve all outstanding obligations before submitting'
+								: hasNoEnrollment || availableClassCodes.length === 0
+									? 'You must be enrolled in a class to submit requests'
+									: ''}
 				>
 					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
@@ -3826,100 +3951,128 @@
 {/if}
 
 {#if showTermsModal}
-	<div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-		<div class="flex items-center justify-center min-h-screen px-4 py-6">
+	<div
+		class="fixed inset-0 z-50 overflow-y-auto"
+		aria-labelledby="modal-title"
+		role="dialog"
+		aria-modal="true"
+	>
+		<div class="flex min-h-screen items-center justify-center px-4 py-6">
 			<!-- Background overlay -->
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<div 
-				class="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" 
+			<div
+				class="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
 				onclick={() => (showTermsModal = false)}
 				aria-hidden="true"
 			></div>
 
 			<!-- Modal panel -->
-			<div class="relative bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all w-full max-w-3xl z-10 border border-gray-200 animate-scaleIn">
-				<div class="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
-					<h3 class="text-lg font-bold text-gray-900" id="modal-title">
-						Terms and Conditions
-					</h3>
+			<div
+				class="animate-scaleIn relative z-10 w-full max-w-3xl transform overflow-hidden rounded-2xl border border-gray-200 bg-white text-left shadow-2xl transition-all"
+			>
+				<div class="flex items-center justify-between border-b border-gray-200 px-6 py-5">
+					<h3 class="text-lg font-bold text-gray-900" id="modal-title">Terms and Conditions</h3>
 					<button
 						type="button"
 						onclick={() => (showTermsModal = false)}
-						class="text-gray-400 hover:text-gray-600 focus:outline-none rounded-lg p-1"
+						class="rounded-lg p-1 text-gray-400 hover:text-gray-600 focus:outline-none"
 						aria-label="Close modal"
 					>
 						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2.5"
+								d="M6 18L18 6M6 6l12 12"
+							/>
 						</svg>
 					</button>
 				</div>
 
-				<div bind:this={scrollContainer} class="px-6 py-5 max-h-[60vh] overflow-y-auto space-y-4 text-sm text-gray-600 leading-relaxed">
+				<div
+					bind:this={scrollContainer}
+					class="max-h-[60vh] space-y-4 overflow-y-auto px-6 py-5 text-sm leading-relaxed text-gray-600"
+				>
 					<p class="text-xs text-gray-400">Last updated: May 24, 2026</p>
-					
+
 					<div>
-						<h4 class="text-base font-bold text-gray-900 mb-1">1. Acceptance of Terms</h4>
+						<h4 class="mb-1 text-base font-bold text-gray-900">1. Acceptance of Terms</h4>
 						<p>
-							By accessing and using the CHTM Cooks platform, you accept and agree to be bound by the terms and provisions of this agreement. If you do not agree to these terms, please do not use this service.
+							By accessing and using the CHTM Cooks platform, you accept and agree to be bound by
+							the terms and provisions of this agreement. If you do not agree to these terms, please
+							do not use this service.
 						</p>
 					</div>
 
 					<div>
-						<h4 class="text-base font-bold text-gray-900 mb-1">2. User Account</h4>
+						<h4 class="mb-1 text-base font-bold text-gray-900">2. User Account</h4>
 						<p>
-							You must provide accurate and complete information when creating your account. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account.
+							You must provide accurate and complete information when creating your account. You are
+							responsible for maintaining the confidentiality of your account credentials and for
+							all activities that occur under your account.
 						</p>
 					</div>
 
 					<div>
-						<h4 class="text-base font-bold text-gray-900 mb-1">3. Acceptable Use</h4>
+						<h4 class="mb-1 text-base font-bold text-gray-900">3. Acceptable Use</h4>
 						<p>
-							You agree to use the platform only for lawful purposes and in accordance with these Terms. You must not use the platform in any way that violates any applicable laws or regulations, infringes on the rights of others, or could damage or impair the service.
+							You agree to use the platform only for lawful purposes and in accordance with these
+							Terms. You must not use the platform in any way that violates any applicable laws or
+							regulations, infringes on the rights of others, or could damage or impair the service.
 						</p>
 					</div>
 
 					<div>
-						<h4 class="text-base font-bold text-gray-900 mb-1">4. Intellectual Property</h4>
+						<h4 class="mb-1 text-base font-bold text-gray-900">4. Intellectual Property</h4>
 						<p>
-							The platform and its original content, features, and functionality are owned by CHTM Cooks and are protected by international copyright, trademark, and other intellectual property laws.
+							The platform and its original content, features, and functionality are owned by CHTM
+							Cooks and are protected by international copyright, trademark, and other intellectual
+							property laws.
 						</p>
 					</div>
 
 					<div>
-						<h4 class="text-base font-bold text-gray-900 mb-1">5. Termination</h4>
+						<h4 class="mb-1 text-base font-bold text-gray-900">5. Termination</h4>
 						<p>
-							We may terminate or suspend your account and access to the platform immediately, without prior notice or liability, for any reason, including if you breach these Terms and Conditions.
+							We may terminate or suspend your account and access to the platform immediately,
+							without prior notice or liability, for any reason, including if you breach these Terms
+							and Conditions.
 						</p>
 					</div>
 
 					<div>
-						<h4 class="text-base font-bold text-gray-900 mb-1">6. Limitation of Liability</h4>
+						<h4 class="mb-1 text-base font-bold text-gray-900">6. Limitation of Liability</h4>
 						<p>
-							In no event shall CHTM Cooks, its directors, employees, or partners be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use or inability to use the service.
+							In no event shall CHTM Cooks, its directors, employees, or partners be liable for any
+							indirect, incidental, special, consequential, or punitive damages resulting from your
+							use or inability to use the service.
 						</p>
 					</div>
 
 					<div>
-						<h4 class="text-base font-bold text-gray-900 mb-1">7. Changes to Terms</h4>
+						<h4 class="mb-1 text-base font-bold text-gray-900">7. Changes to Terms</h4>
 						<p>
-							We reserve the right to modify or replace these Terms at any time. We will provide notice of any significant changes. Your continued use of the platform after any such changes constitutes your acceptance of the new Terms.
+							We reserve the right to modify or replace these Terms at any time. We will provide
+							notice of any significant changes. Your continued use of the platform after any such
+							changes constitutes your acceptance of the new Terms.
 						</p>
 					</div>
 
 					<div>
-						<h4 class="text-base font-bold text-gray-900 mb-1">8. Contact Information</h4>
+						<h4 class="mb-1 text-base font-bold text-gray-900">8. Contact Information</h4>
 						<p>
-							If you have any questions about these Terms and Conditions, please contact us at support@chtmcooks.edu.ph
+							If you have any questions about these Terms and Conditions, please contact us at
+							support@chtmcooks.edu.ph
 						</p>
 					</div>
 				</div>
-				
-				<div class="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+
+				<div class="flex justify-end border-t border-gray-200 bg-gray-50 px-6 py-4">
 					<button
 						type="button"
 						onclick={() => (showTermsModal = false)}
-						class="w-full sm:w-auto rounded-lg bg-pink-600 hover:bg-pink-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-pink-500/20 active:scale-[0.98]"
+						class="w-full rounded-lg bg-pink-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-pink-700 focus:ring-2 focus:ring-pink-500/20 focus:outline-none active:scale-[0.98] sm:w-auto"
 					>
 						Close
 					</button>
