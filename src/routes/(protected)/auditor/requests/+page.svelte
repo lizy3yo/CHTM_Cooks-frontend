@@ -1,0 +1,2912 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import { goto, afterNavigate } from '$app/navigation';
+	import { page } from '$app/stores';
+	import { browser } from '$app/environment';
+	import {
+		borrowRequestsAPI,
+		type BorrowRequestItem,
+		type BorrowRequestRealtimeEvent,
+		type BorrowRequestRecord,
+		type BorrowRequestStatus
+	} from '$lib/api/borrowRequests';
+	import { catalogAPI } from '$lib/api/catalog';
+	import { classCodesAPI, type ClassCodeResponse } from '$lib/api/classCodes';
+	import { confirmStore } from '$lib/stores/confirm';
+	import { toastStore } from '$lib/stores/toast';
+	import ItemInspectionModal from '$lib/components/custodian/ItemInspectionModal.svelte';
+	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
+	import ReplacementObligationModal from '$lib/components/custodian/ReplacementObligationModal.svelte';
+	import type { ReplacementObligation } from '$lib/api/replacementObligations';
+	import RequestsSkeletonLoader from '$lib/components/ui/RequestsSkeletonLoader.svelte';
+	import { replacementObligationsAPI } from '$lib/api/replacementObligations';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
+	import { Package } from 'lucide-svelte';
+	type Tab = 'all' | 'pending' | 'ready' | 'active' | 'unresolved' | 'history';
+	type HistorySubTab = 'all' | 'done' | 'resolved' | 'completed' | 'cancelled';
+	type ViewMode = 'card' | 'list';
+
+	// Filters
+	let activeTab = $state<Tab>('all');
+	let overdueOnly = $state(false);
+	let pendingReturnOnly = $state(false);
+	let historySubTab = $state<HistorySubTab>('all');
+	let showDetailModal = $state(false);
+	let highlightedRequestId = $state<string | null>(null);
+	let showInspectionModal = $state(false);
+	let selectedRequest = $state<any>(null);
+	let activeRequestObligations = $state<ReplacementObligation[]>([]);
+	let showObligationModal = $state(false);
+	let resolvingRequestId = $state<string | null>(null);
+
+	// Check for cached data before mounting to avoid unnecessary loading states
+	const cachedRequests = browser ? borrowRequestsAPI.peekCachedList({}) : null;
+	const hasCachedData = cachedRequests && cachedRequests.requests.length > 0;
+
+	let requests = $state<any[]>([]);
+	let searchQuery = $state('');
+	let sortBy = $state<'date' | 'student' | 'status'>('date');
+	let viewMode = $state<ViewMode>('list');
+	let loading = $state(!hasCachedData); // Only show skeleton if no cached data
+	let initialLoadComplete = $state(hasCachedData); // Mark as complete if we have cached data
+	let cardsLoading = $state(!hasCachedData);
+	let pendingLoading = $state(!hasCachedData);
+	let readyLoading = $state(!hasCachedData);
+	let activeLoading = $state(!hasCachedData);
+	let unresolvedLoading = $state(!hasCachedData);
+	let historyLoading = $state(!hasCachedData);
+	let inFlightLoadId = 0;
+
+	async function loadRequestsProgressive(forceRefresh = false) {
+		const loadId = ++inFlightLoadId;
+		try {
+			// Step 1: Load cards (and parallel fetch classCodes, reconcile replacement obligations, catalog items)
+			const listPromise = borrowRequestsAPI.list({}, { forceRefresh });
+			const catalogPromise = catalogAPI.getCatalog({ availability: 'all', limit: 300 });
+			const reconcilePromise = replacementObligationsAPI.reconcile();
+
+			const results = await Promise.allSettled([listPromise, catalogPromise, reconcilePromise]);
+
+			if (loadId !== inFlightLoadId) return;
+
+			// Handle list
+			const listResult = results[0];
+			if (listResult.status === 'fulfilled') {
+				requests = listResult.value.requests
+					.filter((record) => record.status !== 'pending_instructor')
+					.map(mapRequest);
+			} else {
+				throw listResult.reason;
+			}
+
+			// Cards are ready!
+			cardsLoading = false;
+
+			// Step 2: Sequentially settle each tab loader
+			await new Promise((resolve) => setTimeout(resolve, 80));
+			if (loadId !== inFlightLoadId) return;
+			pendingLoading = false;
+
+			await new Promise((resolve) => setTimeout(resolve, 80));
+			if (loadId !== inFlightLoadId) return;
+			readyLoading = false;
+
+			await new Promise((resolve) => setTimeout(resolve, 80));
+			if (loadId !== inFlightLoadId) return;
+			activeLoading = false;
+
+			await new Promise((resolve) => setTimeout(resolve, 80));
+			if (loadId !== inFlightLoadId) return;
+			unresolvedLoading = false;
+
+			await new Promise((resolve) => setTimeout(resolve, 80));
+			if (loadId !== inFlightLoadId) return;
+			historyLoading = false;
+
+			// Backfill pictures/classCodes in background
+			const catalogResult = results[1];
+			if (catalogResult.status === 'fulfilled') {
+				const next = new Map(itemPictureCache);
+				const missingIds = new Set<string>();
+				for (const req of requests) {
+					for (const item of req.items) {
+						if (item.itemId && !item.picture && !itemPictureCache.has(item.itemId)) {
+							missingIds.add(item.itemId);
+						}
+					}
+				}
+				for (const catalogItem of catalogResult.value.items) {
+					if (missingIds.has(catalogItem.id) && catalogItem.picture) {
+						next.set(catalogItem.id, catalogItem.picture);
+					}
+				}
+				itemPictureCache = next;
+			}
+
+			await backfillClassCodes();
+			await maybeOpenScannedRequestFromUrl();
+			syncSelectedRequestWithLatestData();
+
+		} catch (error) {
+			console.error('Failed to load custodian requests', error);
+			if (loadId === inFlightLoadId) {
+				requests = [];
+			}
+		} finally {
+			if (loadId === inFlightLoadId) {
+				loading = false;
+				initialLoadComplete = true;
+				cardsLoading = false;
+				pendingLoading = false;
+				readyLoading = false;
+				activeLoading = false;
+				unresolvedLoading = false;
+				historyLoading = false;
+			}
+		}
+	}
+	const PAGE_SIZE_CARD = 5; // Card view - max 5 cards
+	const PAGE_SIZE_LIST = 10; // List view - max 10 items
+	const PAGE_SIZE = $derived(viewMode === 'card' ? PAGE_SIZE_CARD : PAGE_SIZE_LIST);
+	let currentPage = $state(1);
+	let openActionMenuFor = $state<string | null>(null);
+	let itemPictureCache = $state<Map<string, string>>(new Map());
+	let classCodeCache = $state<Map<string, ClassCodeResponse>>(new Map());
+	let liveSyncActive = $state(false);
+	let inspectionItems = $state<BorrowRequestItem[]>([]);
+	let handledScanToken = $state('');
+
+	let refreshInFlight = false;
+	let pendingRefresh = false;
+	let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function isCancelledRequest(status: BorrowRequestStatus, rejectionReason?: string): boolean {
+		return (
+			status === 'cancelled' ||
+			(status === 'rejected' && rejectionReason === 'Request cancelled by student')
+		);
+	}
+
+	function toUiStatus(
+		status: BorrowRequestStatus,
+		rejectionReason?: string
+	): 'pending' | 'ready' | 'active' | 'unresolved' | 'history' {
+		switch (status) {
+			case 'approved_instructor':
+				return 'pending';
+			case 'ready_for_pickup':
+				return 'ready';
+			case 'borrowed':
+				return 'active';
+			case 'pending_return':
+				return 'active';
+			case 'missing':
+				return 'unresolved';
+			case 'resolved':
+				return 'history';
+			case 'cancelled':
+				return 'history';
+			case 'returned':
+				return 'history';
+			case 'rejected':
+				return 'history';
+			default:
+				return 'history';
+		}
+	}
+
+	function getDisplayId(id: string): string {
+		return `REQ-${id.slice(-6).toUpperCase()}`;
+	}
+
+	function initials(name: string): string {
+		return name
+			.split(' ')
+			.filter(Boolean)
+			.slice(0, 2)
+			.map((part) => part[0]?.toUpperCase() || '')
+			.join('');
+	}
+
+	function inferItemImage(name: string): string {
+		const normalized = name.toLowerCase();
+		if (normalized.includes('knife')) return 'Knife';
+		if (normalized.includes('bowl')) return 'Bowl';
+		if (normalized.includes('scale')) return 'Scale';
+		if (normalized.includes('mixer')) return 'Mixer';
+		if (normalized.includes('processor')) return 'Processor';
+		return 'Item';
+	}
+
+	function formatDate(value: string): string {
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return value;
+		return date.toLocaleDateString();
+	}
+
+	function formatDateTime(value?: string): string | undefined {
+		if (!value) return undefined;
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return undefined;
+		return date.toLocaleString();
+	}
+
+	function formatDateTimeShort(value: string): string {
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return value;
+		return date.toLocaleString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+			hour: 'numeric',
+			minute: '2-digit',
+			hour12: true
+		});
+	}
+
+	function mapRequest(record: BorrowRequestRecord): any {
+		const status = toUiStatus(record.status, record.rejectReason);
+		const studentName =
+			record.student?.fullName || `Student ${record.studentId.slice(-6).toUpperCase()}`;
+		const now = new Date();
+		const isOverdue =
+			['borrowed', 'pending_return'].includes(record.status) && new Date(record.returnDate) < now;
+		const daysOverdue = isOverdue
+			? Math.max(
+					1,
+					Math.ceil((now.getTime() - new Date(record.returnDate).getTime()) / (1000 * 60 * 60 * 24))
+				)
+			: 0;
+		const damagedItemCount = record.items.filter(
+			(item) => item.inspection?.status === 'damaged'
+		).length;
+		const missingItemCount = record.items.filter(
+			(item) => item.inspection?.status === 'missing'
+		).length;
+
+		return {
+			rawId: record.id,
+			rawStatus: record.status,
+			rawItems: record.items,
+			id: getDisplayId(record.id),
+			student: {
+				name: studentName,
+				avatar: initials(studentName),
+				avatarUrl: record.student?.profilePhotoUrl || null,
+				yearLevel: record.student?.yearLevel || 'N/A',
+				block: record.student?.block || 'N/A',
+				studentId: record.studentId.slice(-8).toUpperCase(),
+				email: record.student?.email || 'N/A'
+			},
+			items: record.items.map((item) => ({
+				name: item.name,
+				image: inferItemImage(item.name),
+				itemId: item.itemId,
+				picture: item.picture || null,
+				code: item.itemId.slice(-6).toUpperCase(),
+				quantity: item.quantity,
+				inspection: item.inspection
+			})),
+			status,
+			requestDate: record.createdAt,
+			borrowDate: record.borrowDate,
+			returnDate: record.returnDate,
+			purpose: record.purpose,
+			usageLocation: record.usageLocation,
+			classCodeId: record.classCodeId,
+			daysOverdue: isOverdue ? daysOverdue : 0,
+			isOverdue,
+			releasedDate: formatDateTime(record.releasedAt),
+			pickedUpDate: formatDateTime(record.pickedUpAt),
+			returnedDate: formatDateTime(record.returnedAt),
+			missingDate: formatDateTime(record.missingAt),
+			resolvedDate: formatDateTime(record.resolvedAt),
+			lastReminderAt: formatDateTime(record.lastReminderAt),
+			reminderCount: record.reminderCount || 0,
+			approvedBy: record.instructor?.fullName || 'Instructor',
+			rejectionReason: record.rejectReason,
+			approvedDate: formatDateTime(record.approvedAt),
+			instructorData: record.instructor ?? null,
+			custodianData: record.custodian ?? null,
+			damagedItemCount,
+			missingItemCount
+		};
+	}
+
+	function getErrorMessage(error: unknown, fallback: string): string {
+		if (error instanceof Error && error.message) {
+			return error.message;
+		}
+		return fallback;
+	}
+
+	async function markReady(rawId: string): Promise<void> {
+		closeActionMenu();
+
+		const confirmed = await confirmStore.confirm({
+			title: 'Release for Pickup',
+			message: 'Mark this request as ready for student pickup?',
+			type: 'info',
+			confirmText: 'Ready for Pickup',
+			cancelText: 'Cancel'
+		});
+
+		if (!confirmed) return;
+
+		try {
+			await borrowRequestsAPI.release(rawId);
+			await loadRequests(true);
+			toastStore.success('Request marked ready for student pickup.');
+		} catch (error) {
+			console.error('Failed to mark request as ready for pickup', error);
+			toastStore.error(getErrorMessage(error, 'Failed to mark request as ready for pickup.'));
+		}
+	}
+
+	async function confirmPickup(rawId: string): Promise<void> {
+		closeActionMenu();
+
+		const confirmed = await confirmStore.confirm({
+			title: 'Confirm Pickup',
+			message: 'Confirm that the student has successfully picked up all released items?',
+			type: 'warning',
+			confirmText: 'Confirm Pickup',
+			cancelText: 'Cancel'
+		});
+
+		if (!confirmed) return;
+
+		try {
+			await borrowRequestsAPI.pickup(rawId);
+			await loadRequests(true);
+			toastStore.success('Pickup confirmed successfully.');
+		} catch (error) {
+			console.error('Failed to confirm item pickup', error);
+			toastStore.error(getErrorMessage(error, 'Failed to confirm item pickup.'));
+		}
+	}
+
+	async function openResolveModal(rawId: string): Promise<void> {
+		closeActionMenu();
+		resolvingRequestId = rawId;
+		try {
+			const res = await replacementObligationsAPI.getObligations(
+				{ limit: 500 },
+				{ forceRefresh: true }
+			);
+			const requestObligations = res.obligations.filter((o) => o.borrowRequestId === rawId);
+			if (requestObligations.length === 0) {
+				toastStore.info('No obligations found for this request.');
+				return;
+			}
+			activeRequestObligations = requestObligations;
+			showObligationModal = true;
+		} catch (err) {
+			console.error('Failed to fetch obligations', err);
+			toastStore.error('Failed to retrieve obligations for resolution.');
+		} finally {
+			resolvingRequestId = null;
+		}
+	}
+
+	async function handleResolveObligation(id: string, quantityReplaced: number): Promise<void> {
+		try {
+			await replacementObligationsAPI.resolveObligation(id, {
+				resolutionType: 'replacement',
+				amountPaid: quantityReplaced
+			});
+			toastStore.success('Obligation resolved successfully.');
+
+			// Refresh obligations to update UI status to 'replaced'
+			const rawId = activeRequestObligations[0]?.borrowRequestId;
+			if (rawId) {
+				const res = await replacementObligationsAPI.getObligations(
+					{ limit: 500 },
+					{ forceRefresh: true }
+				);
+				activeRequestObligations = res.obligations.filter((o) => o.borrowRequestId === rawId);
+			}
+
+			await refreshRequests();
+		} catch (err) {
+			console.error('Failed to resolve obligation', err);
+			throw err;
+		}
+	}
+
+	async function confirmReturn(rawId: string): Promise<void> {
+		console.log('[confirmReturn] Called with rawId:', rawId);
+		closeActionMenu();
+
+		// Open inspection modal instead of directly confirming
+		const request = requests.find((r) => r.rawId === rawId);
+		console.log('[confirmReturn] Found request:', request);
+
+		if (request) {
+			selectedRequest = request;
+			inspectionItems = buildInspectionItems(request);
+			console.log('[confirmReturn] Inspection items:', inspectionItems);
+			console.log('[confirmReturn] Opening modal, showInspectionModal = true');
+			showInspectionModal = true;
+			showDetailModal = false; // Close detail modal after opening inspection modal
+		} else {
+			console.error('[confirmReturn] Request not found for rawId:', rawId);
+		}
+	}
+
+	async function handleInspectionSubmit(
+		inspections: Array<{
+			itemId: string;
+			status: 'good' | 'damaged' | 'missing';
+			notes: string;
+			replacementQuantity?: number;
+			dueDate?: string;
+		}>
+	): Promise<void> {
+		if (!selectedRequest) return;
+
+		console.log('[handleInspectionSubmit] Starting inspection submission', {
+			requestId: selectedRequest.rawId,
+			inspections
+		});
+
+		try {
+			const result = await borrowRequestsAPI.inspectItems(selectedRequest.rawId, inspections);
+			console.log('[handleInspectionSubmit] Inspection API call successful', result);
+
+			await loadRequests(true);
+			showInspectionModal = false;
+			selectedRequest = null;
+
+			if (result.obligationsCreated > 0) {
+				toastStore.success(
+					`Inspection complete. ${result.obligationsCreated} replacement obligation(s) created for damaged or missing items.`
+				);
+			} else {
+				toastStore.success('All items returned intact. Inventory updated successfully.');
+			}
+		} catch (error) {
+			console.error('[handleInspectionSubmit] Failed to submit inspection', error);
+			toastStore.error(getErrorMessage(error, 'Failed to submit inspection.'));
+			throw error;
+		}
+	}
+
+	async function markMissing(rawId: string): Promise<void> {
+		closeActionMenu();
+
+		const confirmed = await confirmStore.danger(
+			'Mark this request as missing? This should only be used when an item cannot be accounted for after verification.',
+			'Mark Request as Missing',
+			'Mark Missing',
+			'Cancel'
+		);
+
+		if (!confirmed) return;
+		try {
+			await borrowRequestsAPI.markMissing(rawId);
+			await loadRequests(true);
+			toastStore.warning('Request marked as missing for escalation and follow-up.');
+		} catch (error) {
+			console.error('Failed to mark item as missing', error);
+			toastStore.error(getErrorMessage(error, 'Failed to mark item as missing.'));
+		}
+	}
+
+	async function sendReminder(rawId: string): Promise<void> {
+		closeActionMenu();
+
+		const confirmed = await confirmStore.confirm({
+			title: 'Send Overdue Reminder',
+			message: 'Send an overdue reminder for this request now?',
+			type: 'default',
+			confirmText: 'Send Reminder',
+			cancelText: 'Cancel'
+		});
+
+		if (!confirmed) return;
+
+		try {
+			const result = await borrowRequestsAPI.sendOverdueReminder(rawId);
+			await loadRequests(true);
+			toastStore.info(`${result.message} (total reminders: ${result.reminderCount})`);
+		} catch (error) {
+			console.error('Failed to send overdue reminder', error);
+			toastStore.error(getErrorMessage(error, 'Failed to send overdue reminder.'));
+		}
+	}
+
+	async function loadRequests(forceRefresh = false): Promise<void> {
+		await loadRequestsProgressive(forceRefresh);
+	}
+
+	async function maybeOpenScannedRequestFromUrl(): Promise<void> {
+		const scanId =
+			$page.url.searchParams.get('requestId')?.trim() ??
+			$page.url.searchParams.get('scan')?.trim() ??
+			'';
+
+		if (!scanId) {
+			handledScanToken = '';
+			return;
+		}
+
+		if (handledScanToken === scanId) return;
+
+		try {
+			let target = requests.find((request) => request.rawId === scanId) ?? null;
+
+			if (!target) {
+				const record = await borrowRequestsAPI.getById(scanId);
+				target = mapRequest(record);
+			}
+
+			if (!target) {
+				toastStore.error('Scanned request could not be found.', 'QR Scan');
+				return;
+			}
+
+			// Close any previously opened modal before switching context
+			closeDetailModal();
+
+			activeTab = target.status;
+
+			// Reset to page 1 so the highlighted row is always visible
+			currentPage = 1;
+
+			// Highlight the row, scroll it into view, then open the modal
+			highlightedRequestId = target.rawId;
+			setTimeout(() => {
+				const el = document.querySelector(`[data-request-id="${target.rawId}"]`);
+				if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+				setTimeout(() => {
+					openDetailModal(target);
+				}, 600);
+			}, 80);
+		} catch {
+			toastStore.error('Scanned request could not be found.', 'QR Scan');
+		} finally {
+			handledScanToken = scanId;
+			clearScanQueryFromUrl();
+		}
+	}
+
+	function clearScanQueryFromUrl(): void {
+		const url = new URL($page.url.href);
+		if (!url.searchParams.has('requestId') && !url.searchParams.has('scan')) return;
+
+		url.searchParams.delete('requestId');
+		url.searchParams.delete('scan');
+		const search = url.searchParams.toString();
+		const next = `${url.pathname}${search ? `?${search}` : ''}${url.hash}`;
+		// Reset the token BEFORE navigating so the $effect doesn't block re-opens
+		handledScanToken = '';
+		void goto(next, {
+			replaceState: true,
+			noScroll: true,
+			keepFocus: true
+		});
+	}
+
+	afterNavigate(({ to }) => {
+		if (to) {
+			const tabParam = to.url.searchParams.get('tab');
+			if (tabParam && ['pending', 'ready', 'active', 'unresolved', 'history'].includes(tabParam)) {
+				activeTab = tabParam as Tab;
+			}
+			const filterParam = to.url.searchParams.get('filter');
+			if (filterParam === 'overdue') {
+				overdueOnly = true;
+			} else {
+				overdueOnly = false;
+			}
+		}
+
+		const scanId =
+			to?.url.searchParams.get('requestId')?.trim() ??
+			to?.url.searchParams.get('scan')?.trim() ??
+			'';
+
+		if (!scanId || handledScanToken === scanId) return;
+
+		void maybeOpenScannedRequestFromUrl();
+	});
+
+	function buildInspectionItems(request: any): BorrowRequestItem[] {
+		const requestItemById = new Map<string, any>();
+		for (const item of request.items ?? []) {
+			requestItemById.set(item.itemId, item);
+		}
+
+		return (request.rawItems ?? []).map((item: BorrowRequestItem) => {
+			const fallbackPicture =
+				requestItemById.get(item.itemId)?.picture ?? itemPictureCache.get(item.itemId) ?? null;
+
+			return {
+				...item,
+				picture: item.picture ?? fallbackPicture
+			};
+		});
+	}
+
+	function syncSelectedRequestWithLatestData(): void {
+		if (!selectedRequest) return;
+		const fresh = requests.find((request) => request.rawId === selectedRequest.rawId);
+		if (fresh) {
+			selectedRequest = fresh;
+			if (showInspectionModal) {
+				inspectionItems = buildInspectionItems(fresh);
+			}
+		} else {
+			showDetailModal = false;
+			showInspectionModal = false;
+			selectedRequest = null;
+			inspectionItems = [];
+		}
+	}
+
+	async function refreshRequests(): Promise<void> {
+		if (refreshInFlight) {
+			pendingRefresh = true;
+			return;
+		}
+
+		refreshInFlight = true;
+		try {
+			borrowRequestsAPI.invalidateCache();
+			await loadRequests(true);
+		} finally {
+			refreshInFlight = false;
+			if (pendingRefresh) {
+				pendingRefresh = false;
+				await refreshRequests();
+			}
+		}
+	}
+
+	function scheduleRefresh(): void {
+		if (refreshTimer !== null) clearTimeout(refreshTimer);
+		refreshTimer = setTimeout(() => {
+			refreshTimer = null;
+			refreshRequests();
+		}, 250);
+	}
+
+	async function backfillItemPictures(): Promise<void> {
+		const next = new Map(itemPictureCache);
+		let hasNewLocalPictures = false;
+
+		// 1. Seed cache with pictures from items that already have them
+		for (const req of requests) {
+			for (const item of req.items) {
+				if (item.itemId && item.picture && !next.has(item.itemId)) {
+					next.set(item.itemId, item.picture);
+					hasNewLocalPictures = true;
+				}
+			}
+		}
+
+		// 2. Collect IDs that are missing pictures
+		const missingIds = new Set<string>();
+		for (const req of requests) {
+			for (const item of req.items) {
+				if (item.itemId && !item.picture && !next.has(item.itemId)) {
+					missingIds.add(item.itemId);
+				}
+			}
+		}
+
+		if (missingIds.size === 0) {
+			if (hasNewLocalPictures) {
+				itemPictureCache = next;
+			}
+			return;
+		}
+
+		try {
+			const response = await catalogAPI.getCatalog({ availability: 'all', limit: 300 });
+			for (const catalogItem of response.items) {
+				if (missingIds.has(catalogItem.id) && catalogItem.picture) {
+					next.set(catalogItem.id, catalogItem.picture);
+				}
+			}
+			itemPictureCache = next;
+			if (selectedRequest && showInspectionModal) {
+				inspectionItems = buildInspectionItems(selectedRequest);
+			}
+		} catch {
+			if (hasNewLocalPictures) {
+				itemPictureCache = next;
+			}
+		}
+	}
+
+	async function backfillClassCodes(): Promise<void> {
+		const missingClassCodeIds = new Set<string>();
+		for (const req of requests) {
+			if (req.classCodeId && !classCodeCache.has(req.classCodeId)) {
+				missingClassCodeIds.add(req.classCodeId);
+			}
+		}
+
+		if (missingClassCodeIds.size === 0) return;
+
+		try {
+			const next = new Map(classCodeCache);
+			for (const classCodeId of missingClassCodeIds) {
+				try {
+					const classCode = await classCodesAPI.getById(classCodeId);
+					next.set(classCodeId, classCode);
+				} catch {
+					// Skip if class code not found
+				}
+			}
+			classCodeCache = next;
+		} catch {
+			// Keep graceful fallback when class codes are unavailable.
+		}
+	}
+
+	onMount(() => {
+		const hideReadOnlyElements = () => {
+			document.querySelectorAll('button, a, div, span').forEach(el => {
+				const txt = el.textContent?.toLowerCase().trim() ?? '';
+				if (
+					txt === 'add item' ||
+					txt === 'add new item' ||
+					txt === 'import items' ||
+					txt === 'import' ||
+					txt === 'confirm pickup' ||
+					txt === 'confirm return' ||
+					txt === 'inspect & confirm return' ||
+					txt === 'ready for pickup' ||
+					txt === 'resolve obligation' ||
+					txt === 'adjust stock' ||
+					txt === 'mark required' ||
+					txt === 'remove required' ||
+					txt === 'archive' ||
+					txt === 'archive item' ||
+					txt === 'edit details' ||
+					txt === 'edit item' ||
+					txt === 'prepare items' ||
+					txt === 'mark ready' ||
+					txt === 'resolve' ||
+					txt === 'action' ||
+					txt === 'actions' ||
+					txt === 'open actions' ||
+					txt === 'item actions' ||
+					txt === 'bulk import' ||
+					txt === 'bulk import items' ||
+					txt === 'import inventory'
+				) {
+					if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.classList.contains('action-menu') || el.getAttribute('aria-label') === 'Actions' || el.getAttribute('aria-label') === 'Item actions' || el.getAttribute('aria-label') === 'Open actions') {
+						(el as HTMLElement).style.display = 'none';
+					}
+				}
+			});
+			document.querySelectorAll('button[aria-label="Item actions"], button[aria-label="Open actions"], button[aria-label="Actions"], .action-menu-trigger').forEach(el => {
+				(el as HTMLElement).style.display = 'none';
+			});
+		};
+		setTimeout(hideReadOnlyElements, 50);
+		setTimeout(hideReadOnlyElements, 250);
+		const observer = new MutationObserver(hideReadOnlyElements);
+		observer.observe(document.body, { childList: true, subtree: true });
+
+		// Parse search parameters
+		const tabParam = $page.url.searchParams.get('tab');
+		if (tabParam && ['pending', 'ready', 'active', 'unresolved', 'history'].includes(tabParam)) {
+			activeTab = tabParam as Tab;
+		}
+		const filterParam = $page.url.searchParams.get('filter');
+		if (filterParam === 'overdue') {
+			overdueOnly = true;
+		}
+
+		// Populate cached data if available
+		if (hasCachedData && cachedRequests) {
+			requests = cachedRequests.requests
+				.filter((record) => record.status !== 'pending_instructor')
+				.map(mapRequest);
+			console.log('[REQUESTS] Loaded from cache:', requests.length, 'requests');
+			cardsLoading = false;
+			pendingLoading = false;
+			readyLoading = false;
+			activeLoading = false;
+			unresolvedLoading = false;
+			historyLoading = false;
+		}
+
+		// Initial load with loading state management
+		loadRequests(!hasCachedData);
+
+		const unsubscribeSSE = borrowRequestsAPI.subscribeToChanges(
+			(_event: BorrowRequestRealtimeEvent) => {
+				scheduleRefresh();
+			}
+		);
+		liveSyncActive = true;
+
+		const pollInterval = setInterval(() => {
+			void refreshRequests();
+		}, 30_000);
+
+		const onFocus = () => {
+			void refreshRequests();
+		};
+		const onVisible = () => {
+			if (document.visibilityState === 'visible') {
+				void refreshRequests();
+			}
+		};
+
+		window.addEventListener('focus', onFocus);
+		document.addEventListener('visibilitychange', onVisible);
+
+		return () => {
+			observer.disconnect();
+			unsubscribeSSE();
+			if (refreshTimer !== null) clearTimeout(refreshTimer);
+			clearInterval(pollInterval);
+			window.removeEventListener('focus', onFocus);
+			document.removeEventListener('visibilitychange', onVisible);
+		};
+	});
+
+	const filteredRequests = $derived(
+		requests
+			.filter((req) => {
+				if (activeTab === 'all') return true;
+				if (activeTab !== 'history') return req.status === activeTab;
+				if (req.status !== 'history') return false;
+				if (historySubTab === 'all') return true;
+				if (historySubTab === 'done') return req.rawStatus === 'resolved' || req.rawStatus === 'returned';
+				if (historySubTab === 'resolved') return req.rawStatus === 'resolved';
+				if (historySubTab === 'completed') return req.rawStatus === 'returned';
+				if (historySubTab === 'cancelled')
+					return req.rawStatus === 'cancelled' || req.rawStatus === 'rejected';
+				return true;
+			})
+			.filter((req) => {
+				if (activeTab === 'active') {
+					if (overdueOnly && !req.isOverdue) return false;
+					if (pendingReturnOnly && req.rawStatus !== 'pending_return') return false;
+				}
+				return true;
+			})
+			.filter((req) => {
+				if (!searchQuery) return true;
+				const query = searchQuery.toLowerCase();
+				return (
+					req.student.name.toLowerCase().includes(query) ||
+					req.id.toLowerCase().includes(query) ||
+					req.items.some((item: any) => item.name.toLowerCase().includes(query))
+				);
+			})
+			.sort((a, b) => {
+				if (sortBy === 'date') {
+					return new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime();
+				} else if (sortBy === 'student') {
+					return a.student.name.localeCompare(b.student.name);
+				}
+				return a.status.localeCompare(b.status);
+			})
+	);
+
+	const totalPages = $derived(Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE)));
+
+	const paginatedRequests = $derived(
+		filteredRequests.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+	);
+
+	$effect(() => {
+		activeTab;
+		historySubTab;
+		searchQuery;
+		sortBy;
+		currentPage = 1;
+	});
+
+	$effect(() => {
+		if (activeTab !== 'active') {
+			overdueOnly = false;
+		}
+	});
+
+	$effect(() => {
+		if (currentPage > totalPages) currentPage = totalPages;
+		if (currentPage < 1) currentPage = 1;
+	});
+
+	const stats = $derived({
+		totalRequests: requests.length,
+		pendingCount: requests.filter((r) => r.status === 'pending').length,
+		readyCount: requests.filter((r) => r.status === 'ready').length,
+		activeCount: requests.filter((r) => r.status === 'active').length,
+		overdueCount: requests.filter((r) => r.isOverdue).length
+	});
+
+	const tabCounts = $derived({
+		pending: requests.filter((r) => r.status === 'pending').length,
+		ready: requests.filter((r) => r.status === 'ready').length,
+		active: requests.filter((r) => r.status === 'active').length,
+		unresolved: requests.filter((r) => r.status === 'unresolved').length,
+		history: requests.filter((r) => r.status === 'history').length,
+		historyResolved: requests.filter((r) => r.rawStatus === 'resolved').length,
+		historyCompleted: requests.filter((r) => r.rawStatus === 'returned').length,
+		historyCancelled: requests.filter(
+			(r) => r.rawStatus === 'cancelled' || r.rawStatus === 'rejected'
+		).length
+	});
+
+	const activeTabLoading = $derived.by(() => {
+		switch (activeTab) {
+			case 'all': return pendingLoading || readyLoading || activeLoading || unresolvedLoading || historyLoading;
+			case 'pending': return pendingLoading;
+			case 'ready': return readyLoading;
+			case 'active': return activeLoading;
+			case 'unresolved': return unresolvedLoading;
+			case 'history': return historyLoading;
+			default: return false;
+		}
+	});
+
+	function openDetailModal(request: any) {
+		closeActionMenu();
+		selectedRequest = request;
+		showDetailModal = true;
+	}
+
+	function closeDetailModal() {
+		showDetailModal = false;
+		selectedRequest = null;
+		highlightedRequestId = null;
+	}
+
+	function toggleActionMenu(rawId: string): void {
+		openActionMenuFor = openActionMenuFor === rawId ? null : rawId;
+	}
+
+	function closeActionMenu(): void {
+		openActionMenuFor = null;
+	}
+
+	function getStatusBadge(status: Tab, rawStatus?: BorrowRequestStatus, rejectionReason?: string) {
+		switch (status) {
+			case 'pending':
+				return { text: 'Pending Preparation', color: 'bg-yellow-100 text-yellow-800' };
+			case 'ready':
+				return { text: 'Ready for Pickup', color: 'bg-green-100 text-green-800' };
+			case 'active':
+				return rawStatus === 'pending_return'
+					? { text: 'Awaiting Return Confirmation', color: 'bg-orange-100 text-orange-800' }
+					: { text: 'Currently Borrowed', color: 'bg-purple-100 text-purple-800' };
+			case 'unresolved':
+				return { text: 'Unresolved', color: 'bg-amber-100 text-amber-800' };
+			case 'history':
+				if (rawStatus === 'resolved')
+					return { text: 'Resolved', color: 'bg-emerald-100 text-emerald-800' };
+				return isCancelledRequest(rawStatus ?? 'returned', rejectionReason)
+					? { text: 'Cancelled', color: 'bg-slate-100 text-slate-800' }
+					: rawStatus === 'rejected'
+						? { text: 'Declined', color: 'bg-red-100 text-red-800' }
+						: { text: 'Completed', color: 'bg-gray-100 text-gray-800' };
+			default:
+				return { text: status, color: 'bg-gray-100 text-gray-800' };
+		}
+	}
+
+	function getCardBorderColor(
+		status: Tab,
+		rawStatus?: BorrowRequestStatus,
+		rejectionReason?: string
+	): string {
+		switch (status) {
+			case 'pending':
+				return 'border-yellow-500';
+			case 'ready':
+				return 'border-green-500';
+			case 'active':
+				return rawStatus === 'pending_return' ? 'border-orange-500' : 'border-purple-500';
+			case 'unresolved':
+				return 'border-rose-500';
+			case 'history':
+				return isCancelledRequest(rawStatus ?? 'returned', rejectionReason)
+					? 'border-slate-400'
+					: rawStatus === 'rejected'
+						? 'border-red-500'
+						: rawStatus === 'resolved'
+							? 'border-emerald-400'
+							: 'border-gray-300';
+			default:
+				return 'border-gray-300';
+		}
+	}
+
+	function getRequestHint(
+		status: Tab,
+		rawStatus?: BorrowRequestStatus,
+		rejectionReason?: string
+	): { text: string; color: string } {
+		switch (status) {
+			case 'pending':
+				return {
+					text: 'Prepare the requested equipment and release it when the request is ready for pickup.',
+					color: 'text-yellow-700'
+				};
+			case 'ready':
+				return {
+					text: 'Items are staged for handoff and waiting for student pickup confirmation.',
+					color: 'text-green-700'
+				};
+			case 'active':
+				if (rawStatus === 'pending_return') {
+					return {
+						text: 'The items are ready for return inspection. Inspect them before completing check-in.',
+						color: 'text-orange-700'
+					};
+				}
+
+				return {
+					text: 'This equipment is currently borrowed and should be monitored until return.',
+					color: 'text-purple-700'
+				};
+			case 'unresolved':
+				return {
+					text: 'This request has open incident cases. Coordinate with the student to resolve outstanding damage or missing items.',
+					color: 'text-rose-700'
+				};
+			case 'history':
+				return isCancelledRequest(rawStatus ?? 'returned', rejectionReason)
+					? {
+							text: 'This request was cancelled by the student before fulfillment and archived in history.',
+							color: 'text-slate-700'
+						}
+					: rawStatus === 'rejected'
+						? {
+								text: 'This request was closed without fulfillment and has been archived.',
+								color: 'text-red-700'
+							}
+						: rawStatus === 'resolved'
+							? {
+									text: 'All replacement obligations from this incident have been settled. The request is fully resolved.',
+									color: 'text-emerald-700'
+								}
+							: {
+									text: 'This request has been completed and archived in the request history.',
+									color: 'text-gray-600'
+								};
+			default:
+				return { text: '', color: 'text-gray-500' };
+		}
+	}
+
+	function getWorkflowFilter(): string {
+		if (activeTab === 'all') return 'all';
+		if (activeTab === 'pending') return 'pending';
+		if (activeTab === 'ready') return 'ready';
+		if (activeTab === 'unresolved') return 'unresolved';
+		if (activeTab === 'active') {
+			if (overdueOnly) return 'overdue';
+			if (pendingReturnOnly) return 'pending_return';
+			return 'active';
+		}
+		if (activeTab === 'history') {
+			if (historySubTab === 'cancelled') return 'cancelled';
+			return 'resolved_completed';
+		}
+		return 'all';
+	}
+
+	function setWorkflowFilter(val: string) {
+		if (val === 'all') { activeTab = 'all'; overdueOnly = false; pendingReturnOnly = false; historySubTab = 'all'; }
+		else if (val === 'pending') { activeTab = 'pending'; overdueOnly = false; pendingReturnOnly = false; }
+		else if (val === 'ready') { activeTab = 'ready'; overdueOnly = false; pendingReturnOnly = false; }
+		else if (val === 'active') { activeTab = 'active'; overdueOnly = false; pendingReturnOnly = false; }
+		else if (val === 'overdue') { activeTab = 'active'; overdueOnly = true; pendingReturnOnly = false; }
+		else if (val === 'pending_return') { activeTab = 'active'; overdueOnly = false; pendingReturnOnly = true; }
+		else if (val === 'unresolved') { activeTab = 'unresolved'; overdueOnly = false; pendingReturnOnly = false; }
+		else if (val === 'resolved_completed') { activeTab = 'history'; overdueOnly = false; pendingReturnOnly = false; historySubTab = 'done'; }
+		else if (val === 'cancelled') { activeTab = 'history'; overdueOnly = false; pendingReturnOnly = false; historySubTab = 'cancelled'; }
+	}
+
+	const activeFilterBadge = $derived.by(() => {
+		const filter = getWorkflowFilter();
+		if (filter === 'all') return null;
+		
+		switch (filter) {
+			case 'pending': 
+				return { label: 'Pending Preparation Only', bg: 'bg-yellow-50', text: 'text-yellow-700', ring: 'ring-yellow-600/10', btn: 'text-yellow-500', btnHoverBg: 'hover:bg-yellow-100', btnHoverText: 'hover:text-yellow-700' };
+			case 'ready': 
+				return { label: 'Ready for Pickup Only', bg: 'bg-green-50', text: 'text-green-700', ring: 'ring-green-600/10', btn: 'text-green-500', btnHoverBg: 'hover:bg-green-100', btnHoverText: 'hover:text-green-700' };
+			case 'active': 
+				return { label: 'Currently Borrowed Only', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
+			case 'pending_return': 
+				return { label: 'Confirm Return Only', bg: 'bg-orange-50', text: 'text-orange-700', ring: 'ring-orange-600/10', btn: 'text-orange-500', btnHoverBg: 'hover:bg-orange-100', btnHoverText: 'hover:text-orange-700' };
+			case 'overdue': 
+				return { label: 'Overdue Only', bg: 'bg-red-50', text: 'text-red-700', ring: 'ring-red-600/10', btn: 'text-red-500', btnHoverBg: 'hover:bg-red-100', btnHoverText: 'hover:text-red-700' };
+			case 'unresolved': 
+				return { label: 'Unresolved Obligations Only', bg: 'bg-amber-50', text: 'text-amber-700', ring: 'ring-amber-600/10', btn: 'text-amber-500', btnHoverBg: 'hover:bg-amber-100', btnHoverText: 'hover:text-amber-700' };
+			case 'resolved_completed': 
+				return { label: 'Resolved / Completed Only', bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-600/10', btn: 'text-emerald-500', btnHoverBg: 'hover:bg-emerald-100', btnHoverText: 'hover:text-emerald-700' };
+			case 'cancelled': 
+				return { label: 'Cancelled Only', bg: 'bg-slate-50', text: 'text-slate-700', ring: 'ring-slate-600/10', btn: 'text-slate-500', btnHoverBg: 'hover:bg-slate-100', btnHoverText: 'hover:text-slate-700' };
+			default: return null;
+		}
+	});
+</script>
+
+<svelte:head>
+	<title>Requests & Borrowed Items - Auditor Portal</title>
+</svelte:head>
+
+	<div class="space-y-6">
+		<!-- Header -->
+		<div>
+			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Requests & Borrowed Items</h1>
+			<p class="mt-1 text-sm text-gray-500">Prepare, distribute, and receive borrowed equipment</p>
+		</div>
+
+		<!-- Statistics Cards -->
+		{#if cardsLoading}
+			<div class="grid grid-cols-2 gap-3 lg:grid-cols-5 animate-pulse">
+				{#each Array(5) as _, idx}
+					<div class="rounded-lg bg-white p-3 shadow sm:p-5 h-[80px] sm:h-[116px] {idx === 4 ? 'col-span-2 lg:col-span-1' : ''}">
+						<div class="flex items-center justify-between gap-2 h-full">
+							<div class="space-y-2 flex-1">
+								<div class="h-4 bg-gray-200 rounded w-2/3"></div>
+								<div class="h-6 bg-gray-200 rounded w-1/3"></div>
+							</div>
+							<div class="h-9 w-9 sm:h-12 sm:w-12 bg-gray-200 rounded-full"></div>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{:else}
+			<div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
+				<button
+					type="button"
+					onclick={() => { activeTab = 'all'; overdueOnly = false; pendingReturnOnly = false; searchQuery = ''; }}
+					class="rounded-lg border border-blue-200 bg-blue-50 p-3 shadow-sm hover:shadow-md hover:border-blue-300/60 hover:bg-blue-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:p-5 {activeTab === 'all' ? 'ring-2 ring-blue-500/50' : ''}"
+				>
+					<div class="flex items-center justify-between gap-2">
+						<div class="min-w-0">
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Total</p>
+							<p class="mt-1 text-xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">
+								{stats.totalRequests}
+							</p>
+						</div>
+						<div
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 sm:h-12 sm:w-12"
+						>
+							<svg
+								class="h-5 w-5 text-blue-600 sm:h-6 sm:w-6"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+								/>
+							</svg>
+						</div>
+					</div>
+				</button>
+
+				<button
+					type="button"
+					onclick={() => { activeTab = 'pending'; overdueOnly = false; pendingReturnOnly = false; }}
+					class="rounded-lg border border-yellow-200 bg-yellow-50 p-3 shadow-sm hover:shadow-md hover:border-yellow-300/60 hover:bg-yellow-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-yellow-500/20 sm:p-5 {activeTab === 'pending' ? 'ring-2 ring-yellow-500/50' : ''}"
+				>
+					<div class="flex items-center justify-between gap-2">
+						<div class="min-w-0">
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Pending</p>
+							<p class="mt-1 text-xl font-semibold text-yellow-600 sm:mt-2 sm:text-3xl">
+								{stats.pendingCount}
+							</p>
+						</div>
+						<div
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-yellow-100 sm:h-12 sm:w-12"
+						>
+							<svg
+								class="h-5 w-5 text-yellow-600 sm:h-6 sm:w-6"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+								/>
+							</svg>
+						</div>
+					</div>
+				</button>
+
+				<button
+					type="button"
+					onclick={() => { activeTab = 'ready'; overdueOnly = false; pendingReturnOnly = false; }}
+					class="rounded-lg border border-green-200 bg-green-50 p-3 shadow-sm hover:shadow-md hover:border-green-300/60 hover:bg-green-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-green-500/20 sm:p-5 {activeTab === 'ready' ? 'ring-2 ring-green-500/50' : ''}"
+				>
+					<div class="flex items-center justify-between gap-2">
+						<div class="min-w-0">
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Ready</p>
+							<p class="mt-1 text-xl font-semibold text-green-600 sm:mt-2 sm:text-3xl">
+								{stats.readyCount}
+							</p>
+						</div>
+						<div
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100 sm:h-12 sm:w-12"
+						>
+							<svg
+								class="h-5 w-5 text-green-600 sm:h-6 sm:w-6"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+								/>
+							</svg>
+						</div>
+					</div>
+				</button>
+
+				<button
+					type="button"
+					onclick={() => { activeTab = 'active'; overdueOnly = false; pendingReturnOnly = false; }}
+					class="rounded-lg border border-purple-200 bg-purple-50 p-3 shadow-sm hover:shadow-md hover:border-purple-300/60 hover:bg-purple-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-purple-500/20 sm:p-5 {activeTab === 'active' && !overdueOnly && !pendingReturnOnly ? 'ring-2 ring-purple-500/50' : ''}"
+				>
+					<div class="flex items-center justify-between gap-2">
+						<div class="min-w-0">
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Currently Borrowed</p>
+							<p class="mt-1 text-xl font-semibold text-purple-600 sm:mt-2 sm:text-3xl">
+								{stats.activeCount}
+							</p>
+						</div>
+						<div
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 sm:h-12 sm:w-12"
+						>
+							<svg
+								class="h-5 w-5 text-purple-600 sm:h-6 sm:w-6"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+								/>
+							</svg>
+						</div>
+					</div>
+				</button>
+
+				<button
+					type="button"
+					onclick={() => { activeTab = 'active'; overdueOnly = true; pendingReturnOnly = false; }}
+					class="col-span-2 rounded-lg border border-red-200 bg-red-50 p-3 shadow-sm hover:shadow-md hover:border-red-300/60 hover:bg-red-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-red-500/20 lg:col-span-1 sm:p-5 {activeTab === 'active' && overdueOnly ? 'ring-2 ring-red-500/50' : ''}"
+				>
+					<div class="flex items-center justify-between gap-2">
+						<div class="min-w-0">
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Overdue</p>
+							<p class="mt-1 text-xl font-semibold text-red-600 sm:mt-2 sm:text-3xl">
+								{stats.overdueCount}
+							</p>
+						</div>
+						<div
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 sm:h-12 sm:w-12"
+						>
+							<svg
+								class="h-5 w-5 text-red-600 sm:h-6 sm:w-6"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+								/>
+							</svg>
+						</div>
+					</div>
+				</button>
+			</div>
+		{/if}
+
+
+		<!-- Request Cards in Professional Card Container -->
+		<div class="rounded-xl bg-white shadow-sm">
+			<div class="p-6">
+				<!-- Search and Filter Bar -->
+				<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div class="relative flex-1">
+						<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+							<svg
+								class="h-4 w-4 text-gray-400 sm:h-5 sm:w-5"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+								/>
+							</svg>
+						</div>
+						<input
+							type="text"
+							bind:value={searchQuery}
+							placeholder="Search by student, request ID, or item..."
+							class="block h-10 w-full rounded-xl border border-gray-300 bg-white py-2 pr-3 pl-9 text-sm placeholder-gray-400 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-100 focus:outline-none sm:pl-10"
+						/>
+					</div>
+					<div class="flex shrink-0 flex-wrap items-center gap-2">
+						<select
+							value={getWorkflowFilter()}
+							onchange={(e) => setWorkflowFilter((e.currentTarget as HTMLSelectElement).value)}
+							class="h-10 min-w-[150px] rounded-xl border border-gray-300 bg-white px-3 text-sm shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-100 focus:outline-none"
+						>
+							<option value="all">All Statuses</option>
+							<option value="pending">Pending Preparation</option>
+							<option value="ready">Ready for Pickup (Confirm Pickup)</option>
+							<option value="active">Currently Borrowed</option>
+							<option value="pending_return">Confirm Return</option>
+							<option value="overdue">Overdue</option>
+							<option value="unresolved">Unresolved Obligations</option>
+							<option value="resolved_completed">Resolved / Completed</option>
+							<option value="cancelled">Cancelled</option>
+						</select>
+						<select
+							bind:value={sortBy}
+							class="h-10 min-w-[120px] rounded-xl border border-gray-300 bg-white px-3 text-sm shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-100 focus:outline-none"
+						>
+							<option value="date">Date</option>
+							<option value="status">Status</option>
+						</select>
+						<button
+							onclick={() => {
+								searchQuery = '';
+								sortBy = 'date';
+								activeTab = 'all';
+								overdueOnly = false;
+								pendingReturnOnly = false;
+							}}
+							class="h-10 rounded-xl px-2 text-sm font-semibold text-pink-600 transition-colors hover:bg-pink-50 hover:text-pink-700"
+						>
+							Clear
+						</button>
+					</div>
+				</div>
+				<div class="space-y-4">
+					{#if activeTabLoading}
+						<RequestsSkeletonLoader {viewMode} showCards={false} showTabs={false} showFilters={false} />
+					{:else}
+					<div
+						class="mb-4 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-4"
+					>
+						<div class="flex min-w-0 flex-wrap items-center gap-2">
+							<span class="text-sm font-semibold text-gray-700">
+								{filteredRequests.length}
+								{filteredRequests.length === 1 ? 'request' : 'requests'} found
+							</span>
+							{#if activeFilterBadge}
+								<span class="inline-flex items-center gap-1 rounded-full {activeFilterBadge.bg} px-2 py-0.5 text-xs font-semibold {activeFilterBadge.text} ring-1 {activeFilterBadge.ring}">
+									{activeFilterBadge.label}
+									<button 
+										onclick={() => setWorkflowFilter('all')}
+										class="ml-0.5 rounded-full p-0.5 {activeFilterBadge.btn} {activeFilterBadge.btnHoverBg} {activeFilterBadge.btnHoverText} focus:outline-none"
+										aria-label="Clear filter"
+									>
+										<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+										</svg>
+									</button>
+								</span>
+							{/if}
+							<span
+								class="hidden rounded-full bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200 sm:inline-flex"
+							>
+								{viewMode === 'card' ? 'Card view' : 'Table view'}
+							</span>
+						</div>
+						<div class="flex flex-wrap items-center justify-end gap-2">
+							<div class="flex overflow-hidden rounded-lg border border-gray-300">
+								<button
+									onclick={() => (viewMode = 'list')}
+									aria-label="Table view"
+									class="flex h-10 w-10 items-center justify-center text-sm transition-colors {viewMode ===
+									'list'
+										? 'bg-pink-100 text-pink-700'
+										: 'bg-white text-gray-600 hover:bg-gray-50'}"
+								>
+									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M4 6h16M4 12h16M4 18h16"
+										/>
+									</svg>
+								</button>
+								<button
+									onclick={() => (viewMode = 'card')}
+									aria-label="Card view"
+									class="flex h-10 w-10 items-center justify-center border-l border-gray-300 text-sm transition-colors {viewMode ===
+									'card'
+										? 'bg-pink-100 text-pink-700'
+										: 'bg-white text-gray-600 hover:bg-gray-50'}"
+								>
+									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+										/>
+									</svg>
+								</button>
+							</div>
+						</div>
+					</div>
+
+					{#if viewMode === 'card'}
+						<div style="min-height: 600px;">
+							{#if paginatedRequests.length > 0}
+								<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" style="align-content: start;">
+									{#each paginatedRequests as request}
+										<!-- svelte-ignore a11y_click_events_have_key_events -->
+										<!-- svelte-ignore a11y_no_static_element_interactions -->
+										<div
+											class="cursor-pointer overflow-hidden rounded-xl border-l-4 bg-white shadow-sm ring-1 ring-gray-200 transition-all hover:shadow-md {getCardBorderColor(
+												request.status,
+												request.rawStatus,
+												request.rejectionReason
+											)} {highlightedRequestId === request.rawId
+												? 'bg-pink-50/30 ring-2 ring-pink-400'
+												: ''}"
+											data-request-id={request.rawId}
+											onclick={() => openDetailModal(request)}
+											role="button"
+											tabindex="0"
+											onkeydown={(e) => e.key === 'Enter' && openDetailModal(request)}
+											aria-label="View details for {request.id}"
+										>
+											<div class="p-4 sm:p-5">
+												<!-- Header: Student, Request ID, Status -->
+												<div class="mb-3 flex items-start justify-between gap-3">
+													<div class="flex min-w-0 flex-1 items-center gap-3">
+														<div
+															class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-pink-100 text-xs font-semibold text-pink-700"
+														>
+															{#if request.student.avatarUrl}
+																<img
+																	src={request.student.avatarUrl}
+																	alt={request.student.name}
+																	class="h-full w-full object-cover"
+																	loading="lazy"
+																/>
+															{:else}
+																{request.student.avatar}
+															{/if}
+														</div>
+														<div class="flex min-w-0 flex-col gap-1">
+															<span class="truncate font-semibold text-gray-900"
+																>{request.student.name}</span
+															>
+															<span class="truncate font-mono text-xs text-gray-500"
+																>{request.id}</span
+															>
+														</div>
+													</div>
+													<span
+														class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold {getStatusBadge(
+															request.status,
+															request.rawStatus,
+															request.rejectionReason
+														).color}"
+													>
+														{getStatusBadge(
+															request.status,
+															request.rawStatus,
+															request.rejectionReason
+														).text}
+													</span>
+													{#if request.approvedBy}
+														<p class="mt-1 text-[11px] text-gray-500">Approved by {request.approvedBy}</p>
+													{/if}
+												</div>
+
+												<!-- Qty & Date -->
+												<div class="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500">
+													<div class="flex items-center gap-1.5">
+														<Package class="h-4 w-4" />
+														<span class="font-medium text-gray-900"
+															>Qty: {request.items.reduce(
+																(sum: number, item: any) => sum + item.quantity,
+																0
+															)}</span
+														>
+													</div>
+													<div class="flex items-center gap-1.5">
+														<svg
+															class="h-4 w-4"
+															fill="none"
+															stroke="currentColor"
+															viewBox="0 0 24 24"
+															><path
+																stroke-linecap="round"
+																stroke-linejoin="round"
+																stroke-width="2"
+																d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+															/></svg
+														>
+														<span
+															>{new Date(request.requestDate).toLocaleDateString('en-US', {
+																month: 'short',
+																day: 'numeric',
+																year: 'numeric'
+															})}</span
+														>
+													</div>
+												</div>
+
+												<!-- Missing / Damaged Badges -->
+												{#if request.status === 'unresolved' && (request.missingItemCount > 0 || request.damagedItemCount > 0)}
+													<div
+														class="mt-3 flex gap-2 border-t border-gray-100 pt-3 text-xs text-gray-500"
+													>
+														{#if request.missingItemCount > 0}
+															<span
+																class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-800"
+															>
+																<span class="h-1 w-1 rounded-full bg-red-500"></span>
+																{request.missingItemCount} Missing
+															</span>
+														{/if}
+														{#if request.damagedItemCount > 0}
+															<span
+																class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 font-medium text-rose-800"
+															>
+																<span class="h-1 w-1 rounded-full bg-rose-500"></span>
+																{request.damagedItemCount} Damaged
+															</span>
+														{/if}
+													</div>
+												{/if}
+											</div>
+
+											<!-- Card Footer -->
+											<div
+												class="flex justify-end gap-2 border-t border-gray-100 bg-gray-50/60 px-4 py-3 sm:px-5"
+											>
+												<div class="relative flex flex-wrap items-center gap-2">
+													{#if request.status === 'unresolved'}
+														<button
+															onclick={() => openResolveModal(request.rawId)}
+															disabled={resolvingRequestId === request.rawId}
+															class="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+														>
+															{#if resolvingRequestId === request.rawId}
+																<svg
+																	class="h-4 w-4 animate-spin text-white"
+																	fill="none"
+																	viewBox="0 0 24 24"
+																>
+																	<circle
+																		class="opacity-25"
+																		cx="12"
+																		cy="12"
+																		r="10"
+																		stroke="currentColor"
+																		stroke-width="4"
+																	></circle>
+																	<path
+																		class="opacity-75"
+																		fill="currentColor"
+																		d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+																	></path>
+																</svg>
+																Loading...
+															{:else}
+																Resolve Obligation
+															{/if}
+														</button>
+													{/if}
+													{#if request.status === 'pending'}
+														<button
+															onclick={() => markReady(request.rawId)}
+															class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-green-700"
+														>
+															Ready for Pickup
+														</button>
+													{/if}
+													{#if request.status === 'ready'}
+														<button
+															onclick={() => confirmPickup(request.rawId)}
+															class="rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
+														>
+															Confirm Pickup
+														</button>
+													{/if}
+													{#if request.status === 'active' && ['borrowed', 'pending_return'].includes(request.rawStatus)}
+														<button
+															onclick={() => {
+																closeActionMenu();
+																confirmReturn(request.rawId);
+															}}
+															class="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+														>
+															Confirm Return
+														</button>
+													{/if}
+												</div>
+											</div>
+										</div>
+									{/each}
+								</div>
+							{:else}
+								<!-- Completely empty state -->
+								<div
+									class="py-16 text-center"
+									style="min-height: 600px; display: flex; align-items: center; justify-content: center;"
+								>
+									<div>
+										<div
+											class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gray-100"
+										>
+											<svg
+												class="h-10 w-10 text-pink-600"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+												/>
+											</svg>
+										</div>
+										<h3 class="mt-6 text-base font-semibold text-gray-900">
+											{#if activeTab === 'pending'}
+												No pending requests
+											{:else if activeTab === 'ready'}
+												No items ready for pickup
+											{:else if activeTab === 'active'}
+												No currently borrowed items
+											{:else if activeTab === 'unresolved'}
+												No unresolved items
+											{:else}
+												No request history
+											{/if}
+										</h3>
+										<p class="mx-auto mt-2 max-w-md text-sm text-gray-600">
+											{#if activeTab === 'pending'}
+												Requests approved by instructors will appear here for your action.
+											{:else if activeTab === 'ready'}
+												Items that have been released and are ready for student pickup will appear
+												here.
+											{:else if activeTab === 'active'}
+												Currently borrowed items will be listed here when students pick them up.
+											{:else if activeTab === 'unresolved'}
+												Items reported as missing or damaged will be tracked here.
+											{:else}
+												Completed, cancelled, returned, and rejected requests will be archived here.
+											{/if}
+										</p>
+									</div>
+								</div>
+							{/if}
+						</div>
+					{:else}
+						<!-- List View -->
+						<div style="min-height: 600px;">
+							{#if paginatedRequests.length > 0}
+								<div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+									<div
+										class="hidden border-b border-gray-200 bg-gray-50 px-4 py-3 text-xs font-semibold tracking-wide text-gray-500 uppercase md:grid md:grid-cols-[32px_0.6fr_1fr_2.4fr_0.8fr_120px] md:items-center md:gap-4"
+									>
+										<span class="text-center text-gray-400">#</span>
+										<span>Request</span>
+										<span>Requested By</span>
+										<span>Items</span>
+										<span>Status</span>
+										<span class="text-right">Actions</span>
+									</div>
+									<div class="divide-y divide-gray-100">
+										{#each paginatedRequests as request, i}
+											<!-- svelte-ignore a11y_click_events_have_key_events -->
+											<!-- svelte-ignore a11y_no_static_element_interactions -->
+											<div
+												class="grid cursor-pointer gap-3 p-4 transition-colors md:grid-cols-[32px_0.6fr_1fr_2.4fr_0.8fr_120px] md:items-start md:gap-4 {highlightedRequestId ===
+												request.rawId
+													? 'bg-pink-50/50 ring-1 ring-pink-300 ring-inset'
+													: 'hover:bg-gray-50'}"
+												data-request-id={request.rawId}
+												onclick={() => openDetailModal(request)}
+												role="button"
+												tabindex="0"
+												onkeydown={(e) => e.key === 'Enter' && openDetailModal(request)}
+												aria-label="View details for {request.id}"
+											>
+												<div class="hidden items-center justify-center pt-0.5 md:flex">
+													<span
+														class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-500"
+														>{(currentPage - 1) * PAGE_SIZE_LIST + i + 1}</span
+													>
+												</div>
+												<div class="min-w-0">
+													<p class="font-mono text-xs font-bold tracking-wider text-gray-900">
+														{request.id}
+													</p>
+													<p class="mt-1 text-xs text-gray-500">
+														{new Date(request.requestDate).toLocaleDateString('en-US', {
+															month: 'short',
+															day: 'numeric',
+															year: 'numeric'
+														})}
+													</p>
+													{#if request.isOverdue}
+														<p class="mt-1 text-xs font-semibold text-red-600">
+															{request.daysOverdue}
+															{request.daysOverdue === 1 ? 'day' : 'days'} overdue
+														</p>
+													{/if}
+												</div>
+
+												<div class="flex min-w-0 items-center gap-3">
+													<div
+														class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-pink-100 text-xs font-semibold text-pink-700"
+													>
+														{#if request.student.avatarUrl}
+															<img
+																src={request.student.avatarUrl}
+																alt={request.student.name}
+																class="h-full w-full object-cover"
+																loading="lazy"
+															/>
+														{:else}
+															{request.student.avatar}
+														{/if}
+													</div>
+													<div class="min-w-0">
+														<p class="truncate text-sm font-semibold text-gray-900">
+															{request.student.name}
+														</p>
+														<p class="truncate text-xs text-gray-500">
+															{request.student.yearLevel} • Block {request.student.block}
+														</p>
+													</div>
+												</div>
+
+												<div class="min-w-0">
+													<div class="flex flex-wrap gap-1.5">
+														{#each request.items.slice(0, 3) as item}
+															{@const pic = item.picture ?? itemPictureCache.get(item.itemId)}
+															<span
+																class="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700"
+															>
+																{#if pic}
+																	<img
+																		src={pic}
+																		alt={item.name}
+																		class="h-3.5 w-3.5 shrink-0 rounded object-cover"
+																		loading="lazy"
+																	/>
+																{:else}
+																	<span class="h-3.5 w-3.5 shrink-0 overflow-hidden rounded"
+																		><ItemImagePlaceholder size="xs" /></span
+																	>
+																{/if}
+																<span class="max-w-[100px] truncate">{item.name}</span>
+															</span>
+														{/each}
+														{#if request.items.length > 3}
+															<span
+																class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600"
+																>+{request.items.length - 3} more</span
+															>
+														{/if}
+													</div>
+													<p class="mt-1 truncate text-xs text-gray-500">{request.purpose}</p>
+												</div>
+
+												<div class="min-w-0">
+													<span
+														class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold {getStatusBadge(
+															request.status,
+															request.rawStatus,
+															request.rejectionReason
+														).color}"
+													>
+														<span class="h-1.5 w-1.5 rounded-full bg-current"></span>
+														{getStatusBadge(
+															request.status,
+															request.rawStatus,
+															request.rejectionReason
+														).text}
+													</span>
+													<p class="mt-1 text-xs text-gray-500">
+														Due {formatDate(request.returnDate)}
+													</p>
+												</div>
+
+												<div class="relative flex flex-wrap items-center gap-2 md:justify-end">
+													{#if request.status === 'pending'}
+														<button
+															onclick={(e) => {
+																e.stopPropagation();
+																markReady(request.rawId);
+															}}
+															class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-green-700"
+														>
+															Ready for Pickup
+														</button>
+													{/if}
+													{#if request.status === 'ready'}
+														<button
+															onclick={(e) => {
+																e.stopPropagation();
+																confirmPickup(request.rawId);
+															}}
+															class="rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
+														>
+															Confirm Pickup
+														</button>
+													{/if}
+													{#if request.status === 'active' && ['borrowed', 'pending_return'].includes(request.rawStatus)}
+														<button
+															onclick={(e) => {
+																e.stopPropagation();
+																closeActionMenu();
+																confirmReturn(request.rawId);
+															}}
+															class="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+														>
+															Confirm Return
+														</button>
+													{/if}
+												</div>
+											</div>
+										{/each}
+									</div>
+								</div>
+							{:else}
+								<!-- Completely empty state -->
+								<div
+									class="py-16 text-center"
+									style="min-height: 600px; display: flex; align-items: center; justify-content: center;"
+								>
+									<div>
+										<div
+											class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gray-100"
+										>
+											<svg
+												class="h-10 w-10 text-pink-600"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+												/>
+											</svg>
+										</div>
+										<h3 class="mt-6 text-base font-semibold text-gray-900">
+											{#if activeTab === 'pending'}
+												No pending requests
+											{:else if activeTab === 'ready'}
+												No items ready for pickup
+											{:else if activeTab === 'active'}
+												No currently borrowed items
+											{:else if activeTab === 'unresolved'}
+												No unresolved items
+											{:else}
+												No request history
+											{/if}
+										</h3>
+										<p class="mx-auto mt-2 max-w-md text-sm text-gray-600">
+											{#if activeTab === 'pending'}
+												Requests approved by instructors will appear here for your action.
+											{:else if activeTab === 'ready'}
+												Items that have been released and are ready for student pickup will appear
+												here.
+											{:else if activeTab === 'active'}
+												Currently borrowed items will be listed here when students pick them up.
+											{:else if activeTab === 'unresolved'}
+												Items reported as missing or damaged will be tracked here.
+											{:else}
+												Completed, cancelled, returned, and rejected requests will be archived here.
+											{/if}
+										</p>
+									</div>
+								</div>
+							{/if}
+						</div>
+					{/if}
+
+					{#if filteredRequests.length > 0 && totalPages > 1}
+						<Pagination
+							{currentPage}
+							{totalPages}
+							totalItems={filteredRequests.length}
+							itemsPerPage={PAGE_SIZE}
+							onPageChange={(p) => {
+								currentPage = p;
+							}}
+							class="mt-4"
+						/>
+					{/if}
+					{/if}
+				</div>
+			</div>
+		</div>
+	</div>
+
+<!-- Detail Modal -->
+{#if showDetailModal && selectedRequest}
+	<div class="fixed inset-0 z-50 overflow-y-auto">
+		<div
+			class="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+			aria-hidden="true"
+		></div>
+		<div class="flex min-h-full items-end justify-center sm:items-center sm:p-4">
+			<div
+				class="animate-scaleIn relative w-full max-w-4xl overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
+			>
+				<!-- Header -->
+				<div
+					class="sticky top-0 z-10 border-b border-gray-200 bg-white/95 px-4 py-4 backdrop-blur-sm sm:px-8 sm:py-6"
+				>
+					<div class="flex items-start justify-between gap-3">
+						<div class="flex min-w-0 flex-1 items-start gap-3">
+							<div
+								class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-pink-500 to-pink-600 shadow-lg shadow-pink-500/30 sm:h-12 sm:w-12"
+							>
+								<svg
+									class="h-5 w-5 text-white sm:h-6 sm:w-6"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2.5"
+										d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+									/>
+								</svg>
+							</div>
+							<div class="min-w-0 flex-1">
+								<h2 class="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
+									Request Details
+								</h2>
+								<p class="mt-0.5 font-mono text-xs font-semibold text-pink-600 sm:text-sm">
+									{selectedRequest.id}
+								</p>
+								<div
+									class="mt-2 inline-flex items-center gap-2 rounded-full px-2.5 py-1 sm:px-3 sm:py-1.5 {getStatusBadge(
+										selectedRequest.status,
+										selectedRequest.rawStatus,
+										selectedRequest.rejectionReason
+									).color} shadow-sm ring-1 ring-black/5"
+								>
+									<span class="h-1.5 w-1.5 rounded-full bg-current"></span>
+									<span class="text-[10px] font-bold sm:text-xs"
+										>{getStatusBadge(
+											selectedRequest.status,
+											selectedRequest.rawStatus,
+											selectedRequest.rejectionReason
+										).text}</span
+									>
+								</div>
+								{#if selectedRequest.approvedBy}
+									<p class="mt-1 text-xs text-gray-500">Approved by {selectedRequest.approvedBy}</p>
+								{/if}
+							</div>
+						</div>
+						<button
+							onclick={closeDetailModal}
+							aria-label="Close modal"
+							class="rounded-xl p-2 text-gray-400 transition-all hover:bg-gray-100 hover:text-gray-600 active:scale-95 sm:p-2.5"
+						>
+							<svg
+								class="h-5 w-5 sm:h-6 sm:w-6"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M6 18L18 6M6 6l12 12"
+								/>
+							</svg>
+						</button>
+					</div>
+				</div>
+
+				<!-- Content -->
+				<div class="max-h-[70vh] overflow-y-auto px-4 py-5 sm:px-8 sm:py-8">
+					<div class="space-y-6 sm:space-y-8">
+						<!-- Workflow Timeline -->
+						<div>
+							<div
+								class="rounded-2xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-4 sm:p-5"
+							>
+								<!-- Timeline Container -->
+								<div class="relative">
+									<!-- SVG Background for connector lines -->
+									<svg class="pointer-events-none absolute inset-0 h-16 w-full" style="z-index: 0;">
+										{#each [{ label: 'Request Submitted', by: 'Student', date: selectedRequest.requestDate, completed: true }, { label: 'Approved', by: selectedRequest.approvedBy, date: selectedRequest.approvedDate, completed: !!selectedRequest.approvedDate }, { label: 'Custodian Approved', by: 'Custodian', date: selectedRequest.releasedDate, completed: !!selectedRequest.releasedDate }, { label: 'Awaiting Pickup', by: 'Student', date: selectedRequest.pickedUpDate, completed: !!selectedRequest.pickedUpDate && selectedRequest.status !== 'ready' }] as step, idx}
+											{@const stepCount = 4}
+											{@const isLastStep = idx === stepCount - 1}
+											{@const stepWidth = 100 / stepCount}
+											{@const x1 = stepWidth * (idx + 0.5)}
+											{@const x2 = stepWidth * (idx + 1.5)}
+											{@const y = 20}
+											{@const isCurrentCompleted = step.completed}
+
+											{#if !isLastStep}
+												<line
+													x1="{x1}%"
+													y1={y}
+													x2="{x2}%"
+													y2={y}
+													stroke={isCurrentCompleted ? '#ec4899' : '#e5e7eb'}
+													stroke-width="2"
+													stroke-linecap="round"
+												/>
+											{/if}
+										{/each}
+									</svg>
+
+									<!-- Timeline steps -->
+									<div
+										class="relative flex items-start justify-between gap-1 sm:gap-2"
+										style="z-index: 1;"
+									>
+										{#each [{ label: 'Request Submitted', by: 'Student', date: selectedRequest.requestDate, completed: true }, { label: 'Approved', by: selectedRequest.approvedBy, date: selectedRequest.approvedDate, completed: !!selectedRequest.approvedDate }, { label: 'Custodian Approved', by: 'Custodian', date: selectedRequest.releasedDate, completed: !!selectedRequest.releasedDate }, { label: 'Awaiting Pickup', by: 'Student', date: selectedRequest.pickedUpDate, completed: !!selectedRequest.pickedUpDate && selectedRequest.status !== 'ready' }] as step, idx}
+											<div class="flex flex-1 flex-col items-center">
+												<!-- Icon Circle -->
+												<div class="relative mb-2 flex items-center justify-center">
+													<div
+														class="flex h-10 w-10 items-center justify-center rounded-full border-2 bg-white sm:h-12 sm:w-12 {step.completed
+															? 'border-pink-600'
+															: 'border-gray-300'}"
+													>
+														{#if idx === 0}
+															<svg
+																class="h-4 w-4 sm:h-5 sm:w-5 {step.completed
+																	? 'text-pink-600'
+																	: 'text-gray-400'}"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+															>
+																<path
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																	stroke-width="2"
+																	d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+																/>
+															</svg>
+														{:else if idx === 1}
+															<svg
+																class="h-4 w-4 sm:h-5 sm:w-5 {step.completed
+																	? 'text-pink-600'
+																	: 'text-gray-400'}"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+															>
+																<path
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																	stroke-width="2"
+																	d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+																/>
+															</svg>
+														{:else if idx === 2}
+															<svg
+																class="h-4 w-4 sm:h-5 sm:w-5 {step.completed
+																	? 'text-pink-600'
+																	: 'text-gray-400'}"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+															>
+																<path
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																	stroke-width="2"
+																	d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+																/>
+															</svg>
+														{:else}
+															<svg
+																class="h-4 w-4 sm:h-5 sm:w-5 {step.completed
+																	? 'text-pink-600'
+																	: 'animate-pulse text-gray-400'}"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+															>
+																<path
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																	stroke-width="2"
+																	d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+																/>
+															</svg>
+														{/if}
+													</div>
+												</div>
+
+												<!-- Step Label -->
+												<div class="min-w-0 text-center">
+													<p
+														class="line-clamp-2 text-[10px] leading-tight font-semibold text-gray-900 sm:text-xs"
+													>
+														{step.label}
+													</p>
+													<p class="mt-0.5 line-clamp-1 text-[9px] text-gray-500 sm:text-xs">
+														{step.by}
+													</p>
+													<p
+														class="text-[9px] font-medium sm:text-xs {step.completed
+															? 'text-pink-600'
+															: 'text-gray-400'} mt-0.5"
+													>
+														{#if step.date}
+															{new Date(step.date).toLocaleDateString('en-US', {
+																month: 'short',
+																day: 'numeric'
+															})}
+														{:else}
+															Pending
+														{/if}
+													</p>
+												</div>
+											</div>
+										{/each}
+									</div>
+								</div>
+
+								<!-- Status Legend -->
+								<div
+									class="mt-4 flex flex-wrap justify-center gap-3 border-t border-gray-200 pt-3 text-[10px] sm:text-xs"
+								>
+									<div class="flex items-center gap-1.5">
+										<div class="h-2 w-2 rounded-full bg-pink-600"></div>
+										<span class="text-gray-600">Completed</span>
+									</div>
+									<div class="flex items-center gap-1.5">
+										<div class="h-2 w-2 rounded-full bg-gray-300"></div>
+										<span class="text-gray-600">Pending</span>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Student Information -->
+						<div>
+							<h3
+								class="mb-4 flex items-center gap-2 text-sm font-bold tracking-wider text-gray-900 uppercase"
+							>
+								<div class="h-1 w-1 rounded-full bg-pink-500"></div>
+								Student Information
+							</h3>
+							<div
+								class="rounded-2xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-4 sm:p-5"
+							>
+								<div class="flex items-center gap-4">
+									<div
+										class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-pink-100 text-lg font-semibold text-pink-700 ring-2 ring-pink-200 sm:h-16 sm:w-16 sm:text-xl"
+									>
+										{#if selectedRequest.student.avatarUrl}
+											<img
+												src={selectedRequest.student.avatarUrl}
+												alt={selectedRequest.student.name}
+												class="h-full w-full object-cover"
+												loading="lazy"
+											/>
+										{:else}
+											{selectedRequest.student.avatar}
+										{/if}
+									</div>
+									<div class="min-w-0 flex-1">
+										<p class="text-base font-bold text-gray-900 sm:text-lg">
+											{selectedRequest.student.name}
+										</p>
+										<p class="mt-0.5 text-xs text-gray-600 sm:text-sm">
+											{selectedRequest.student.yearLevel} • Block {selectedRequest.student.block}
+										</p>
+										<div
+											class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500"
+										>
+											<span class="font-mono">ID: {selectedRequest.student.studentId}</span>
+											<span>•</span>
+											<span class="truncate">{selectedRequest.student.email}</span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Request Information -->
+						<div>
+							<h3
+								class="mb-4 flex items-center gap-2 text-sm font-bold tracking-wider text-gray-900 uppercase"
+							>
+								<div class="h-1 w-1 rounded-full bg-pink-500"></div>
+								Request Information
+							</h3>
+							<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+								<div
+									class="group rounded-xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-3 transition-all hover:border-pink-200 hover:shadow-md sm:p-4"
+								>
+									<div class="mb-2 flex items-center gap-1.5 sm:gap-2">
+										<svg
+											class="h-3.5 w-3.5 text-pink-500 sm:h-4 sm:w-4"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+											/>
+										</svg>
+										<p
+											class="text-[10px] font-bold tracking-wider text-gray-500 uppercase sm:text-xs"
+										>
+											Request Date
+										</p>
+									</div>
+									<p class="text-sm font-bold text-gray-900 sm:text-base">
+										{new Date(selectedRequest.requestDate).toLocaleDateString('en-US', {
+											month: 'short',
+											day: 'numeric',
+											year: 'numeric'
+										})}
+									</p>
+								</div>
+								<div
+									class="group rounded-xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-3 transition-all hover:border-pink-200 hover:shadow-md sm:p-4"
+								>
+									<div class="mb-2 flex items-center gap-1.5 sm:gap-2">
+										<svg
+											class="h-3.5 w-3.5 text-pink-500 sm:h-4 sm:w-4"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+											/>
+										</svg>
+										<p
+											class="text-[10px] font-bold tracking-wider text-gray-500 uppercase sm:text-xs"
+										>
+											Borrow Period
+										</p>
+									</div>
+									<p class="text-sm font-bold text-gray-900 sm:text-base">
+										{new Date(selectedRequest.borrowDate).toLocaleDateString('en-US', {
+											month: 'short',
+											day: 'numeric'
+										})} – {new Date(selectedRequest.returnDate).toLocaleDateString('en-US', {
+											month: 'short',
+											day: 'numeric'
+										})}
+									</p>
+								</div>
+								<div
+									class="group rounded-xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-3 transition-all hover:border-pink-200 hover:shadow-md sm:p-4"
+								>
+									<div class="mb-2 flex items-center gap-1.5 sm:gap-2">
+										<svg
+											class="h-3.5 w-3.5 text-pink-500 sm:h-4 sm:w-4"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+											/>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+											/>
+										</svg>
+										<p
+											class="text-[10px] font-bold tracking-wider text-gray-500 uppercase sm:text-xs"
+										>
+											Usage Location
+										</p>
+									</div>
+									<p class="text-sm font-bold text-gray-900 sm:text-base">
+										{#if selectedRequest.usageLocation === 'school'}
+											<span class="inline-flex items-center gap-1.5">
+												<span class="h-2 w-2 rounded-full bg-green-500"></span>
+												In-School Use
+											</span>
+										{:else if selectedRequest.usageLocation === 'outdoor'}
+											<span class="inline-flex items-center gap-1.5">
+												<span class="h-2 w-2 rounded-full bg-blue-500"></span>
+												Outdoor/Off-Campus
+											</span>
+										{:else}
+											<span class="text-gray-400">Not specified</span>
+										{/if}
+									</p>
+								</div>
+								<div
+									class="group rounded-xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-3 transition-all hover:border-pink-200 hover:shadow-md sm:p-4"
+								>
+									<div class="mb-2 flex items-center gap-1.5 sm:gap-2">
+										<svg
+											class="h-3.5 w-3.5 text-pink-500 sm:h-4 sm:w-4"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+											/>
+										</svg>
+										<p
+											class="text-[10px] font-bold tracking-wider text-gray-500 uppercase sm:text-xs"
+										>
+											Class Code
+										</p>
+									</div>
+									{#if selectedRequest.classCodeId}
+										{@const classCode = classCodeCache.get(selectedRequest.classCodeId)}
+										{#if classCode}
+											<p class="text-sm font-bold text-gray-900 sm:text-base">
+												{classCode.courseCode}
+											</p>
+											<p class="mt-1 text-xs text-gray-600">{classCode.courseName}</p>
+											<p class="mt-0.5 text-xs text-gray-500">
+												{classCode.semester}
+												{classCode.academicYear}
+											</p>
+										{:else}
+											<p class="text-sm font-bold text-gray-900 sm:text-base">
+												{selectedRequest.classCodeId.slice(-8).toUpperCase()}
+											</p>
+										{/if}
+									{:else}
+										<p class="text-sm font-medium text-gray-400 sm:text-base">Not specified</p>
+									{/if}
+								</div>
+								<div
+									class="group col-span-1 rounded-xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-3 transition-all hover:border-pink-200 hover:shadow-md sm:col-span-2 sm:p-4"
+								>
+									<div class="mb-2 flex items-center gap-1.5 sm:gap-2">
+										<svg
+											class="h-3.5 w-3.5 text-pink-500 sm:h-4 sm:w-4"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+											/>
+										</svg>
+										<p
+											class="text-[10px] font-bold tracking-wider text-gray-500 uppercase sm:text-xs"
+										>
+											Purpose & Details
+										</p>
+									</div>
+									<p class="text-sm leading-relaxed font-semibold text-gray-900 sm:text-base">
+										{selectedRequest.purpose}
+									</p>
+								</div>
+								<div
+									class="group col-span-1 rounded-xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-3 transition-all hover:border-pink-200 hover:shadow-md sm:col-span-2 sm:p-4"
+								>
+									<div class="mb-2 flex items-center gap-1.5 sm:gap-2">
+										<svg
+											class="h-3.5 w-3.5 text-pink-500 sm:h-4 sm:w-4"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+											/>
+										</svg>
+										<p
+											class="text-[10px] font-bold tracking-wider text-gray-500 uppercase sm:text-xs"
+										>
+											Approved By
+										</p>
+									</div>
+									{#if selectedRequest.instructorData}
+										<div class="flex items-center gap-2.5">
+											<div
+												class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-pink-100 text-xs font-semibold text-pink-700 ring-1 ring-pink-200"
+											>
+												{#if selectedRequest.instructorData.profilePhotoUrl}
+													<img
+														src={selectedRequest.instructorData.profilePhotoUrl}
+														alt={selectedRequest.instructorData.fullName}
+														class="h-full w-full object-cover"
+														loading="lazy"
+													/>
+												{:else}
+													{(selectedRequest.instructorData.fullName ?? 'I').charAt(0).toUpperCase()}
+												{/if}
+											</div>
+											<div>
+												<p class="text-sm font-bold text-gray-900 sm:text-base">
+													{selectedRequest.instructorData.fullName}
+												</p>
+												{#if selectedRequest.approvedDate}
+													<p class="mt-0.5 text-xs text-gray-500">
+														Approved on {selectedRequest.approvedDate}
+													</p>
+												{/if}
+											</div>
+										</div>
+									{:else}
+										<p class="text-sm font-bold text-gray-900 sm:text-base">
+											{selectedRequest.approvedBy}
+										</p>
+										{#if selectedRequest.approvedDate}
+											<p class="mt-1 text-xs text-gray-500">
+												Approved on {selectedRequest.approvedDate}
+											</p>
+										{/if}
+									{/if}
+								</div>
+							</div>
+						</div>
+
+						<!-- Requested Items -->
+						{#if selectedRequest.items}
+							<div>
+								<div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+									<h3
+										class="flex items-center gap-2 text-sm font-bold tracking-wider text-gray-900 uppercase"
+									>
+										<div class="h-1 w-1 rounded-full bg-pink-500"></div>
+										Requested Items
+									</h3>
+									{#if selectedRequest.status === 'unresolved' || selectedRequest.status === 'history'}
+										<div class="flex flex-wrap items-center gap-2">
+											{#if selectedRequest.items.some((i: any) => !i.inspection || i.inspection.status === 'good')}
+												<span
+													class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-200/60"
+												>
+													<span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+													Good
+												</span>
+											{/if}
+											{#if selectedRequest.items.some((i: any) => i.inspection?.status === 'damaged')}
+												<span
+													class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 shadow-sm ring-1 ring-amber-200/60"
+												>
+													<span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+													Damaged
+												</span>
+											{/if}
+											{#if selectedRequest.items.some((i: any) => i.inspection?.status === 'missing')}
+												<span
+													class="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] font-bold text-rose-700 shadow-sm ring-1 ring-rose-200/60"
+												>
+													<span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+													Missing
+												</span>
+											{/if}
+										</div>
+									{/if}
+								</div>
+								<div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+									<!-- Desktop Table Header -->
+									<div
+										class="hidden grid-cols-12 border-b border-gray-200 bg-gray-50 px-4 py-2.5 text-[11px] font-semibold tracking-wide text-gray-500 uppercase sm:grid"
+									>
+										<span class="col-span-8">Item</span>
+										<span class="col-span-2 text-center">Code</span>
+										<span class="col-span-2 text-center">Qty</span>
+									</div>
+
+									<!-- Table Rows -->
+									<div class="divide-y divide-gray-100">
+										{#each selectedRequest.items as item}
+											{@const pic = item.picture ?? itemPictureCache.get(item.itemId)}
+											{@const isGood = !item.inspection || item.inspection.status === 'good'}
+											{@const isDamaged = item.inspection?.status === 'damaged'}
+											{@const isMissing = item.inspection?.status === 'missing'}
+											<div
+												class="grid items-center gap-3 bg-white p-3 transition-colors hover:bg-gray-50/50 sm:grid-cols-12 sm:p-4"
+											>
+												<!-- Item Info -->
+												<div class="col-span-12 flex min-w-0 items-center gap-3 sm:col-span-8">
+													{#if pic}
+														<img
+															src={pic}
+															alt={item.name}
+															class="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-gray-200"
+															loading="lazy"
+														/>
+													{:else}
+														<div
+															class="h-10 w-10 shrink-0 overflow-hidden rounded-lg ring-1 ring-gray-200"
+														>
+															<ItemImagePlaceholder size="sm" />
+														</div>
+													{/if}
+													<div class="flex min-w-0 flex-col gap-1">
+														<span class="truncate text-sm font-semibold text-gray-900"
+															>{item.name}</span
+														>
+														{#if selectedRequest.status === 'unresolved' || selectedRequest.status === 'history'}
+															<div class="mt-0.5 flex flex-wrap items-center gap-1.5">
+																{#if isGood}
+																	<span
+																		class="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 ring-1 ring-emerald-200/50"
+																	>
+																		<span class="h-1 w-1 rounded-full bg-emerald-500"></span>
+																		Good
+																	</span>
+																{/if}
+																{#if isDamaged}
+																	<span
+																		class="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 ring-1 ring-amber-200/50"
+																	>
+																		<span class="h-1 w-1 rounded-full bg-amber-500"></span>
+																		Damaged
+																	</span>
+																{/if}
+																{#if isMissing}
+																	<span
+																		class="inline-flex items-center gap-1 rounded-md bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-700 ring-1 ring-rose-200/50"
+																	>
+																		<span class="h-1 w-1 rounded-full bg-rose-500"></span>
+																		Missing
+																	</span>
+																{/if}
+															</div>
+														{/if}
+													</div>
+												</div>
+
+												<!-- Mobile/Desktop Details -->
+												<div
+													class="col-span-6 flex items-center justify-between border-t border-gray-100 pt-3 sm:col-span-2 sm:justify-center sm:border-0 sm:pt-0"
+												>
+													<span class="text-[10px] font-semibold text-gray-500 uppercase sm:hidden"
+														>Code</span
+													>
+													<span class="font-mono text-sm font-medium text-gray-600"
+														>{item.code}</span
+													>
+												</div>
+												<div
+													class="col-span-6 flex items-center justify-between border-t border-l border-gray-100 pt-3 pl-3 sm:col-span-2 sm:justify-center sm:border-0 sm:pt-0 sm:pl-0"
+												>
+													<span class="text-[10px] font-semibold text-gray-500 uppercase sm:hidden"
+														>Qty</span
+													>
+													<span class="text-sm font-bold text-gray-900 tabular-nums"
+														>{item.quantity}</span
+													>
+												</div>
+											</div>
+										{/each}
+									</div>
+								</div>
+							</div>
+
+							<!-- Replacement Obligations Table -->
+							{#if (selectedRequest.status === 'unresolved' || selectedRequest.status === 'history') && selectedRequest.items.some((item: any) => item.inspection && (item.inspection.replacementQuantity || 0) > 0)}
+								<div class="mt-8">
+									<h3
+										class="mb-4 flex items-center gap-2 text-sm font-bold tracking-wider text-gray-900 uppercase"
+									>
+										<div class="h-1 w-1 rounded-full bg-amber-500"></div>
+										Replacement Obligations
+									</h3>
+									<div
+										class="overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm"
+									>
+										<!-- Desktop Table Header -->
+										<div
+											class="hidden grid-cols-12 border-b border-amber-100 bg-amber-50/50 px-4 py-2.5 text-[11px] font-semibold tracking-wide text-amber-900 uppercase sm:grid"
+										>
+											<span class="col-span-6">Item to Replace</span>
+											<span class="col-span-3 text-center">Qty Required</span>
+											<span class="col-span-3 text-right">Due Date</span>
+										</div>
+
+										<!-- Table Rows -->
+										<div class="divide-y divide-amber-100/50">
+											{#each selectedRequest.items.filter((item: any) => item.inspection && (item.inspection.replacementQuantity || 0) > 0) as item}
+												{@const pic = item.picture ?? itemPictureCache.get(item.itemId)}
+												<div
+													class="grid items-center gap-3 bg-white p-3 transition-colors hover:bg-amber-50/30 sm:grid-cols-12 sm:p-4"
+												>
+													<div class="col-span-12 flex min-w-0 items-center gap-3 sm:col-span-6">
+														{#if pic}
+															<img
+																src={pic}
+																alt={item.name}
+																class="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-amber-200/50"
+																loading="lazy"
+															/>
+														{:else}
+															<div
+																class="h-10 w-10 shrink-0 overflow-hidden rounded-lg text-amber-500/50 ring-1 ring-amber-200/50"
+															>
+																<ItemImagePlaceholder size="sm" />
+															</div>
+														{/if}
+														<div class="flex min-w-0 flex-col gap-1">
+															<span class="truncate text-sm font-semibold text-gray-900"
+																>{item.name}</span
+															>
+															<span class="text-[10px] font-semibold text-amber-600/80 uppercase"
+																>{item.code}</span
+															>
+														</div>
+													</div>
+													<div
+														class="col-span-6 flex items-center justify-between border-t border-amber-100/50 pt-3 sm:col-span-3 sm:justify-center sm:border-0 sm:pt-0"
+													>
+														<span
+															class="text-[10px] font-semibold text-amber-800 uppercase sm:hidden"
+															>Qty Required</span
+														>
+														<span class="text-sm font-bold text-amber-700 tabular-nums"
+															>{item.inspection.replacementQuantity}</span
+														>
+													</div>
+													<div
+														class="col-span-6 flex items-center justify-between border-t border-l border-amber-100/50 pt-3 pl-3 sm:col-span-3 sm:justify-end sm:border-0 sm:pt-0 sm:pl-0"
+													>
+														<span
+															class="text-[10px] font-semibold text-amber-800 uppercase sm:hidden"
+															>Due Date</span
+														>
+														{#if selectedRequest.status === 'unresolved' || selectedRequest.status === 'history'}
+															<input
+																type="date"
+																min={new Date().toLocaleDateString('en-CA')}
+																onkeydown={(e) => e.preventDefault()}
+																class="block w-[120px] rounded-md border-0 bg-transparent py-1 pr-0 pl-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-amber-100/50 focus:ring-2 focus:ring-amber-500/50"
+																value={item.inspection.dueDate
+																	? new Date(item.inspection.dueDate).toISOString().split('T')[0]
+																	: ''}
+																onchange={async (e) => {
+																	const target = e.currentTarget;
+																	const newDate = target.value;
+																	if (!newDate) return;
+																	try {
+																		target.disabled = true;
+																		const res = await fetch(
+																			`/api/borrow-requests/${selectedRequest!.rawId}/due-date`,
+																			{
+																				method: 'PATCH',
+																				headers: { 'Content-Type': 'application/json' },
+																				body: JSON.stringify({
+																					itemId: item.itemId,
+																					dueDate: newDate
+																				})
+																			}
+																		);
+																		if (res.ok) await loadRequests(true);
+																	} finally {
+																		target.disabled = false;
+																	}
+																}}
+															/>
+														{:else}
+															<span class="text-xs font-semibold text-gray-700"
+																>{item.inspection.dueDate
+																	? new Date(item.inspection.dueDate).toLocaleDateString('en-US', {
+																			month: 'short',
+																			day: 'numeric',
+																			year: 'numeric'
+																		})
+																	: 'Not set'}</span
+															>
+														{/if}
+													</div>
+												</div>
+											{/each}
+										</div>
+									</div>
+								</div>
+							{/if}
+						{/if}
+
+						<!-- Overdue Warning -->
+						{#if selectedRequest.isOverdue}
+							<div
+								class="rounded-2xl border-2 border-red-200 bg-linear-to-br from-red-50 to-red-100/50 p-5"
+							>
+								<div class="flex gap-3">
+									<div
+										class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500"
+									>
+										<svg
+											class="h-5 w-5 text-white"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+											/>
+										</svg>
+									</div>
+									<div class="min-w-0 flex-1">
+										<p class="text-sm font-bold text-red-900">Overdue Return</p>
+										<p class="mt-1.5 text-sm leading-relaxed text-red-800">
+											This request is {selectedRequest.daysOverdue}
+											{selectedRequest.daysOverdue === 1 ? 'day' : 'days'} overdue. Expected return: {formatDateTimeShort(
+												selectedRequest.returnDate
+											)}
+										</p>
+										{#if selectedRequest.lastReminderAt}
+											<p class="mt-2 text-xs text-red-700">
+												Last reminder sent: {selectedRequest.lastReminderAt}
+											</p>
+										{/if}
+									</div>
+								</div>
+							</div>
+						{/if}
+					</div>
+				</div>
+
+				<!-- Footer -->
+				<div
+					class="sticky bottom-0 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur-sm sm:px-8 sm:py-5"
+				>
+					<div
+						class="flex flex-col items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3"
+					>
+						{#if selectedRequest.status === 'pending'}
+							<button
+								onclick={() => {
+									const rawId = selectedRequest.rawId;
+									closeDetailModal();
+									markReady(rawId);
+								}}
+								class="rounded-xl bg-linear-to-r from-green-600 to-green-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:from-green-700 hover:to-green-800 active:scale-[0.98] sm:px-6 sm:py-3"
+							>
+								Ready for Pickup
+							</button>
+						{/if}
+						{#if selectedRequest.status === 'ready'}
+							<button
+								onclick={() => {
+									const rawId = selectedRequest.rawId;
+									closeDetailModal();
+									confirmPickup(rawId);
+								}}
+								class="rounded-xl bg-linear-to-r from-pink-600 to-pink-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:from-pink-700 hover:to-pink-800 active:scale-[0.98] sm:px-6 sm:py-3"
+							>
+								Confirm Pickup
+							</button>
+						{/if}
+						{#if selectedRequest.status === 'active' && ['borrowed', 'pending_return'].includes(selectedRequest.rawStatus)}
+							<button
+								onclick={() => {
+									confirmReturn(selectedRequest.rawId);
+								}}
+								class="rounded-xl bg-linear-to-r from-orange-600 to-orange-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:from-orange-700 hover:to-orange-800 active:scale-[0.98] sm:px-6 sm:py-3"
+							>
+								Inspect & Confirm Return
+							</button>
+						{/if}
+						{#if selectedRequest.status === 'unresolved'}
+							<button
+								onclick={() => openResolveModal(selectedRequest.rawId)}
+								disabled={resolvingRequestId === selectedRequest.rawId}
+								class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-linear-to-r from-amber-600 to-amber-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:from-amber-700 hover:to-amber-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:px-6 sm:py-3"
+							>
+								{#if resolvingRequestId === selectedRequest.rawId}
+									<svg class="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+										<circle
+											class="opacity-25"
+											cx="12"
+											cy="12"
+											r="10"
+											stroke="currentColor"
+											stroke-width="4"
+										></circle>
+										<path
+											class="opacity-75"
+											fill="currentColor"
+											d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+										></path>
+									</svg>
+									Loading...
+								{:else}
+									Resolve Obligation
+								{/if}
+							</button>
+						{/if}
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Resolve Obligation Modal -->
+{#if showObligationModal}
+	<ReplacementObligationModal
+		obligations={activeRequestObligations}
+		itemPictures={itemPictureCache}
+		onResolve={handleResolveObligation}
+		onCancel={() => {
+			showObligationModal = false;
+			activeRequestObligations = [];
+		}}
+	/>
+{/if}
+
+<!-- Item Inspection Modal -->
+{#if showInspectionModal && selectedRequest}
+	<ItemInspectionModal
+		items={inspectionItems}
+		requestId={selectedRequest.rawId}
+		onSubmit={handleInspectionSubmit}
+		onCancel={() => {
+			showInspectionModal = false;
+			selectedRequest = null;
+			inspectionItems = [];
+		}}
+	/>
+{/if}
