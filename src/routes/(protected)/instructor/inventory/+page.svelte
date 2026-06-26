@@ -921,6 +921,19 @@
 	const lowStockItems = $derived([]);
 	const requiredItems = $derived(activeItems.filter((item) => item.isrequired === true));
 
+	const totalOwned = $derived(
+		activeItems.reduce((sum, item) => sum + (item.currentCount ?? (item.quantity + (item.donations ?? 0))), 0)
+	);
+	const totalAvailable = $derived(
+		activeItems.reduce((sum, item) => sum + (item.available ?? (item.quantity + (item.donations ?? 0))), 0)
+	);
+	const totalReleased = $derived(
+		activeItems.reduce((sum, item) => sum + (item.released ?? 0), 0)
+	);
+	const flowPercentage = $derived(
+		totalOwned > 0 ? Math.round((totalAvailable / totalOwned) * 100) : 0
+	);
+
 	function switchTab(tab: Tab) {
 		activeTab = tab;
 		currentPage = 1;
@@ -3692,8 +3705,8 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 	{:else}
 		<!-- Stats Overview -->
 		{#if cardsLoading}
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-3 animate-pulse">
-				{#each Array(3) as _}
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 animate-pulse">
+				{#each Array(4) as _}
 					<div class="rounded-lg bg-white p-3 shadow sm:p-5 h-20 sm:h-28">
 						<div class="flex items-center justify-between gap-2 h-full">
 							<div class="space-y-2 flex-1">
@@ -3706,83 +3719,94 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 				{/each}
 			</div>
 		{:else}
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-				<button
-					type="button"
-					onclick={() => {
-						switchTab('all-items');
-						requiredFilter = 'all';
-						statusFilter = 'all';
-						selectedCategory = null;
-						query = '';
-					}}
-					class="w-full text-left rounded-lg bg-white p-3 shadow sm:p-5 hover:shadow-md hover:border-pink-200/50 hover:bg-gray-50/50 border border-transparent transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-pink-500/20 cursor-pointer"
-				>
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+				<!-- Card 1: Total Lab Stock -->
+				<div class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200">
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Total Items</p>
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Total Lab Stock</p>
 							<p class="mt-1 text-2xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">
-								{activeItems.length}
+								{totalOwned}
 							</p>
+							<p class="mt-1 text-[10px] text-gray-400">Total items owned by lab</p>
 						</div>
-						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 sm:h-12 sm:w-12"
-						>
+						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 sm:h-12 sm:w-12">
 							<Package size={18} class="text-blue-600 sm:hidden" />
 							<Package size={24} class="hidden text-blue-600 sm:block" />
 						</div>
 					</div>
-				</button>
-				<button
-					type="button"
-					onclick={() => {
-						if (activeTab !== 'categories') {
-							switchTab('categories');
-						} else {
-							switchTab('all-items');
-						}
-					}}
-					class="w-full text-left rounded-lg bg-white p-3 shadow sm:p-5 hover:shadow-md hover:border-pink-200/50 hover:bg-gray-50/50 border border-transparent transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-pink-500/20 cursor-pointer"
-				>
+				</div>
+
+				<!-- Card 2: Physical Available -->
+				<div class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200">
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Categories</p>
-							<p class="mt-1 text-2xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">
-								{categories.length}
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Physical Available</p>
+							<p class="mt-1 text-2xl font-semibold text-emerald-600 sm:mt-2 sm:text-3xl">
+								{totalAvailable}
 							</p>
+							<p class="mt-1 text-[10px] text-gray-400">Inside laboratory space</p>
 						</div>
-						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 sm:h-12 sm:w-12"
-						>
-							<FolderTree size={18} class="text-purple-600 sm:hidden" />
-							<FolderTree size={24} class="hidden text-purple-600 sm:block" />
+						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 sm:h-12 sm:w-12">
+							<svg class="h-5 w-5 text-emerald-600 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+							</svg>
+							<svg class="hidden h-6 w-6 text-emerald-600 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+							</svg>
 						</div>
 					</div>
-				</button>
-				<button
-					type="button"
-					onclick={() => {
-						switchTab('all-items');
-						requiredFilter = 'required';
-						statusFilter = 'all';
-					}}
-					class="w-full text-left rounded-lg bg-white p-3 shadow sm:p-5 hover:shadow-md hover:border-pink-200/50 hover:bg-gray-50/50 border border-transparent transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-pink-500/20 cursor-pointer"
-				>
+				</div>
+
+				<!-- Card 3: Out / Released -->
+				<div class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200">
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Required Items</p>
-							<p class="mt-1 text-2xl font-semibold text-amber-600 sm:mt-2 sm:text-3xl">
-								{requiredItems.length}
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Released / Out</p>
+							<p class="mt-1 text-2xl font-semibold text-blue-600 sm:mt-2 sm:text-3xl">
+								{totalReleased}
 							</p>
+							<p class="mt-1 text-[10px] text-gray-400">Currently out / checked out</p>
 						</div>
-						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 sm:h-12 sm:w-12"
-						>
-							<Star size={18} class="text-amber-600 sm:hidden" />
-							<Star size={24} class="hidden text-amber-600 sm:block" />
+						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 sm:h-12 sm:w-12">
+							<svg class="h-5 w-5 text-blue-600 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+							</svg>
+							<svg class="hidden h-6 w-6 text-blue-600 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+							</svg>
 						</div>
 					</div>
-				</button>
+				</div>
+
+				<!-- Card 4: Flow Balance -->
+				<div class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200">
+					<div class="flex flex-col justify-between h-full">
+						<div class="flex items-center justify-between gap-2 mb-2">
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Stock Flow Balance</p>
+							<span class="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-600/10">
+								{flowPercentage}% Avail
+							</span>
+						</div>
+						<div class="space-y-1.5 flex-1 flex flex-col justify-center">
+							<!-- Dynamic progress flow bar -->
+							<div class="h-2 w-full rounded-full bg-blue-100 overflow-hidden flex">
+								<div class="h-full bg-emerald-500 transition-all duration-500" style="width: {flowPercentage}%"></div>
+								<div class="h-full bg-blue-500 transition-all duration-500 flex-1"></div>
+							</div>
+							<div class="flex items-center justify-between text-[10px] text-gray-500 font-medium">
+								<span class="flex items-center gap-1">
+									<span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+									{totalAvailable} Available
+								</span>
+								<span class="flex items-center gap-1">
+									<span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+									{totalReleased} Out
+								</span>
+							</div>
+						</div>
+					</div>
+				</div>
 			</div>
 		{/if}
 
