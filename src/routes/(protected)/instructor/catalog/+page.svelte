@@ -6,6 +6,7 @@
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import CatalogItemModal from '$lib/components/ui/CatalogItemModal.svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
+	import ItemBorrowersModal from '$lib/components/ui/ItemBorrowersModal.svelte';
 
 	// UI State
 	let viewMode = $state<'grid' | 'list'>('grid');
@@ -13,6 +14,16 @@
 	let error = $state<string | null>(null);
 	let selectedItem = $state<CatalogItem | null>(null);
 	let showFullImage = $state(false);
+	let showBorrowersModal = $state(false);
+	let selectedBorrowersItem = $state<CatalogItem | null>(null);
+
+	function openBorrowersModal(item: CatalogItem) {
+		selectedBorrowersItem = {
+			...item,
+			category: item.category || getCategoryName(item.categoryId)
+		};
+		showBorrowersModal = true;
+	}
 	let isEditMode = $state(false);
 	let isSaving = $state(false);
 	let saveError = $state<string | null>(null);
@@ -786,7 +797,16 @@
 							<div class="mt-1.5 flex flex-wrap items-center gap-1">
 								<span class="rounded bg-gray-100 px-1 py-0.5 text-[10px] font-medium text-gray-600">{getCategoryName(item.categoryId)}</span>
 							</div>
-							<p class="mt-1 text-[10px] text-gray-400">Qty: {item.currentCount ?? (item.quantity + (item.donations ?? 0))}</p>
+							<span
+								role="button"
+								tabindex="0"
+								onclick={(e) => { e.stopPropagation(); openBorrowersModal(item); }}
+								onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); openBorrowersModal(item); } }}
+								class="mt-1 inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 ring-1 ring-blue-600/10 hover:bg-blue-100 transition-colors cursor-pointer"
+								title="Click to view active borrowers"
+							>
+								Qty: {item.currentCount ?? (item.quantity + (item.donations ?? 0))}
+							</span>
 						</div>
 					</button>
 				{/if}
@@ -841,7 +861,16 @@
 									</span>
 								{/if}
 
-								<span class="text-[10px] text-gray-400">Qty: {item.currentCount ?? (item.quantity + (item.donations ?? 0))}</span>
+								<span
+									role="button"
+									tabindex="0"
+									onclick={(e) => { e.stopPropagation(); openBorrowersModal(item); }}
+									onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); openBorrowersModal(item); } }}
+									class="inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 ring-1 ring-blue-600/10 hover:bg-blue-100 transition-colors cursor-pointer"
+									title="Click to view active borrowers"
+								>
+									Qty: {item.currentCount ?? (item.quantity + (item.donations ?? 0))}
+								</span>
 							</div>
 						</div>
 						<svg class="h-4 w-4 shrink-0 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -878,6 +907,16 @@
 		/>
 	{/if}
 </div>
+
+{#if showBorrowersModal && selectedBorrowersItem}
+	<ItemBorrowersModal
+		item={selectedBorrowersItem}
+		onClose={() => {
+			showBorrowersModal = false;
+			selectedBorrowersItem = null;
+		}}
+	/>
+{/if}
 
 
 

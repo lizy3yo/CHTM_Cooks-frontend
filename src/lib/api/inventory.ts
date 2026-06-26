@@ -11,6 +11,8 @@ export interface InventoryItem {
 	picture?: string;
 	quantity: number;
 	donations?: number;
+	released?: number;
+	available?: number;
 	eomCount: number;
 	currentCount?: number;
 	variance: number;
@@ -314,6 +316,31 @@ export const inventoryItemsAPI = {
 	 */
 	async delete(id: string): Promise<{ success: boolean; message: string }> {
 		const response = await fetchWithAuthRetry(`/api/inventory/items/${id}`, getFetchOptions('DELETE'));
+
+		return handleResponse(response);
+	},
+
+	/**
+	 * Get all active borrowers for inventory items
+	 */
+	async getAllBorrowers(): Promise<{
+		borrowers: Array<{
+			borrow_request_id: number;
+			item_id: number;
+			item_name: string;
+			item_specification: string;
+			item_category: string;
+			item_picture: string | null;
+			quantity: number;
+			due_date: string | null;
+			borrow_date: string | null;
+			status: string;
+			student: { id: number; name: string; email: string } | null;
+			instructor: { id: number; name: string; email: string } | null;
+			class_code: { id: number; code: string; name: string } | null;
+		}>;
+	}> {
+		const response = await fetchWithAuthRetry('/api/inventory/borrowers', getFetchOptions('GET'));
 
 		return handleResponse(response);
 	}

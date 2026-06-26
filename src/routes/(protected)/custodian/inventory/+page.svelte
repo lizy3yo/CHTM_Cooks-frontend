@@ -31,6 +31,7 @@
 	} from 'lucide-svelte';
 	import ActionMenu from '$lib/components/ui/ActionMenu.svelte';
 	import ExportModal from '$lib/components/custodian/ExportModal.svelte';
+	import ItemBorrowersModal from '$lib/components/ui/ItemBorrowersModal.svelte';
 
 	type Tab = 'all-items' | 'categories';
 
@@ -38,6 +39,13 @@
 	let requiredFilter = $state<'all' | 'required' | 'regular'>('all');
 	let statusFilter = $state('all');
 	let showAddItemModal = $state(false);
+	let showBorrowersModal = $state(false);
+	let selectedBorrowersItem = $state<InventoryItem | null>(null);
+
+	function openBorrowersModal(item: InventoryItem) {
+		selectedBorrowersItem = item;
+		showBorrowersModal = true;
+	}
 
 	// Stock adjustment modal states
 	let showAdjustStockModal = $state(false);
@@ -3324,16 +3332,16 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 											<div class="h-1 w-1 rounded-full bg-pink-500"></div>
 											Stock Information
 										</h3>
-										<div class="grid grid-cols-2 gap-2 lg:gap-3">
+										<div class="grid grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-3">
 											<div
 												class="group rounded-lg border border-gray-200 bg-linear-to-br from-white to-gray-50 p-2.5 transition-all hover:border-pink-200 hover:shadow-md sm:rounded-xl sm:p-3 lg:p-4"
 											>
 												<div class="mb-1 flex items-center gap-1 sm:mb-1.5 sm:gap-1.5">
 													<div
-														class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-blue-100 sm:h-6 sm:w-6 sm:rounded-lg lg:h-8 lg:w-8"
+														class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gray-100 sm:h-6 sm:w-6 sm:rounded-lg lg:h-8 lg:w-8"
 													>
 														<svg
-															class="h-2.5 w-2.5 text-blue-600 sm:h-3 sm:w-3 lg:h-4 lg:w-4"
+															class="h-2.5 w-2.5 text-gray-600 sm:h-3 sm:w-3 lg:h-4 lg:w-4"
 															fill="none"
 															stroke="currentColor"
 															viewBox="0 0 24 24"
@@ -3349,7 +3357,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 													<p
 														class="text-[8px] leading-tight font-bold tracking-tight text-gray-500 uppercase sm:text-[9px] lg:text-xs"
 													>
-														Current
+														Total Stock
 													</p>
 												</div>
 												<p class="text-lg font-bold text-gray-900 sm:text-xl lg:text-2xl">
@@ -3357,6 +3365,74 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 														getCurrentCount(selectedItem.quantity, selectedItem.donations ?? 0)}
 												</p>
 											</div>
+
+											<div
+												class="group rounded-lg border border-gray-200 bg-linear-to-br from-white to-gray-50 p-2.5 transition-all hover:border-pink-200 hover:shadow-md sm:rounded-xl sm:p-3 lg:p-4"
+											>
+												<div class="mb-1 flex items-center gap-1 sm:mb-1.5 sm:gap-1.5">
+													<div
+														class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-emerald-100 sm:h-6 sm:w-6 sm:rounded-lg lg:h-8 lg:w-8"
+													>
+														<svg
+															class="h-2.5 w-2.5 text-emerald-600 sm:h-3 sm:w-3 lg:h-4 lg:w-4"
+															fill="none"
+															stroke="currentColor"
+															viewBox="0 0 24 24"
+														>
+															<path
+																stroke-linecap="round"
+																stroke-linejoin="round"
+																stroke-width="2"
+																d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+															/>
+														</svg>
+													</div>
+													<p
+														class="text-[8px] leading-tight font-bold tracking-tight text-gray-500 uppercase sm:text-[9px] lg:text-xs"
+													>
+														Available
+													</p>
+												</div>
+												<p class="text-lg font-bold text-emerald-600 sm:text-xl lg:text-2xl">
+													{selectedItem.available ??
+														getCurrentCount(selectedItem.quantity, selectedItem.donations ?? 0)}
+												</p>
+											</div>
+
+											<button
+												type="button"
+												onclick={() => { if (selectedItem) { openBorrowersModal(selectedItem); closeModal(); } }}
+												class="group text-left rounded-lg border border-gray-200 bg-linear-to-br from-white to-gray-50 p-2.5 transition-all hover:border-pink-200 hover:shadow-md sm:rounded-xl sm:p-3 lg:p-4 hover:bg-blue-50/50"
+											>
+												<div class="mb-1 flex items-center gap-1 sm:mb-1.5 sm:gap-1.5">
+													<div
+														class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-blue-100 sm:h-6 sm:w-6 sm:rounded-lg lg:h-8 lg:w-8"
+													>
+														<svg
+															class="h-2.5 w-2.5 text-blue-600 sm:h-3 sm:w-3 lg:h-4 lg:w-4"
+															fill="none"
+															stroke="currentColor"
+															viewBox="0 0 24 24"
+														>
+															<path
+																stroke-linecap="round"
+																stroke-linejoin="round"
+																stroke-width="2"
+																d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+															/>
+														</svg>
+													</div>
+													<p
+														class="text-[8px] leading-tight font-bold tracking-tight text-gray-500 uppercase sm:text-[9px] lg:text-xs"
+													>
+														Released
+													</p>
+												</div>
+												<p class="text-lg font-bold text-blue-600 sm:text-xl lg:text-2xl flex items-center gap-1.5">
+													{selectedItem.released ?? 0}
+													<span class="text-[9px] font-medium text-gray-400 hover:text-blue-500 hover:underline">View details →</span>
+												</p>
+											</button>
 
 											<div
 												class="group rounded-lg border border-gray-200 bg-linear-to-br from-white to-gray-50 p-2.5 transition-all hover:border-pink-200 hover:shadow-md sm:rounded-xl sm:p-3 lg:p-4"
@@ -4007,7 +4083,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 													</span>
 												{/if}
 												<span class="text-[10px] text-gray-400"
-													>Qty: {item.quantity} · EOM: {item.eomCount}</span
+													>Total: {item.currentCount ?? getCurrentCount(item.quantity, item.donations ?? 0)} (Avail: {item.available ?? getCurrentCount(item.quantity, item.donations ?? 0)} · Rel: {item.released ?? 0}) · EOM: {item.eomCount}</span
 												>
 											</div>
 										</div>
@@ -4052,7 +4128,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 										>
 										<th
 											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
-											>Current Count</th
+											>Stock (Total | Avail | Rel)</th
 										>
 
 										<th
@@ -4112,11 +4188,29 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 												>
 											</td>
 											<td class="px-6 py-4 text-sm text-gray-700">{item.specification || '—'}</td>
+											<td class="px-6 py-4 text-sm whitespace-nowrap" onclick={(e) => e.stopPropagation()}>
+												<div class="flex items-center gap-1.5 text-xs font-medium">
+													<span class="text-sm font-semibold text-gray-900 mr-1" title="Total Stock">
+														{item.currentCount ?? getCurrentCount(item.quantity, item.donations ?? 0)}
+													</span>
+													<span class="text-gray-300">|</span>
+													<span
+														class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-600/10 cursor-help"
+														title="Available (In Storage)"
+													>
+														{item.available ?? (item.currentCount ?? getCurrentCount(item.quantity, item.donations ?? 0))}
+													</span>
+													<button
+														type="button"
+														onclick={() => openBorrowersModal(item)}
+														class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 ring-1 ring-blue-600/10 hover:bg-blue-100 transition-colors"
+														title="Released (Click to view active borrowers)"
+													>
+														{item.released ?? 0}
+													</button>
+												</div>
+											</td>
 											<td class="px-6 py-4 text-sm text-gray-700">{item.toolsOrEquipment || '—'}</td
-											>
-											<td class="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900"
-												>{item.currentCount ??
-													getCurrentCount(item.quantity, item.donations ?? 0)}</td
 											>
 
 											<!-- Actions cell -->
@@ -6310,4 +6404,14 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 			</div>
 		</div>
 	</div>
+{/if}
+
+{#if showBorrowersModal && selectedBorrowersItem}
+	<ItemBorrowersModal
+		item={selectedBorrowersItem}
+		onClose={() => {
+			showBorrowersModal = false;
+			selectedBorrowersItem = null;
+		}}
+	/>
 {/if}

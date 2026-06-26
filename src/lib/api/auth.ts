@@ -24,7 +24,7 @@ const API_BASE_URL = '/api/auth';
 class ApiErrorHandler extends Error {
 	status: number;
 	code?: string;
-	details?: unknown;
+	details?: unknown; 
 
 	constructor(message: string, status: number, code?: string, details?: unknown) {
 		super(message);

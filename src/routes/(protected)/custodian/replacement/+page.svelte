@@ -32,7 +32,102 @@
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import { Package, AlertCircle, CheckCircle2, TrendingUp } from 'lucide-svelte';
 
-	let activeTab = $state<'donations' | 'replacements' | 'adjustments'>('donations');
+	let activeTab = $state<'donations' | 'replacements' | 'adjustments' | 'borrowers'>('donations');
+	
+	let borrowersList = $state<any[]>([]);
+	let borrowersLoading = $state(false);
+	let borrowersSearch = $state('');
+	let selectedItemIdFilter = $state<string | null>(null);
+
+	async function loadActiveBorrowers() {
+		borrowersLoading = true;
+		try {
+			const res = await inventoryItemsAPI.getAllBorrowers();
+			borrowersList = res.borrowers || [];
+		} catch (err) {
+			console.error(err);
+			toastStore.error('Failed to load active borrowers');
+		} finally {
+			borrowersLoading = false;
+		}
+	}
+
+	function formatBorrowerDate(dateStr: string | null | undefined): string {
+		if (!dateStr) return '—';
+		try {
+			const date = new Date(dateStr);
+			return date.toLocaleDateString('en-US', {
+				month: 'short',
+				day: 'numeric',
+				year: 'numeric'
+			});
+		} catch {
+			return dateStr;
+		}
+	}
+
+	function isBorrowerOverdue(dueDateStr: string | null | undefined): boolean {
+		if (!dueDateStr) return false;
+		try {
+			return new Date(dueDateStr) < new Date();
+		} catch {
+			return false;
+		}
+	}
+
+	function getBorrowerStatusColor(status: string): string {
+		switch (status) {
+			case 'borrowed':
+				return 'bg-blue-50 text-blue-700 ring-blue-600/10';
+			case 'pending_return':
+				return 'bg-amber-50 text-amber-700 ring-amber-600/10';
+			case 'pending_appeal':
+				return 'bg-purple-50 text-purple-700 ring-purple-600/10';
+			case 'missing':
+				return 'bg-rose-50 text-rose-700 ring-rose-600/10';
+			default:
+				return 'bg-gray-50 text-gray-700 ring-gray-600/10';
+		}
+	}
+
+	function formatBorrowerStatus(status: string): string {
+		switch (status) {
+			case 'borrowed':
+				return 'Checked Out';
+			case 'pending_return':
+				return 'Pending Return';
+			case 'pending_appeal':
+				return 'In Appeal';
+			case 'missing':
+				return 'Missing';
+			default:
+				return status.replace(/_/g, ' ');
+		}
+	}
+
+	const filteredBorrowers = $derived.by(() => {
+		let list = borrowersList;
+		if (selectedItemIdFilter) {
+			list = list.filter((b) => String(b.item_id) === String(selectedItemIdFilter));
+		}
+		if (borrowersSearch.trim()) {
+			const term = borrowersSearch.toLowerCase();
+			list = list.filter((b) => 
+				b.item_name.toLowerCase().includes(term) ||
+				(b.student?.name || '').toLowerCase().includes(term) ||
+				(b.student?.email || '').toLowerCase().includes(term) ||
+				(b.class_code?.code || '').toLowerCase().includes(term) ||
+				(b.instructor?.name || '').toLowerCase().includes(term)
+			);
+		}
+		return list;
+	});
+
+	$effect(() => {
+		if (activeTab === 'borrowers') {
+			void loadActiveBorrowers();
+		}
+	});
 	let replacementsFilter = $state<'pending' | 'replaced' | 'all'>('pending');
 	let viewMode = $state<'card' | 'list'>('list');
 	let obligations = $state<ReplacementObligation[]>([]);
@@ -424,6 +519,9 @@
 		const tabParam = get(page).url.searchParams.get('tab');
 		if (tabParam === 'replacements') {
 			activeTab = 'replacements';
+		} else if (tabParam === 'borrowers') {
+			activeTab = 'borrowers';
+			selectedItemIdFilter = get(page).url.searchParams.get('item');
 		}
 
 		// Initialize from cache if available, otherwise show loading
@@ -589,6 +687,9 @@
 			const tabParam = to.url.searchParams.get('tab');
 			if (tabParam === 'replacements') {
 				activeTab = 'replacements';
+			} else if (tabParam === 'borrowers') {
+				activeTab = 'borrowers';
+				selectedItemIdFilter = to.url.searchParams.get('item');
 			}
 		}
 	});
@@ -1290,12 +1391,31 @@
 			>
 				Stock Adjustments
 			</button>
+			<button
+				onclick={() => (activeTab = 'borrowers')}
+				class="flex flex-1 items-center justify-center gap-1.5 border-b-2 px-1 py-3 text-[11px] font-medium whitespace-nowrap transition-colors sm:flex-none sm:px-6 sm:text-sm {activeTab ===
+				'borrowers'
+					? 'border-pink-500 text-pink-600'
+					: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
+			>
+				Active Borrowers
+				{#if borrowersList.length > 0}
+					<span
+						class="rounded-full px-1.5 py-0.5 text-[10px] font-semibold {activeTab ===
+						'borrowers'
+							? 'bg-pink-100 text-pink-700'
+							: 'bg-pink-50 text-pink-600'}"
+					>
+						{borrowersList.length}
+					</span>
+				{/if}
+			</button>
 		</nav>
 	</div>
 
 	<div class="rounded-lg bg-white shadow">
 		<div class="p-6">
-			{#if (activeTab === 'donations' && donationsTabLoading) || (activeTab === 'replacements' && accountabilityLoading) || (activeTab === 'adjustments' && adjustmentsLoading)}
+			{#if (activeTab === 'donations' && donationsTabLoading) || (activeTab === 'replacements' && accountabilityLoading) || (activeTab === 'adjustments' && adjustmentsLoading) || (activeTab === 'borrowers' && borrowersLoading)}
 				<!-- Skeleton: tab content placeholder -->
 				<div class="space-y-4" role="status" aria-label="Loading resource management data">
 					<div class="flex items-center justify-between">
@@ -4050,6 +4170,117 @@
 				</div>
 			</div>
 		</div>
+	</div>
+{/if}
+
+<!-- Active Borrowers Tab -->
+{#if activeTab === 'borrowers'}
+	<div class="space-y-6">
+		<!-- Sub-tab header -->
+		<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+			<div>
+				<h3 class="text-lg font-semibold text-gray-900">Active Borrowers</h3>
+				<p class="mt-0.5 text-sm text-gray-500">
+					Track items currently checked out by students and instructors in active classes.
+				</p>
+			</div>
+		</div>
+
+		<!-- Filter controls -->
+		<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+			<div class="relative flex-1 max-w-md">
+				<input
+					type="text"
+					placeholder="Search by student, item, class, or instructor..."
+					bind:value={borrowersSearch}
+					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-950 placeholder-gray-400 shadow-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
+				/>
+			</div>
+
+			{#if selectedItemIdFilter}
+				{@const filteredItem = borrowersList.find(b => String(b.item_id) === String(selectedItemIdFilter))}
+				<div class="flex items-center gap-2 rounded-lg bg-pink-50 border border-pink-100 px-3 py-1.5 text-xs text-pink-700 font-semibold shadow-sm animate-scaleIn">
+					<span>Filtering by: {filteredItem ? filteredItem.item_name : 'Selected Item'}</span>
+					<button
+						type="button"
+						onclick={() => selectedItemIdFilter = null}
+						class="hover:text-pink-900 font-extrabold focus:outline-none ml-1"
+						title="Clear Filter"
+					>
+						✕
+					</button>
+				</div>
+			{/if}
+		</div>
+
+		<!-- List Table -->
+		{#if filteredBorrowers.length === 0}
+			<div class="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-8 text-center sm:p-12">
+				<svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+				</svg>
+				<h3 class="mt-4 text-sm font-semibold text-gray-900">No active checkouts found</h3>
+				<p class="mt-1 text-xs text-gray-500">There are no checkouts matching your search criteria.</p>
+			</div>
+		{:else}
+			<div class="overflow-x-auto rounded-xl border border-gray-200">
+				<table class="min-w-full divide-y divide-gray-200 text-left text-xs sm:text-sm">
+					<thead class="bg-gray-50">
+						<tr>
+							<th class="px-6 py-3 font-semibold text-gray-700 uppercase tracking-wider">Item Details</th>
+							<th class="px-6 py-3 font-semibold text-gray-700 uppercase tracking-wider">Borrower</th>
+							<th class="px-6 py-3 font-semibold text-gray-700 uppercase tracking-wider">Class & Instructor</th>
+							<th class="px-6 py-3 font-semibold text-gray-700 uppercase tracking-wider">Dates</th>
+							<th class="px-6 py-3 font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+							<th class="px-6 py-3 font-semibold text-gray-700 uppercase tracking-wider text-right">Qty</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-gray-200 bg-white">
+						{#each filteredBorrowers as record}
+							<tr class="hover:bg-gray-50/50 transition-colors">
+								<td class="px-6 py-4">
+									<div class="flex items-center gap-3">
+										<div class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100">
+											{#if record.item_picture}
+												<img src={record.item_picture} alt={record.item_name} class="h-full w-full object-cover" />
+											{:else}
+												<div class="flex h-full w-full items-center justify-center bg-pink-50 text-pink-600 font-semibold text-sm">
+													{record.item_name.charAt(0).toUpperCase()}
+												</div>
+											{/if}
+										</div>
+										<div>
+											<div class="font-medium text-gray-900">{record.item_name}</div>
+											{#if record.item_specification}
+												<div class="text-xs text-gray-500">{record.item_specification}</div>
+											{/if}
+										</div>
+									</div>
+								</td>
+								<td class="px-6 py-4">
+									<div class="font-medium text-gray-900">{record.student?.name || 'Unknown Student'}</div>
+									<div class="text-xs text-gray-500">{record.student?.email || ''}</div>
+								</td>
+								<td class="px-6 py-4">
+									<div class="font-medium text-gray-900">{record.class_code?.code || 'No class'}</div>
+									<div class="text-xs text-gray-500">Instructor: {record.instructor?.name || 'None'}</div>
+								</td>
+								<td class="px-6 py-4 space-y-0.5 text-xs text-gray-600">
+									<div>Borrowed: <span class="font-medium">{formatBorrowerDate(record.borrow_date)}</span></div>
+									<div>Due: <span class="font-medium {isBorrowerOverdue(record.due_date) ? 'text-rose-600 font-semibold' : ''}">{formatBorrowerDate(record.due_date)}</span></div>
+								</td>
+								<td class="px-6 py-4">
+									<span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset {getBorrowerStatusColor(record.status)}">
+										{formatBorrowerStatus(record.status)}
+									</span>
+								</td>
+								<td class="px-6 py-4 font-semibold text-gray-900 text-right">{record.quantity}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{/if}
 	</div>
 {/if}
 

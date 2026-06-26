@@ -6,9 +6,24 @@
 	import { toastStore } from '$lib/stores/toast';
 	import { confirmStore } from '$lib/stores/confirm';
 	import {
-		Plus, Search, Users, Package, Clock, CheckCircle2,
-		Trash2, Lock, AlertCircle, Calendar, MapPin, RotateCcw,
-		FileText, ShieldAlert, Sparkles, ChevronRight, X, Info
+		Plus,
+		Search,
+		Users,
+		Package,
+		Clock,
+		CheckCircle2,
+		Trash2,
+		Lock,
+		AlertCircle,
+		Calendar,
+		MapPin,
+		RotateCcw,
+		FileText,
+		ShieldAlert,
+		Sparkles,
+		ChevronRight,
+		X,
+		Info
 	} from 'lucide-svelte';
 
 	// ─── TYPES FOR STATE MANAGEMENT ──────────────────────────────────────────
@@ -95,7 +110,9 @@
 
 	// --- Return Form State ---
 	let selectedWalkIn = $state<WalkInTransaction | null>(null);
-	let returnInspection = $state<Record<string, { status: 'good' | 'damaged' | 'missing'; notes: string }>>({});
+	let returnInspection = $state<
+		Record<string, { status: 'good' | 'damaged' | 'missing'; notes: string }>
+	>({});
 
 	// --- Confidential Request Form State ---
 	let selectedAdmin = $state<UserResponse | null>(null);
@@ -112,61 +129,67 @@
 
 	// Autocomplete searches
 	const filteredStudents = $derived(
-		studentsList.filter(s =>
-			`${s.firstName} ${s.lastName}`.toLowerCase().includes(studentSearchVal.toLowerCase()) ||
-			s.email.toLowerCase().includes(studentSearchVal.toLowerCase()) ||
-			s.id.toLowerCase().includes(studentSearchVal.toLowerCase())
+		studentsList.filter(
+			(s) =>
+				`${s.firstName} ${s.lastName}`.toLowerCase().includes(studentSearchVal.toLowerCase()) ||
+				s.email.toLowerCase().includes(studentSearchVal.toLowerCase()) ||
+				s.id.toLowerCase().includes(studentSearchVal.toLowerCase())
 		)
 	);
 
 	const filteredAdmins = $derived(
-		adminList.filter(a =>
-			`${a.firstName} ${a.lastName}`.toLowerCase().includes(adminSearchVal.toLowerCase()) ||
-			a.email.toLowerCase().includes(adminSearchVal.toLowerCase())
+		adminList.filter(
+			(a) =>
+				`${a.firstName} ${a.lastName}`.toLowerCase().includes(adminSearchVal.toLowerCase()) ||
+				a.email.toLowerCase().includes(adminSearchVal.toLowerCase())
 		)
 	);
 
 	const filteredInventory = $derived(
-		inventoryItems.filter(item =>
-			item.name.toLowerCase().includes(itemSearchQuery.toLowerCase()) &&
-			!item.archived &&
-			(item.quantity + (item.donations ?? 0) > 0)
+		inventoryItems.filter(
+			(item) =>
+				item.name.toLowerCase().includes(itemSearchQuery.toLowerCase()) &&
+				!item.archived &&
+				item.quantity + (item.donations ?? 0) > 0
 		)
 	);
 
 	// Stats Computations
 	const walkInStats = $derived.by(() => {
 		const total = walkIns.length;
-		const active = walkIns.filter(w => w.status === 'borrowed').length;
-		const returned = walkIns.filter(w => w.status === 'returned').length;
+		const active = walkIns.filter((w) => w.status === 'borrowed').length;
+		const returned = walkIns.filter((w) => w.status === 'returned').length;
 		return { total, active, returned };
 	});
 
 	const confidentialStats = $derived.by(() => {
 		const total = confidentialRequests.length;
-		const pending = confidentialRequests.filter(c => c.status === 'preparing' || c.status === 'prepared').length;
-		const active = confidentialRequests.filter(c => c.status === 'dispatched').length;
+		const pending = confidentialRequests.filter(
+			(c) => c.status === 'preparing' || c.status === 'prepared'
+		).length;
+		const active = confidentialRequests.filter((c) => c.status === 'dispatched').length;
 		return { total, pending, active };
 	});
 
 	// Filtered lists
 	const displayWalkIns = $derived(
-		walkIns.filter(w => {
+		walkIns.filter((w) => {
 			const matchesSearch =
 				w.studentName.toLowerCase().includes(walkInSearchQuery.toLowerCase()) ||
 				w.studentId.toLowerCase().includes(walkInSearchQuery.toLowerCase()) ||
-				w.items.some(i => i.name.toLowerCase().includes(walkInSearchQuery.toLowerCase()));
+				w.items.some((i) => i.name.toLowerCase().includes(walkInSearchQuery.toLowerCase()));
 			const matchesStatus = walkInStatusFilter === 'all' || w.status === walkInStatusFilter;
 			return matchesSearch && matchesStatus;
 		})
 	);
 
 	const displayConfidentialRequests = $derived(
-		confidentialRequests.filter(c => {
+		confidentialRequests.filter((c) => {
 			const matchesSearch =
 				c.requesterName.toLowerCase().includes(confidentialSearchQuery.toLowerCase()) ||
 				c.purpose.toLowerCase().includes(confidentialSearchQuery.toLowerCase());
-			const matchesStatus = confidentialStatusFilter === 'all' || c.status === confidentialStatusFilter;
+			const matchesStatus =
+				confidentialStatusFilter === 'all' || c.status === confidentialStatusFilter;
 			return matchesSearch && matchesStatus;
 		})
 	);
@@ -224,9 +247,9 @@
 	}
 
 	function addToWalkInCart(item: InventoryItem) {
-		const exists = walkInCart.find(i => i.id === item.id);
+		const exists = walkInCart.find((i) => i.id === item.id);
 		if (exists) {
-			if (exists.selectedQty < (item.quantity + (item.donations ?? 0))) {
+			if (exists.selectedQty < item.quantity + (item.donations ?? 0)) {
 				exists.selectedQty += 1;
 			} else {
 				toastStore.warning(`Cannot exceed available stock for ${item.name}.`);
@@ -243,7 +266,7 @@
 	}
 
 	function removeFromWalkInCart(itemId: string) {
-		walkInCart = walkInCart.filter(i => i.id !== itemId);
+		walkInCart = walkInCart.filter((i) => i.id !== itemId);
 	}
 
 	async function submitWalkInCheckout() {
@@ -315,7 +338,7 @@
 				usageLocation,
 				borrowDate: new Date().toISOString(),
 				returnDate: new Date(returnDate).toISOString(),
-				items: walkInCart.map(i => ({
+				items: walkInCart.map((i) => ({
 					itemId: i.id,
 					name: i.name,
 					quantity: i.selectedQty,
@@ -357,7 +380,7 @@
 	function openReturnModal(tx: WalkInTransaction) {
 		selectedWalkIn = tx;
 		returnInspection = {};
-		tx.items.forEach(i => {
+		tx.items.forEach((i) => {
 			returnInspection[i.itemId] = { status: 'good', notes: '' };
 		});
 		showReturnModal = true;
@@ -368,7 +391,8 @@
 
 		const ok = await confirmStore.confirm({
 			title: 'Complete Return Inspection',
-			message: 'Confirm all items are accounted for? This will immediately update stock levels based on inspection results.',
+			message:
+				'Confirm all items are accounted for? This will immediately update stock levels based on inspection results.',
 			type: 'info',
 			confirmText: 'Submit Inspection',
 			cancelText: 'Cancel'
@@ -401,13 +425,16 @@
 
 			// Update transaction status
 			const updatedStatus = missingOrDamagedDetected ? 'missing' : 'returned';
-			walkIns = walkIns.map(w => {
+			walkIns = walkIns.map((w) => {
 				if (w.id === selectedWalkIn?.id) {
 					return {
 						...w,
 						status: updatedStatus,
 						returnedAt: new Date().toISOString(),
-						notes: Object.values(returnInspection).map(v => v.notes).filter(Boolean).join('; ')
+						notes: Object.values(returnInspection)
+							.map((v) => v.notes)
+							.filter(Boolean)
+							.join('; ')
 					};
 				}
 				return w;
@@ -443,9 +470,9 @@
 	}
 
 	function addToConfidentialCart(item: InventoryItem) {
-		const exists = confidentialCart.find(i => i.id === item.id);
+		const exists = confidentialCart.find((i) => i.id === item.id);
 		if (exists) {
-			if (exists.selectedQty < (item.quantity + (item.donations ?? 0))) {
+			if (exists.selectedQty < item.quantity + (item.donations ?? 0)) {
 				exists.selectedQty += 1;
 			} else {
 				toastStore.warning(`Cannot exceed available stock for ${item.name}.`);
@@ -462,7 +489,7 @@
 	}
 
 	function removeFromConfidentialCart(itemId: string) {
-		confidentialCart = confidentialCart.filter(i => i.id !== itemId);
+		confidentialCart = confidentialCart.filter((i) => i.id !== itemId);
 	}
 
 	async function submitConfidentialRequest() {
@@ -509,7 +536,7 @@
 			confidentialityLevel,
 			borrowDate: new Date().toISOString(),
 			returnDate: new Date(confidentialReturnDate).toISOString(),
-			items: confidentialCart.map(i => ({
+			items: confidentialCart.map((i) => ({
 				itemId: i.id,
 				name: i.name,
 				quantity: i.selectedQty
@@ -535,7 +562,10 @@
 	}
 
 	// Transition state machine for Confidential Requests
-	async function transitionConfidential(req: ConfidentialRequest, newStatus: 'prepared' | 'dispatched' | 'resolved') {
+	async function transitionConfidential(
+		req: ConfidentialRequest,
+		newStatus: 'prepared' | 'dispatched' | 'resolved'
+	) {
 		const actionLabels = {
 			prepared: 'Mark Items as Prepared',
 			dispatched: 'Dispatch/Release Equipment',
@@ -544,8 +574,10 @@
 
 		const confirmMsg = {
 			prepared: 'Confirm that you have retrieved and packaged all requested assets?',
-			dispatched: 'Confirm release? This will immediately subtract stock quantities from the catalog.',
-			resolved: 'Confirm return? This will immediately restore the stock back to the active catalog.'
+			dispatched:
+				'Confirm release? This will immediately subtract stock quantities from the catalog.',
+			resolved:
+				'Confirm return? This will immediately restore the stock back to the active catalog.'
 		};
 
 		const ok = await confirmStore.confirm({
@@ -580,7 +612,7 @@
 			}
 
 			// Update state
-			confidentialRequests = confidentialRequests.map(c => {
+			confidentialRequests = confidentialRequests.map((c) => {
 				if (c.id === req.id) {
 					return {
 						...c,
@@ -612,7 +644,9 @@
 	<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<div>
 			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Alternative Transactions</h1>
-			<p class="mt-1 text-sm text-gray-500">Dedicated workflows for desk walk-ins and confidential admin operations.</p>
+			<p class="mt-1 text-sm text-gray-500">
+				Dedicated workflows for desk walk-ins and confidential admin operations.
+			</p>
 		</div>
 
 		<!-- Action buttons -->
@@ -620,16 +654,16 @@
 			{#if activeTab === 'walk-in'}
 				<button
 					type="button"
-					onclick={() => showWalkInModal = true}
-					class="inline-flex items-center gap-1.5 rounded-lg bg-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-pink-700 transition-colors cursor-pointer"
+					onclick={() => (showWalkInModal = true)}
+					class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
 				>
 					<Plus size={16} /> Process Walk-in
 				</button>
 			{:else}
 				<button
 					type="button"
-					onclick={() => showConfidentialModal = true}
-					class="inline-flex items-center gap-1.5 rounded-lg bg-gray-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-gray-800 transition-colors cursor-pointer"
+					onclick={() => (showConfidentialModal = true)}
+					class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-gray-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gray-800"
 				>
 					<Lock size={15} /> Log Confidential Request
 				</button>
@@ -642,7 +676,9 @@
 		<!-- Card 1 -->
 		<div class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-semibold uppercase tracking-wider text-gray-400">Total Walk-ins</span>
+				<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase"
+					>Total Walk-ins</span
+				>
 				<div class="rounded-lg bg-pink-50 p-2 text-pink-600">
 					<Users size={16} />
 				</div>
@@ -656,7 +692,9 @@
 		<!-- Card 2 -->
 		<div class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-semibold uppercase tracking-wider text-gray-400">Active Walk-in Borrows</span>
+				<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase"
+					>Active Walk-in Borrows</span
+				>
 				<div class="rounded-lg bg-amber-50 p-2 text-amber-600">
 					<Clock size={16} />
 				</div>
@@ -670,13 +708,17 @@
 		<!-- Card 3 -->
 		<div class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-semibold uppercase tracking-wider text-gray-400">Confidential Admin Orders</span>
+				<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase"
+					>Confidential Admin Orders</span
+				>
 				<div class="rounded-lg bg-indigo-50 p-2 text-indigo-600">
 					<Lock size={15} />
 				</div>
 			</div>
 			<div class="mt-4 flex items-baseline gap-2">
-				<span class="text-3xl font-bold text-indigo-700">{confidentialStats.pending + confidentialStats.active}</span>
+				<span class="text-3xl font-bold text-indigo-700"
+					>{confidentialStats.pending + confidentialStats.active}</span
+				>
 				<span class="text-xs text-gray-500">active admin pipelines</span>
 			</div>
 		</div>
@@ -687,8 +729,9 @@
 		<nav class="flex gap-6" aria-label="Tabs">
 			<button
 				type="button"
-				onclick={() => activeTab = 'walk-in'}
-				class="border-b-2 py-4 px-1 text-sm font-semibold transition-all cursor-pointer {activeTab === 'walk-in'
+				onclick={() => (activeTab = 'walk-in')}
+				class="cursor-pointer border-b-2 px-1 py-4 text-sm font-semibold transition-all {activeTab ===
+				'walk-in'
 					? 'border-pink-600 text-pink-600'
 					: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
 			>
@@ -696,8 +739,9 @@
 			</button>
 			<button
 				type="button"
-				onclick={() => activeTab = 'confidential'}
-				class="border-b-2 py-4 px-1 text-sm font-semibold transition-all cursor-pointer {activeTab === 'confidential'
+				onclick={() => (activeTab = 'confidential')}
+				class="cursor-pointer border-b-2 px-1 py-4 text-sm font-semibold transition-all {activeTab ===
+				'confidential'
 					? 'border-pink-600 text-pink-600'
 					: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
 			>
@@ -713,14 +757,16 @@
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<!-- Search -->
 				<div class="relative max-w-md flex-1">
-					<span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400 pointer-events-none">
+					<span
+						class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"
+					>
 						<Search size={16} />
 					</span>
 					<input
 						type="text"
 						bind:value={walkInSearchQuery}
 						placeholder="Search student name, ID or items..."
-						class="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-4 text-sm focus:border-pink-500 focus:outline-none bg-white text-gray-900"
+						class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pr-4 pl-10 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 					/>
 				</div>
 
@@ -729,7 +775,7 @@
 					<span class="text-xs font-semibold text-gray-400 uppercase">Filter:</span>
 					<select
 						bind:value={walkInStatusFilter}
-						class="rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500"
+						class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 					>
 						<option value="all">All Transactions</option>
 						<option value="borrowed">Borrowed (Out)</option>
@@ -742,7 +788,7 @@
 			<!-- Main list table -->
 			<div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-xs">
 				<table class="w-full min-w-max table-auto text-left">
-					<thead class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+					<thead class="bg-gray-50 text-xs font-semibold tracking-wider text-gray-500 uppercase">
 						<tr>
 							<th class="px-6 py-4">Transaction ID</th>
 							<th class="px-6 py-4">Student/Borrower</th>
@@ -763,7 +809,7 @@
 							</tr>
 						{:else}
 							{#each displayWalkIns as tx}
-								<tr class="hover:bg-gray-50/50 transition-colors">
+								<tr class="transition-colors hover:bg-gray-50/50">
 									<td class="px-6 py-4 font-mono text-xs font-bold text-gray-900">{tx.id}</td>
 									<td class="px-6 py-4">
 										<div>
@@ -780,26 +826,41 @@
 										<div class="space-y-1">
 											{#each tx.items as item}
 												<p class="text-xs">
-													<span class="font-bold text-pink-600">{item.quantity}x</span> {item.name}
+													<span class="font-bold text-pink-600">{item.quantity}x</span>
+													{item.name}
 												</p>
 											{/each}
 										</div>
 									</td>
 									<td class="px-6 py-4 text-xs">
-										<p class="font-medium">{new Date(tx.borrowDate).toLocaleDateString()} {new Date(tx.borrowDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-										<p class="text-gray-400 mt-0.5">Due: {new Date(tx.returnDate).toLocaleDateString()}</p>
+										<p class="font-medium">
+											{new Date(tx.borrowDate).toLocaleDateString()}
+											{new Date(tx.borrowDate).toLocaleTimeString([], {
+												hour: '2-digit',
+												minute: '2-digit'
+											})}
+										</p>
+										<p class="mt-0.5 text-gray-400">
+											Due: {new Date(tx.returnDate).toLocaleDateString()}
+										</p>
 									</td>
 									<td class="px-6 py-4">
 										{#if tx.status === 'borrowed'}
-											<span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+											<span
+												class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700"
+											>
 												<Clock size={10} /> Active Borrow
 											</span>
 										{:else if tx.status === 'returned'}
-											<span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+											<span
+												class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700"
+											>
 												<CheckCircle2 size={10} /> Returned
 											</span>
 										{:else}
-											<span class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
+											<span
+												class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700"
+											>
 												<AlertCircle size={10} /> Inspected Issues
 											</span>
 										{/if}
@@ -809,7 +870,7 @@
 											<button
 												type="button"
 												onclick={() => openReturnModal(tx)}
-												class="inline-flex items-center gap-1 rounded-lg border border-pink-200 bg-white px-3 py-1.5 text-xs font-semibold text-pink-600 hover:bg-pink-50 transition-colors cursor-pointer"
+												class="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-pink-200 bg-white px-3 py-1.5 text-xs font-semibold text-pink-600 transition-colors hover:bg-pink-50"
 											>
 												<RotateCcw size={12} /> Process Return
 											</button>
@@ -835,14 +896,16 @@
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<!-- Search -->
 				<div class="relative max-w-md flex-1">
-					<span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400 pointer-events-none">
+					<span
+						class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"
+					>
 						<Search size={16} />
 					</span>
 					<input
 						type="text"
 						bind:value={confidentialSearchQuery}
 						placeholder="Search requester name, purpose..."
-						class="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-4 text-sm focus:border-pink-500 focus:outline-none bg-white text-gray-900"
+						class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pr-4 pl-10 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 					/>
 				</div>
 
@@ -851,7 +914,7 @@
 					<span class="text-xs font-semibold text-gray-400 uppercase">Filter:</span>
 					<select
 						bind:value={confidentialStatusFilter}
-						class="rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500"
+						class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 					>
 						<option value="all">All Statuses</option>
 						<option value="preparing">Preparing</option>
@@ -864,7 +927,7 @@
 			<!-- Main list table -->
 			<div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-xs">
 				<table class="w-full min-w-max table-auto text-left">
-					<thead class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+					<thead class="bg-gray-50 text-xs font-semibold tracking-wider text-gray-500 uppercase">
 						<tr>
 							<th class="px-6 py-4">Request ID</th>
 							<th class="px-6 py-4">Requester (Admin)</th>
@@ -885,7 +948,7 @@
 							</tr>
 						{:else}
 							{#each displayConfidentialRequests as req}
-								<tr class="hover:bg-gray-50/50 transition-colors">
+								<tr class="transition-colors hover:bg-gray-50/50">
 									<td class="px-6 py-4 font-mono text-xs font-bold text-gray-900">{req.id}</td>
 									<td class="px-6 py-4">
 										<p class="font-medium text-gray-900">{req.requesterName}</p>
@@ -893,59 +956,76 @@
 									</td>
 									<td class="px-6 py-4">
 										<div class="max-w-xs">
-											<p class="font-medium text-gray-900 line-clamp-1">{req.purpose}</p>
-											<p class="text-xs text-gray-400 mt-0.5">Due: {new Date(req.returnDate).toLocaleDateString()}</p>
+											<p class="line-clamp-1 font-medium text-gray-900">{req.purpose}</p>
+											<p class="mt-0.5 text-xs text-gray-400">
+												Due: {new Date(req.returnDate).toLocaleDateString()}
+											</p>
 										</div>
 									</td>
 									<td class="px-6 py-4">
 										<div class="space-y-1">
 											{#each req.items as item}
 												<p class="text-xs">
-													<span class="font-bold text-pink-600">{item.quantity}x</span> {item.name}
+													<span class="font-bold text-pink-600">{item.quantity}x</span>
+													{item.name}
 												</p>
 											{/each}
 										</div>
 									</td>
 									<td class="px-6 py-4">
-										<div class="flex flex-col gap-1 items-start">
-											<span class="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider
-												{req.priority === 'Critical' ? 'bg-red-100 text-red-700' :
-												 req.priority === 'High' ? 'bg-orange-100 text-orange-700' :
-												 req.priority === 'Medium' ? 'bg-blue-100 text-blue-700' :
-												 'bg-gray-100 text-gray-700'}">
+										<div class="flex flex-col items-start gap-1">
+											<span
+												class="rounded px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase
+												{req.priority === 'Critical'
+													? 'bg-red-100 text-red-700'
+													: req.priority === 'High'
+														? 'bg-orange-100 text-orange-700'
+														: req.priority === 'Medium'
+															? 'bg-blue-100 text-blue-700'
+															: 'bg-gray-100 text-gray-700'}"
+											>
 												{req.priority} Priority
 											</span>
 											<span class="inline-flex items-center gap-1 text-xs text-gray-500">
-												<Lock size={10} /> {req.confidentialityLevel}
+												<Lock size={10} />
+												{req.confidentialityLevel}
 											</span>
 										</div>
 									</td>
 									<td class="px-6 py-4">
 										{#if req.status === 'preparing'}
-											<span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+											<span
+												class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700"
+											>
 												Preparing
 											</span>
 										{:else if req.status === 'prepared'}
-											<span class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+											<span
+												class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700"
+											>
 												Ready to Release
 											</span>
 										{:else if req.status === 'dispatched'}
-											<span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+											<span
+												class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700"
+											>
 												Dispatched
 											</span>
 										{:else}
-											<span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+											<span
+												class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700"
+											>
 												Resolved
 											</span>
 										{/if}
 									</td>
 									<td class="px-6 py-4 text-right">
-										<div class="flex gap-1.5 justify-end">
+										<div class="flex justify-end gap-1.5">
 											{#if req.status === 'preparing'}
 												<button
 													type="button"
 													onclick={() => transitionConfidential(req, 'prepared')}
-													class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors cursor-pointer"
+													class="cursor-pointer rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
 												>
 													Ready
 												</button>
@@ -953,7 +1033,7 @@
 												<button
 													type="button"
 													onclick={() => transitionConfidential(req, 'dispatched')}
-													class="rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-pink-700 transition-colors cursor-pointer"
+													class="cursor-pointer rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-pink-700"
 												>
 													Release
 												</button>
@@ -961,7 +1041,7 @@
 												<button
 													type="button"
 													onclick={() => transitionConfidential(req, 'resolved')}
-													class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+													class="cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
 												>
 													Confirm Return
 												</button>
@@ -982,8 +1062,10 @@
 
 <!-- ─── MODAL: WALK-IN BORROW FORM ──────────────────────────────────────── -->
 {#if showWalkInModal}
-	<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-		<div class="relative w-full max-w-3xl rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+		<div
+			class="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+		>
 			<!-- Header -->
 			<div class="flex items-center justify-between border-b border-gray-100 pb-4">
 				<div class="flex items-center gap-2">
@@ -999,15 +1081,27 @@
 			<div class="mt-6 space-y-6">
 				<!-- Step 1: Student Lookup -->
 				<div>
-					<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Borrower Profile</span>
-					
-					<div class="flex items-center gap-4 mb-3">
-						<label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-							<input type="radio" checked={!isCustomBorrower} onclick={() => isCustomBorrower = false} class="text-pink-600 focus:ring-pink-500" />
+					<span class="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+						>Borrower Profile</span
+					>
+
+					<div class="mb-3 flex items-center gap-4">
+						<label class="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+							<input
+								type="radio"
+								checked={!isCustomBorrower}
+								onclick={() => (isCustomBorrower = false)}
+								class="text-pink-600 focus:ring-pink-500"
+							/>
 							Search Database Student
 						</label>
-						<label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-							<input type="radio" checked={isCustomBorrower} onclick={() => isCustomBorrower = true} class="text-pink-600 focus:ring-pink-500" />
+						<label class="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+							<input
+								type="radio"
+								checked={isCustomBorrower}
+								onclick={() => (isCustomBorrower = true)}
+								class="text-pink-600 focus:ring-pink-500"
+							/>
 							Custom Guest Borrower
 						</label>
 					</div>
@@ -1018,11 +1112,13 @@
 								type="text"
 								placeholder="Search student by name, email or ID..."
 								bind:value={studentSearchVal}
-								onfocus={() => showStudentDropdown = true}
-								class="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-pink-500 focus:outline-none bg-white text-gray-900"
+								onfocus={() => (showStudentDropdown = true)}
+								class="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 							/>
 							{#if showStudentDropdown && filteredStudents.length > 0}
-								<div class="absolute z-10 mt-1 w-full rounded-lg border border-gray-100 bg-white py-1 shadow-lg max-h-48 overflow-y-auto">
+								<div
+									class="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-gray-100 bg-white py-1 shadow-lg"
+								>
 									{#each filteredStudents as student}
 										<button
 											type="button"
@@ -1041,16 +1137,31 @@
 					{:else}
 						<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
 							<div>
-								<span class="block text-xs text-gray-500 mb-1">Full Name</span>
-								<input type="text" bind:value={customStudentName} class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500" placeholder="Juan Dela Cruz" />
+								<span class="mb-1 block text-xs text-gray-500">Full Name</span>
+								<input
+									type="text"
+									bind:value={customStudentName}
+									class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
+									placeholder="Juan Dela Cruz"
+								/>
 							</div>
 							<div>
-								<span class="block text-xs text-gray-500 mb-1">Student ID #</span>
-								<input type="text" bind:value={customStudentID} class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500" placeholder="2024-10023" />
+								<span class="mb-1 block text-xs text-gray-500">Student ID #</span>
+								<input
+									type="text"
+									bind:value={customStudentID}
+									class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
+									placeholder="2024-10023"
+								/>
 							</div>
 							<div>
-								<span class="block text-xs text-gray-500 mb-1">Email Address</span>
-								<input type="email" bind:value={customStudentEmail} class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500" placeholder="juan@school.edu" />
+								<span class="mb-1 block text-xs text-gray-500">Email Address</span>
+								<input
+									type="email"
+									bind:value={customStudentEmail}
+									class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
+									placeholder="juan@school.edu"
+								/>
 							</div>
 						</div>
 					{/if}
@@ -1059,10 +1170,12 @@
 				<!-- Step 2: Context Details -->
 				<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
 					<div>
-						<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Class / Subject Code</span>
+						<span class="mb-1 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+							>Class / Subject Code</span
+						>
 						<select
 							bind:value={selectedClassCode}
-							class="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500"
+							class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 						>
 							<option value="">Select Enrolled Class</option>
 							{#each classCodesList as cc}
@@ -1072,10 +1185,12 @@
 					</div>
 
 					<div>
-						<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Usage Location</span>
+						<span class="mb-1 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+							>Usage Location</span
+						>
 						<select
 							bind:value={usageLocation}
-							class="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500"
+							class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 						>
 							<option value="school">Inside School / Lab</option>
 							<option value="outdoor">Outdoor / Home Use</option>
@@ -1083,53 +1198,63 @@
 					</div>
 
 					<div>
-						<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Return Date Deadline</span>
+						<span class="mb-1 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+							>Return Date Deadline</span
+						>
 						<input
 							type="date"
 							bind:value={returnDate}
-							class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500"
+							class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 						/>
 					</div>
 				</div>
 
 				<div>
-					<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Activity Purpose</span>
+					<span class="mb-1 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+						>Activity Purpose</span
+					>
 					<textarea
 						bind:value={purpose}
 						rows="2"
 						placeholder="E.g., Baking activity for HM-302 Class"
-						class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500 resize-none"
+						class="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 					></textarea>
 				</div>
 
 				<!-- Step 3: Catalog & Cart Selection -->
 				<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
 					<!-- Catalog list search -->
-					<div class="rounded-xl border border-gray-150 p-4">
-						<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Inventory Stock Lookup</span>
+					<div class="border-gray-150 rounded-xl border p-4">
+						<span class="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+							>Inventory Stock Lookup</span
+						>
 						<div class="relative mb-3">
-							<span class="absolute inset-y-0 left-0 flex items-center pl-2.5 text-gray-400 pointer-events-none">
+							<span
+								class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-gray-400"
+							>
 								<Search size={14} />
 							</span>
 							<input
 								type="text"
 								bind:value={itemSearchQuery}
 								placeholder="Search equipment..."
-								class="w-full rounded-lg border border-gray-200 py-1.5 pl-8 pr-3 text-xs focus:border-pink-500 focus:outline-none bg-white text-gray-900"
+								class="w-full rounded-lg border border-gray-200 bg-white py-1.5 pr-3 pl-8 text-xs text-gray-900 focus:border-pink-500 focus:outline-none"
 							/>
 						</div>
 
-						<div class="max-h-56 overflow-y-auto divide-y divide-gray-100 space-y-1">
+						<div class="max-h-56 space-y-1 divide-y divide-gray-100 overflow-y-auto">
 							{#each filteredInventory as item}
 								<div class="flex items-center justify-between py-2 text-xs">
 									<div>
 										<p class="font-semibold text-gray-900">{item.name}</p>
-										<p class="text-[10px] text-gray-400">{item.category} · Stock: {item.quantity + (item.donations ?? 0)}</p>
+										<p class="text-[10px] text-gray-400">
+											{item.category} · Stock: {item.quantity + (item.donations ?? 0)}
+										</p>
 									</div>
 									<button
 										type="button"
 										onclick={() => addToWalkInCart(item)}
-										class="rounded bg-pink-50 px-2 py-1 font-semibold text-pink-700 hover:bg-pink-100 transition-colors cursor-pointer"
+										class="cursor-pointer rounded bg-pink-50 px-2 py-1 font-semibold text-pink-700 transition-colors hover:bg-pink-100"
 									>
 										Add
 									</button>
@@ -1139,28 +1264,34 @@
 					</div>
 
 					<!-- Borrow Cart list -->
-					<div class="rounded-xl border border-gray-150 p-4 bg-gray-50/50 flex flex-col justify-between">
+					<div
+						class="border-gray-150 flex flex-col justify-between rounded-xl border bg-gray-50/50 p-4"
+					>
 						<div>
-							<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Selected Borrow Basket</span>
+							<span class="mb-3 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+								>Selected Borrow Basket</span
+							>
 							{#if walkInCart.length === 0}
-								<div class="py-12 text-center text-gray-400 text-xs">
+								<div class="py-12 text-center text-xs text-gray-400">
 									<Package size={20} class="mx-auto mb-2 text-gray-300" />
 									No items selected yet.
 								</div>
 							{:else}
-								<div class="max-h-56 overflow-y-auto space-y-2">
+								<div class="max-h-56 space-y-2 overflow-y-auto">
 									{#each walkInCart as cartItem}
-										<div class="flex items-center justify-between rounded-lg bg-white p-2 text-xs border border-gray-100">
+										<div
+											class="flex items-center justify-between rounded-lg border border-gray-100 bg-white p-2 text-xs"
+										>
 											<div class="min-w-0 flex-1">
-												<p class="font-semibold text-gray-900 truncate">{cartItem.name}</p>
+												<p class="truncate font-semibold text-gray-900">{cartItem.name}</p>
 												<p class="text-[10px] text-gray-400">Available: {cartItem.quantity}</p>
 											</div>
 											<div class="flex items-center gap-3">
-												<div class="flex items-center border border-gray-200 rounded">
+												<div class="flex items-center rounded border border-gray-200">
 													<button
 														type="button"
 														disabled={cartItem.selectedQty <= 1}
-														onclick={() => cartItem.selectedQty -= 1}
+														onclick={() => (cartItem.selectedQty -= 1)}
 														class="px-1.5 py-0.5 hover:bg-gray-100 disabled:opacity-50"
 													>
 														-
@@ -1169,13 +1300,16 @@
 													<button
 														type="button"
 														disabled={cartItem.selectedQty >= cartItem.quantity}
-														onclick={() => cartItem.selectedQty += 1}
+														onclick={() => (cartItem.selectedQty += 1)}
 														class="px-1.5 py-0.5 hover:bg-gray-100 disabled:opacity-50"
 													>
 														+
 													</button>
 												</div>
-												<button onclick={() => removeFromWalkInCart(cartItem.id)} class="text-red-500 hover:text-red-700">
+												<button
+													onclick={() => removeFromWalkInCart(cartItem.id)}
+													class="text-red-500 hover:text-red-700"
+												>
 													<Trash2 size={14} />
 												</button>
 											</div>
@@ -1193,14 +1327,14 @@
 				<button
 					type="button"
 					onclick={() => closeWalkInModal()}
-					class="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+					class="cursor-pointer rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
 				>
 					Cancel
 				</button>
 				<button
 					type="button"
 					onclick={submitWalkInCheckout}
-					class="rounded-lg bg-pink-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-pink-700 transition-colors cursor-pointer"
+					class="cursor-pointer rounded-lg bg-pink-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
 				>
 					Confirm & Issue Immediately
 				</button>
@@ -1211,14 +1345,22 @@
 
 <!-- ─── MODAL: WALK-IN RETURN / INSPECTION FORM ─────────────────────────── -->
 {#if showReturnModal && selectedWalkIn}
-	<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-		<div class="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+		<div
+			class="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+		>
 			<div class="flex items-center justify-between border-b border-gray-100 pb-4">
 				<div class="flex items-center gap-2">
 					<RotateCcw class="text-pink-600" size={20} />
 					<h2 class="text-lg font-bold text-gray-900">Return Inspection Desk</h2>
 				</div>
-				<button onclick={() => { showReturnModal = false; selectedWalkIn = null; }} class="text-gray-400 hover:text-gray-500">
+				<button
+					onclick={() => {
+						showReturnModal = false;
+						selectedWalkIn = null;
+					}}
+					class="text-gray-400 hover:text-gray-500"
+				>
 					<X size={20} />
 				</button>
 			</div>
@@ -1226,26 +1368,36 @@
 			<div class="mt-6 space-y-4">
 				<div class="rounded-lg bg-gray-50 p-3 text-xs">
 					<p class="font-bold text-gray-700">Transaction ID: {selectedWalkIn.id}</p>
-					<p class="text-gray-600 mt-1">Borrower: {selectedWalkIn.studentName} · ID: {selectedWalkIn.studentId}</p>
-					<p class="text-gray-500">Class: {selectedWalkIn.classCode} · Checked out: {new Date(selectedWalkIn.borrowDate).toLocaleDateString()}</p>
+					<p class="mt-1 text-gray-600">
+						Borrower: {selectedWalkIn.studentName} · ID: {selectedWalkIn.studentId}
+					</p>
+					<p class="text-gray-500">
+						Class: {selectedWalkIn.classCode} · Checked out: {new Date(
+							selectedWalkIn.borrowDate
+						).toLocaleDateString()}
+					</p>
 				</div>
 
 				<div class="space-y-3">
-					<span class="block text-xs font-bold uppercase tracking-wider text-gray-400">Items Return Inspection Checklist</span>
+					<span class="block text-xs font-bold tracking-wider text-gray-400 uppercase"
+						>Items Return Inspection Checklist</span
+					>
 					{#each selectedWalkIn.items as item}
-						<div class="rounded-xl border border-gray-150 p-4 space-y-3 bg-white">
+						<div class="border-gray-150 space-y-3 rounded-xl border bg-white p-4">
 							<div class="flex items-center justify-between">
-								<p class="font-semibold text-gray-900 text-sm">{item.name}</p>
-								<span class="rounded bg-pink-100 px-2.5 py-0.5 text-xs font-bold text-pink-700">{item.quantity} borrowed</span>
+								<p class="text-sm font-semibold text-gray-900">{item.name}</p>
+								<span class="rounded bg-pink-100 px-2.5 py-0.5 text-xs font-bold text-pink-700"
+									>{item.quantity} borrowed</span
+								>
 							</div>
 
 							<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 								<!-- Selection status -->
 								<div>
-									<span class="block text-xs text-gray-500 mb-1">Return Status</span>
+									<span class="mb-1 block text-xs text-gray-500">Return Status</span>
 									<select
 										bind:value={returnInspection[item.itemId].status}
-										class="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs bg-white text-gray-900 focus:outline-none focus:border-pink-500"
+										class="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-900 focus:border-pink-500 focus:outline-none"
 									>
 										<option value="good">Returned Good / Clean</option>
 										<option value="damaged">Returned Damaged</option>
@@ -1255,12 +1407,12 @@
 
 								<!-- Notes -->
 								<div>
-									<span class="block text-xs text-gray-500 mb-1">Inspection Notes</span>
+									<span class="mb-1 block text-xs text-gray-500">Inspection Notes</span>
 									<input
 										type="text"
 										bind:value={returnInspection[item.itemId].notes}
 										placeholder="e.g. Scratched handle, no box, clean"
-										class="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs bg-white text-gray-900 focus:outline-none focus:border-pink-500"
+										class="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-900 focus:border-pink-500 focus:outline-none"
 									/>
 								</div>
 							</div>
@@ -1272,15 +1424,18 @@
 			<div class="mt-8 flex justify-end gap-3 border-t border-gray-100 pt-4">
 				<button
 					type="button"
-					onclick={() => { showReturnModal = false; selectedWalkIn = null; }}
-					class="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+					onclick={() => {
+						showReturnModal = false;
+						selectedWalkIn = null;
+					}}
+					class="cursor-pointer rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
 				>
 					Cancel
 				</button>
 				<button
 					type="button"
 					onclick={submitReturn}
-					class="rounded-lg bg-pink-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-pink-700 transition-colors cursor-pointer"
+					class="cursor-pointer rounded-lg bg-pink-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
 				>
 					Record Return & Restock
 				</button>
@@ -1291,8 +1446,10 @@
 
 <!-- ─── MODAL: CONFIDENTIAL REQUEST FORM ────────────────────────────────── -->
 {#if showConfidentialModal}
-	<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-		<div class="relative w-full max-w-3xl rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+		<div
+			class="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+		>
 			<div class="flex items-center justify-between border-b border-gray-100 pb-4">
 				<div class="flex items-center gap-2">
 					<Lock class="text-indigo-600" size={20} />
@@ -1306,14 +1463,26 @@
 			<div class="mt-6 space-y-6">
 				<!-- Step 1: Admin Selector -->
 				<div>
-					<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Requester Profile</span>
-					<div class="flex items-center gap-4 mb-3">
-						<label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-							<input type="radio" checked={!isCustomAdmin} onclick={() => isCustomAdmin = false} class="text-pink-600 focus:ring-pink-500" />
+					<span class="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+						>Requester Profile</span
+					>
+					<div class="mb-3 flex items-center gap-4">
+						<label class="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+							<input
+								type="radio"
+								checked={!isCustomAdmin}
+								onclick={() => (isCustomAdmin = false)}
+								class="text-pink-600 focus:ring-pink-500"
+							/>
 							Search Admin / Faculty
 						</label>
-						<label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-							<input type="radio" checked={isCustomAdmin} onclick={() => isCustomAdmin = true} class="text-pink-600 focus:ring-pink-500" />
+						<label class="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+							<input
+								type="radio"
+								checked={isCustomAdmin}
+								onclick={() => (isCustomAdmin = true)}
+								class="text-pink-600 focus:ring-pink-500"
+							/>
 							Custom Staff Requester
 						</label>
 					</div>
@@ -1324,11 +1493,13 @@
 								type="text"
 								placeholder="Search administrator name..."
 								bind:value={adminSearchVal}
-								onfocus={() => showAdminDropdown = true}
-								class="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-pink-500 focus:outline-none bg-white text-gray-900"
+								onfocus={() => (showAdminDropdown = true)}
+								class="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 							/>
 							{#if showAdminDropdown && filteredAdmins.length > 0}
-								<div class="absolute z-10 mt-1 w-full rounded-lg border border-gray-100 bg-white py-1 shadow-lg max-h-48 overflow-y-auto">
+								<div
+									class="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-gray-100 bg-white py-1 shadow-lg"
+								>
 									{#each filteredAdmins as admin}
 										<button
 											type="button"
@@ -1337,7 +1508,9 @@
 										>
 											<div>
 												<p class="font-semibold">{admin.firstName} {admin.lastName}</p>
-												<p class="text-xs text-gray-400">{admin.email} · Role: {admin.role.toUpperCase()}</p>
+												<p class="text-xs text-gray-400">
+													{admin.email} · Role: {admin.role.toUpperCase()}
+												</p>
 											</div>
 										</button>
 									{/each}
@@ -1346,8 +1519,13 @@
 						</div>
 					{:else}
 						<div>
-							<span class="block text-xs text-gray-500 mb-1">Requester Full Name</span>
-							<input type="text" bind:value={customAdminName} class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500" placeholder="e.g. Dean Reyes" />
+							<span class="mb-1 block text-xs text-gray-500">Requester Full Name</span>
+							<input
+								type="text"
+								bind:value={customAdminName}
+								class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
+								placeholder="e.g. Dean Reyes"
+							/>
 						</div>
 					{/if}
 				</div>
@@ -1355,10 +1533,12 @@
 				<!-- Step 2: Context Details -->
 				<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
 					<div>
-						<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Priority Level</span>
+						<span class="mb-1 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+							>Priority Level</span
+						>
 						<select
 							bind:value={requestPriority}
-							class="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500"
+							class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 						>
 							<option value="Low">Low Priority</option>
 							<option value="Medium">Medium Priority</option>
@@ -1368,10 +1548,12 @@
 					</div>
 
 					<div>
-						<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Confidentiality Classification</span>
+						<span class="mb-1 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+							>Confidentiality Classification</span
+						>
 						<select
 							bind:value={confidentialityLevel}
-							class="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500"
+							class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 						>
 							<option value="Confidential">Confidential</option>
 							<option value="Strictly Confidential">Strictly Confidential (VIP / Audits)</option>
@@ -1379,53 +1561,63 @@
 					</div>
 
 					<div>
-						<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Expected Return Deadline</span>
+						<span class="mb-1 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+							>Expected Return Deadline</span
+						>
 						<input
 							type="date"
 							bind:value={confidentialReturnDate}
-							class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500"
+							class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 						/>
 					</div>
 				</div>
 
 				<div>
-					<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Activity Purpose (Secure Log)</span>
+					<span class="mb-1 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+						>Activity Purpose (Secure Log)</span
+					>
 					<textarea
 						bind:value={confidentialPurpose}
 						rows="2"
 						placeholder="E.g., High-level executive audit review or VIP board presentation preparation."
-						class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:border-pink-500 resize-none"
+						class="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 					></textarea>
 				</div>
 
 				<!-- Step 3: Catalog & Cart Selection -->
 				<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
 					<!-- Catalog list search -->
-					<div class="rounded-xl border border-gray-150 p-4">
-						<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Inventory Stock Lookup</span>
+					<div class="border-gray-150 rounded-xl border p-4">
+						<span class="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+							>Inventory Stock Lookup</span
+						>
 						<div class="relative mb-3">
-							<span class="absolute inset-y-0 left-0 flex items-center pl-2.5 text-gray-400 pointer-events-none">
+							<span
+								class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-gray-400"
+							>
 								<Search size={14} />
 							</span>
 							<input
 								type="text"
 								bind:value={itemSearchQuery}
 								placeholder="Search equipment..."
-								class="w-full rounded-lg border border-gray-200 py-1.5 pl-8 pr-3 text-xs focus:border-pink-500 focus:outline-none bg-white text-gray-900"
+								class="w-full rounded-lg border border-gray-200 bg-white py-1.5 pr-3 pl-8 text-xs text-gray-900 focus:border-pink-500 focus:outline-none"
 							/>
 						</div>
 
-						<div class="max-h-56 overflow-y-auto divide-y divide-gray-100 space-y-1">
+						<div class="max-h-56 space-y-1 divide-y divide-gray-100 overflow-y-auto">
 							{#each filteredInventory as item}
 								<div class="flex items-center justify-between py-2 text-xs">
 									<div>
 										<p class="font-semibold text-gray-900">{item.name}</p>
-										<p class="text-[10px] text-gray-400">{item.category} · Stock: {item.quantity + (item.donations ?? 0)}</p>
+										<p class="text-[10px] text-gray-400">
+											{item.category} · Stock: {item.quantity + (item.donations ?? 0)}
+										</p>
 									</div>
 									<button
 										type="button"
 										onclick={() => addToConfidentialCart(item)}
-										class="rounded bg-indigo-50 px-2 py-1 font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer"
+										class="cursor-pointer rounded bg-indigo-50 px-2 py-1 font-semibold text-indigo-700 transition-colors hover:bg-indigo-100"
 									>
 										Add
 									</button>
@@ -1435,28 +1627,34 @@
 					</div>
 
 					<!-- Cart list -->
-					<div class="rounded-xl border border-gray-150 p-4 bg-gray-50/50 flex flex-col justify-between">
+					<div
+						class="border-gray-150 flex flex-col justify-between rounded-xl border bg-gray-50/50 p-4"
+					>
 						<div>
-							<span class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Request Assets Basket</span>
+							<span class="mb-3 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+								>Request Assets Basket</span
+							>
 							{#if confidentialCart.length === 0}
-								<div class="py-12 text-center text-gray-400 text-xs">
+								<div class="py-12 text-center text-xs text-gray-400">
 									<Package size={20} class="mx-auto mb-2 text-gray-300" />
 									No items selected yet.
 								</div>
 							{:else}
-								<div class="max-h-56 overflow-y-auto space-y-2">
+								<div class="max-h-56 space-y-2 overflow-y-auto">
 									{#each confidentialCart as cartItem}
-										<div class="flex items-center justify-between rounded-lg bg-white p-2 text-xs border border-gray-100">
+										<div
+											class="flex items-center justify-between rounded-lg border border-gray-100 bg-white p-2 text-xs"
+										>
 											<div class="min-w-0 flex-1">
-												<p class="font-semibold text-gray-900 truncate">{cartItem.name}</p>
+												<p class="truncate font-semibold text-gray-900">{cartItem.name}</p>
 												<p class="text-[10px] text-gray-400">Available: {cartItem.quantity}</p>
 											</div>
 											<div class="flex items-center gap-3">
-												<div class="flex items-center border border-gray-200 rounded">
+												<div class="flex items-center rounded border border-gray-200">
 													<button
 														type="button"
 														disabled={cartItem.selectedQty <= 1}
-														onclick={() => cartItem.selectedQty -= 1}
+														onclick={() => (cartItem.selectedQty -= 1)}
 														class="px-1.5 py-0.5 hover:bg-gray-100 disabled:opacity-50"
 													>
 														-
@@ -1465,13 +1663,16 @@
 													<button
 														type="button"
 														disabled={cartItem.selectedQty >= cartItem.quantity}
-														onclick={() => cartItem.selectedQty += 1}
+														onclick={() => (cartItem.selectedQty += 1)}
 														class="px-1.5 py-0.5 hover:bg-gray-100 disabled:opacity-50"
 													>
 														+
 													</button>
 												</div>
-												<button onclick={() => removeFromConfidentialCart(cartItem.id)} class="text-red-500 hover:text-red-700">
+												<button
+													onclick={() => removeFromConfidentialCart(cartItem.id)}
+													class="text-red-500 hover:text-red-700"
+												>
 													<Trash2 size={14} />
 												</button>
 											</div>
@@ -1489,14 +1690,14 @@
 				<button
 					type="button"
 					onclick={closeConfidentialModal}
-					class="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+					class="cursor-pointer rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
 				>
 					Cancel
 				</button>
 				<button
 					type="button"
 					onclick={submitConfidentialRequest}
-					class="rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors cursor-pointer"
+					class="cursor-pointer rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700"
 				>
 					Create Request Pipeline
 				</button>
