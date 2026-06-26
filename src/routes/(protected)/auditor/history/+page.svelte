@@ -5,15 +5,15 @@
 	import { toastStore } from '$lib/stores/toast';
 	import { confirmStore } from '$lib/stores/confirm';
 	import { historyStore } from '$lib/stores/history';
-	import { inventoryHistoryAPI, archivedItemsAPI, deletedItemsAPI } from '$lib/api/inventoryHistory';
-	import type { InventoryHistoryEntry, DeletedItem } from '$lib/api/inventoryHistory';
+	import { inventoryHistoryAPI } from '$lib/api/inventoryHistory';
+	import type { InventoryHistoryEntry } from '$lib/api/inventoryHistory';
 	import { borrowRequestsAPI } from '$lib/api/borrowRequests';
 	import { catalogAPI } from '$lib/api/catalog';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import HistorySkeletonLoader from '$lib/components/ui/HistorySkeletonLoader.svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 
-	type Tab = 'activity-logs' | 'request-history' | 'archived' | 'deleted';
+	type Tab = 'activity-logs' | 'request-history';
 	
 	let activeTab = $state<Tab>('activity-logs');
 	
@@ -26,15 +26,11 @@
 	let initialLoadComplete = $state(hasCachedData);
 	let activityLogsLoading = $state(!hasCachedData);
 	let requestHistoryLoading = $state(true);
-	let archivedLoading = $state(true);
-	let deletedLoading = $state(true);
 	let inFlightLoadId = 0;
 
 	const activeTabLoading = $derived(
 		activeTab === 'activity-logs' ? activityLogsLoading :
-		activeTab === 'request-history' ? requestHistoryLoading :
-		activeTab === 'archived' ? archivedLoading :
-		deletedLoading
+		requestHistoryLoading
 	);
 	
 	// Activity Logs state - from store
@@ -43,22 +39,6 @@
 	let activityPage = $state(1);
 	let activityLimit = $state(50);
 	let activityLogsLoaded = $state(hasCachedData); // Track if activity logs have been loaded
-	
-	// Archived Items state
-	let archivedItems = $state<any[]>([]);
-	let archivedTotal = $state(0);
-	let archivedPage = $state(1);
-	let archivedLimit = $state(50);
-	let archivedSearch = $state('');
-	let archivedLoaded = $state(false); // Track if archived items have been loaded
-	
-	// Recently Deleted state
-	let deletedItems = $state<DeletedItem[]>([]);
-	let deletedTotal = $state(0);
-	let deletedPage = $state(1);
-	let deletedLimit = $state(50);
-	let deletedSearch = $state('');
-	let deletedLoaded = $state(false); // Track if deleted items have been loaded
 
 	// Filters for activity logs
 	let filterAction = $state('');
@@ -82,16 +62,6 @@
 	let showRequestDetailModal = $state(false);
 	let selectedHistoryRequest = $state<any>(null);
 	let itemPictureCache = $state<Map<string, string>>(new Map());
-
-	// Archived Items filters
-	let archivedFilterCondition = $state('');
-	let archivedFilterCategory = $state('');
-	let showArchivedFilters = $state(false);
-
-	// Deleted Items filters
-	let deletedFilterType = $state('');
-	let deletedFilterDaysLeft = $state('');
-	let showDeletedFilters = $state(false);
 
 	// Real-time sync state
 	let liveSyncActive = $state(false);
@@ -159,15 +129,10 @@
 	// Switch tabs
 	function switchTab(tab: Tab) {
 		activeTab = tab;
-		// Only load data if not already loaded to prevent unnecessary refreshes
 		if (tab === 'activity-logs') {
 			if (!activityLogsLoaded) loadActivityLogs();
 		} else if (tab === 'request-history') {
 			if (!requestHistoryLoaded) loadRequestHistory();
-		} else if (tab === 'archived') {
-			if (!archivedLoaded) loadArchivedItems(false, false);
-		} else if (tab === 'deleted') {
-			if (!deletedLoaded) loadDeletedItems(false, false);
 		}
 	}
 
@@ -190,25 +155,9 @@
 			limit: requestHistoryLimit
 		});
 
-		const archivedPromise = archivedItemsAPI.getArchived({
-			search: archivedSearch || undefined,
-			page: archivedPage,
-			limit: archivedLimit,
-			forceRefresh
-		});
-
-		const deletedPromise = deletedItemsAPI.getDeleted({
-			search: deletedSearch || undefined,
-			page: deletedPage,
-			limit: deletedLimit,
-			forceRefresh
-		});
-
 		const results = await Promise.allSettled([
 			activityPromise,
 			requestsPromise,
-			archivedPromise,
-			deletedPromise
 		]);
 
 		if (loadId !== inFlightLoadId) return;
@@ -235,33 +184,6 @@
 			await backfillItemPictures();
 		}
 		requestHistoryLoading = false;
-
-		// 3. Settle Archived Items (third)
-		await new Promise(r => setTimeout(r, 120));
-		if (loadId !== inFlightLoadId) return;
-
-		const archRes = results[2];
-		if (archRes.status === 'fulfilled') {
-			archivedItems = archRes.value.items;
-			archivedTotal = archRes.value.total;
-			archivedLoaded = true;
-			console.log('[HISTORY] Archived items loaded:', archivedTotal, 'items');
-		} else {
-			console.error('[HISTORY] Failed to load archived items:', archRes.reason);
-		}
-		archivedLoading = false;
-
-		// 4. Settle Deleted Items (fourth)
-		await new Promise(r => setTimeout(r, 120));
-		if (loadId !== inFlightLoadId) return;
-
-		const delRes = results[3];
-		if (delRes.status === 'fulfilled') {
-			deletedItems = delRes.value.items;
-			deletedTotal = delRes.value.total;
-			deletedLoaded = true;
-		}
-		deletedLoading = false;
 	}
 
 	// Load Activity Logs
@@ -315,10 +237,6 @@
 			} else if (activeTab === 'request-history') {
 				borrowRequestsAPI.invalidateCache();
 				await loadRequestHistory(false);
-			} else if (activeTab === 'archived') {
-				await loadArchivedItems(false, true);
-			} else if (activeTab === 'deleted') {
-				await loadDeletedItems(false, true);
 			}
 		} finally {
 			refreshInFlight = false;
@@ -378,111 +296,11 @@
 		}
 	}
 
-	// Load Archived Items
-	async function loadArchivedItems(showLoader = true, forceRefresh = false) {
-		if (showLoader) {
-			if (archivedItems.length === 0) archivedLoading = true;
-			await loadAllHistoryProgressive(forceRefresh);
-		} else {
-			try {
-				const response = await archivedItemsAPI.getArchived({
-					search: archivedSearch || undefined,
-					page: archivedPage,
-					limit: archivedLimit,
-					forceRefresh
-				});
-				archivedItems = response.items;
-				archivedTotal = response.total;
-				archivedLoaded = true;
-			} catch (err: any) {
-				toastStore.error(err.message || 'Failed to load archived items');
-			}
-		}
-	}
+	// Load Archived Items — removed (auditor read-only: no Archived or Deleted tabs)
 
-	// Load Recently Deleted Items
-	async function loadDeletedItems(showLoader = true, forceRefresh = false) {
-		if (showLoader) {
-			if (deletedItems.length === 0) deletedLoading = true;
-			await loadAllHistoryProgressive(forceRefresh);
-		} else {
-			try {
-				const response = await deletedItemsAPI.getDeleted({
-					search: deletedSearch || undefined,
-					page: deletedPage,
-					limit: deletedLimit,
-					forceRefresh
-				});
-				deletedItems = response.items;
-				deletedTotal = response.total;
-				deletedLoaded = true;
-			} catch (err: any) {
-				toastStore.error(err.message || 'Failed to load deleted items');
-			}
-		}
-	}
-
-	// Restore archived item
-	async function restoreArchivedItem(item: any) {
-		const confirmed = await confirmStore.info(
-			`Restore "${item.name}" to active inventory?`,
-			'Restore Item',
-			'Restore',
-			'Cancel'
-		);
-
-		if (!confirmed) return;
-
-		try {
-			await archivedItemsAPI.restore(item.id);
-			toastStore.success(`"${item.name}" has been restored to active inventory`);
-			await loadArchivedItems(true);
-		} catch (err: any) {
-			toastStore.error(err.message || 'Failed to restore item');
-		}
-	}
-
-	// Restore deleted item
-	async function restoreDeletedItem(item: DeletedItem) {
-		const itemName = item.type === 'category' ? item.categoryData.name : item.itemData.name;
-		const confirmed = await confirmStore.info(
-			`Restore "${itemName}" from deleted items?`,
-			'Restore Item',
-			'Restore',
-			'Cancel'
-		);
-
-		if (!confirmed) return;
-
-		try {
-			await deletedItemsAPI.restore(item.id, item.type);
-			toastStore.success(`"${itemName}" has been restored successfully`);
-			await loadDeletedItems(true);
-		} catch (err: any) {
-			toastStore.error(err.message || 'Failed to restore item');
-		}
-	}
-
-	// Permanently delete item
-	async function permanentlyDelete(item: DeletedItem) {
-		const itemName = item.type === 'category' ? item.categoryData.name : item.itemData.name;
-		const confirmed = await confirmStore.danger(
-			`Permanently delete "${itemName}"? This action CANNOT be undone.`,
-			'Permanent Deletion',
-			'Delete Forever',
-			'Cancel'
-		);
-
-		if (!confirmed) return;
-
-		try {
-			await deletedItemsAPI.permanentlyDelete(item.id, item.type);
-			toastStore.success(`"${itemName}" has been permanently deleted`);
-			await loadDeletedItems(true);
-		} catch (err: any) {
-			toastStore.error(err.message || 'Failed to permanently delete item');
-		}
-	}
+	// Restore archived item — removed (auditor read-only)
+	// Restore deleted item — removed (auditor read-only)
+	// Permanently delete item — removed (auditor read-only)
 
 	// Format timestamp
 	function formatTimestamp(date: Date | string): string {
@@ -631,76 +449,6 @@
 
 		return filtered;
 	});
-
-	const filteredArchivedItems = $derived.by(() => {
-		let filtered = archivedItems;
-
-		// Apply condition filter
-		if (archivedFilterCondition) {
-			filtered = filtered.filter(item => 
-				item.condition?.toLowerCase() === archivedFilterCondition.toLowerCase()
-			);
-		}
-
-		// Apply category filter
-		if (archivedFilterCategory) {
-			filtered = filtered.filter(item => item.category === archivedFilterCategory);
-		}
-
-		// Apply search filter
-		if (archivedSearch) {
-			const query = archivedSearch.toLowerCase();
-			filtered = filtered.filter(item => {
-				const name = item.name || '';
-				const category = item.category || '';
-				return (
-					name.toLowerCase().includes(query) ||
-					category.toLowerCase().includes(query)
-				);
-			});
-		}
-
-		return filtered;
-	});
-
-	const filteredDeletedItems = $derived.by(() => {
-		let filtered = deletedItems;
-
-		// Apply type filter
-		if (deletedFilterType) {
-			filtered = filtered.filter(item => item.type === deletedFilterType);
-		}
-
-		// Apply days left filter
-		if (deletedFilterDaysLeft) {
-			filtered = filtered.filter(item => {
-				const daysLeft = item.daysRemaining || 0;
-				if (deletedFilterDaysLeft === 'urgent') return daysLeft <= 7;
-				if (deletedFilterDaysLeft === 'moderate') return daysLeft > 7 && daysLeft <= 15;
-				if (deletedFilterDaysLeft === 'safe') return daysLeft > 15;
-				return true;
-			});
-		}
-
-		// Apply search filter
-		if (deletedSearch) {
-			const query = deletedSearch.toLowerCase();
-			filtered = filtered.filter(item => {
-				const data = item.type === 'category' ? item.categoryData : item.itemData;
-				const name = data?.name || '';
-				const category = item.type === 'item' ? (data?.category || '') : '';
-				const deletedBy = item.deletedByName || '';
-				
-				return (
-					name.toLowerCase().includes(query) ||
-					category.toLowerCase().includes(query) ||
-					deletedBy.toLowerCase().includes(query)
-				);
-			});
-		}
-
-		return filtered;
-	});
 </script>
 
 <svelte:head>
@@ -722,9 +470,7 @@
 
 {#if activeTabLoading && (
 	activeTab === 'activity-logs' ? activityLogs.length === 0 :
-	activeTab === 'request-history' ? requestHistory.length === 0 :
-	activeTab === 'archived' ? archivedItems.length === 0 :
-	deletedItems.length === 0
+	requestHistory.length === 0
 )}
 	<HistorySkeletonLoader {activeTab} />
 {:else}
@@ -732,7 +478,7 @@
 	<!-- Header -->
 	<div>
 		<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Inventory History</h1>
-		<p class="mt-1 text-sm text-gray-500">View activity logs, archived items, and recently deleted records</p>
+		<p class="mt-1 text-sm text-gray-500">View activity logs and borrow request history</p>
 	</div>
 
 	<!-- Tabs Navigation -->
@@ -764,36 +510,6 @@
 				{#if requestHistoryTotal > 0}
 					<span class="rounded-full px-1.5 py-0.5 text-[10px] {activeTab === 'request-history' ? 'bg-pink-100 text-pink-600' : 'bg-gray-100 text-gray-600'}">
 						{requestHistoryTotal}
-					</span>
-				{/if}
-			</button>
-			
-			<button
-				onclick={() => switchTab('archived')}
-				class="flex flex-1 items-center justify-center gap-1 border-b-2 px-1 py-3 text-[11px] font-medium whitespace-nowrap transition-colors sm:text-sm {activeTab === 'archived'
-					? 'border-pink-500 text-pink-600'
-					: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
-			>
-				<span class="hidden sm:inline">Archived</span>
-				<span class="sm:hidden">Archived</span>
-				{#if archivedTotal > 0}
-					<span class="rounded-full px-1.5 py-0.5 text-[10px] {activeTab === 'archived' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}">
-						{archivedTotal}
-					</span>
-				{/if}
-			</button>
-			
-			<button
-				onclick={() => switchTab('deleted')}
-				class="flex flex-1 items-center justify-center gap-1 border-b-2 px-1 py-3 text-[11px] font-medium whitespace-nowrap transition-colors sm:text-sm {activeTab === 'deleted'
-					? 'border-pink-500 text-pink-600'
-					: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
-			>
-				<span class="hidden sm:inline">Deleted</span>
-				<span class="sm:hidden">Deleted</span>
-				{#if deletedTotal > 0}
-					<span class="rounded-full px-1.5 py-0.5 text-[10px] {activeTab === 'deleted' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}">
-						{deletedTotal}
 					</span>
 				{/if}
 			</button>
@@ -1188,317 +904,6 @@
 				{/if}
 			</div>
 
-		{:else if activeTab === 'archived'}
-			<!-- Archived Items Tab -->
-			<div>
-				<div class="mb-4 sm:mb-6">
-					<h3 class="text-base font-semibold text-gray-900 sm:text-lg">Archived Items</h3>
-					<p class="mt-1 text-xs text-gray-500 sm:text-sm">Items archived from active inventory. Can be restored anytime.</p>
-				</div>
-
-				<!-- Search Bar and Filter Button -->
-				<div class="mb-4 flex gap-2 sm:mb-6">
-					<div class="relative flex-1">
-						<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 sm:pl-4">
-							<svg class="h-4 w-4 text-gray-400 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-							</svg>
-						</div>
-						<input
-							type="text"
-							placeholder="Search archived items..."
-							bind:value={archivedSearch}
-							onkeyup={(e) => { if (e.key === 'Enter') loadArchivedItems(); }}
-							class="block w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-500 shadow-sm transition-colors hover:border-gray-400 focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-0 sm:py-3 sm:pl-11 sm:pr-4"
-						/>
-					</div>
-					<button
-						onclick={() => showArchivedFilters = !showArchivedFilters}
-						class="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-0 sm:px-4 sm:py-3 {showArchivedFilters ? 'bg-gray-50 border-pink-500 text-pink-600' : ''}"
-					>
-						<svg class="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-						</svg>
-						<span class="hidden sm:inline">Filters</span>
-					</button>
-				</div>
-
-				<!-- Filters Section -->
-				{#if showArchivedFilters}
-					<div class="mb-4 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:mb-6 sm:space-y-4">
-						<!-- Row 1: Condition and Category -->
-						<div class="grid grid-cols-2 gap-3 sm:gap-4">
-							<div>
-								<label for="archived-condition-filter" class="mb-1 block text-xs font-medium text-gray-700 sm:text-sm">Condition</label>
-								<select
-									id="archived-condition-filter"
-									bind:value={archivedFilterCondition}
-									class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors hover:border-gray-400 focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-0 sm:px-4 sm:py-2.5"
-								>
-									<option value="">All Conditions</option>
-									<option value="good">Good</option>
-									<option value="fair">Fair</option>
-									<option value="poor">Poor</option>
-									<option value="damaged">Damaged</option>
-								</select>
-							</div>
-
-							<div>
-								<label for="archived-category-filter" class="mb-1 block text-xs font-medium text-gray-700 sm:text-sm">Category</label>
-								<select
-									id="archived-category-filter"
-									bind:value={archivedFilterCategory}
-									class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors hover:border-gray-400 focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-0 sm:px-4 sm:py-2.5"
-								>
-									<option value="">All Categories</option>
-									<option value="Cookware">Cookware</option>
-									<option value="Utensils">Utensils</option>
-									<option value="Appliances">Appliances</option>
-									<option value="Bakeware">Bakeware</option>
-								</select>
-							</div>
-						</div>
-
-						<!-- Clear Filters Button -->
-						<div class="flex justify-end">
-							<button
-								onclick={() => {
-									archivedFilterCondition = '';
-									archivedFilterCategory = '';
-									loadArchivedItems();
-								}}
-								class="text-xs font-medium text-pink-600 hover:text-pink-700 sm:text-sm"
-							>
-								Clear Filters
-							</button>
-						</div>
-					</div>
-				{/if}
-
-				{#if filteredArchivedItems.length === 0}
-					<div class="py-12 text-center">
-						<svg class="mx-auto h-24 w-24 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-						</svg>
-						<h3 class="mt-4 text-lg font-medium text-gray-900">No archived items</h3>
-						<p class="mt-2 text-sm text-gray-500">
-							{#if archivedFilterCondition || archivedFilterCategory || archivedSearch}
-								No items match your current filters. Try adjusting your search criteria.
-							{:else}
-								Archived items will appear here.
-							{/if}
-						</p>
-					</div>
-				{:else}
-					<div class="overflow-x-auto">
-						<table class="w-full">
-							<thead>
-								<tr class="border-b border-gray-200 bg-gray-50">
-									<th class="w-10 px-3 py-3 text-center text-xs font-semibold text-gray-400">#</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Item Name</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Category</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Last Quantity</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Condition</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Archived Date</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-gray-200">
-								{#each filteredArchivedItems as item, i}
-									<tr class="hover:bg-gray-50 transition-colors">
-										<td class="px-3 py-4 text-center">
-											<span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-500">{(archivedPage - 1) * archivedLimit + i + 1}</span>
-										</td>
-										<td class="px-6 py-4 text-sm font-medium text-gray-900">{item.name}</td>
-										<td class="px-6 py-4 text-sm text-gray-600">{item.category || 'N/A'}</td>
-										<td class="px-6 py-4 text-sm text-gray-600">{item.quantity}</td>
-										<td class="px-6 py-4 text-sm">
-											<span class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-												{item.condition}
-											</span>
-										</td>
-										<td class="px-6 py-4 text-sm text-gray-600">{formatTimestamp(item.updatedAt)}</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-
-					<!-- Pagination -->
-					{#if archivedTotal > archivedLimit}
-						<Pagination
-							currentPage={archivedPage}
-							totalPages={Math.ceil(archivedTotal / archivedLimit)}
-							totalItems={archivedTotal}
-							itemsPerPage={archivedLimit}
-							onPageChange={(p) => { archivedPage = p; loadArchivedItems(); }}
-							class="mt-4"
-						/>
-					{:else if filteredArchivedItems.length < archivedItems.length}
-						<div class="mt-4 border-t border-gray-200 pt-4 text-center text-xs text-gray-700 sm:text-sm">
-							Showing {filteredArchivedItems.length} of {archivedItems.length} items (filtered)
-						</div>
-					{/if}
-				{/if}
-			</div>
-
-		{:else if activeTab === 'deleted'}
-			<!-- Recently Deleted Tab -->
-			<div>
-				<div class="mb-4 sm:mb-6">
-					<h3 class="text-base font-semibold text-gray-900 sm:text-lg">Recently Deleted Items</h3>
-					<p class="mt-1 text-xs text-gray-500 sm:text-sm">Items automatically deleted after 30 days. Restore before expiration.</p>
-				</div>
-
-				<!-- Search Bar and Filter Button -->
-				<div class="mb-4 flex gap-2 sm:mb-6">
-					<div class="relative flex-1">
-						<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 sm:pl-4">
-							<svg class="h-4 w-4 text-gray-400 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-							</svg>
-						</div>
-						<input
-							type="text"
-							placeholder="Search deleted items..."
-							bind:value={deletedSearch}
-							onkeyup={(e) => { if (e.key === 'Enter') loadDeletedItems(); }}
-							class="block w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-500 shadow-sm transition-colors hover:border-gray-400 focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-0 sm:py-3 sm:pl-11 sm:pr-4"
-						/>
-					</div>
-					<button
-						onclick={() => showDeletedFilters = !showDeletedFilters}
-						class="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-0 sm:px-4 sm:py-3 {showDeletedFilters ? 'bg-gray-50 border-pink-500 text-pink-600' : ''}"
-					>
-						<svg class="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-						</svg>
-						<span class="hidden sm:inline">Filters</span>
-					</button>
-				</div>
-
-				<!-- Filters Section -->
-				{#if showDeletedFilters}
-					<div class="mb-4 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:mb-6 sm:space-y-4">
-						<!-- Row 1: Type and Days Left -->
-						<div class="grid grid-cols-2 gap-3 sm:gap-4">
-							<div>
-								<label for="deleted-type-filter" class="mb-1 block text-xs font-medium text-gray-700 sm:text-sm">Type</label>
-								<select
-									id="deleted-type-filter"
-									bind:value={deletedFilterType}
-									class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors hover:border-gray-400 focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-0 sm:px-4 sm:py-2.5"
-								>
-									<option value="">All Types</option>
-									<option value="item">Items</option>
-									<option value="category">Categories</option>
-								</select>
-							</div>
-
-							<div>
-								<label for="deleted-days-filter" class="mb-1 block text-xs font-medium text-gray-700 sm:text-sm">Days Left</label>
-								<select
-									id="deleted-days-filter"
-									bind:value={deletedFilterDaysLeft}
-									class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors hover:border-gray-400 focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-0 sm:px-4 sm:py-2.5"
-								>
-									<option value="">All</option>
-									<option value="urgent">≤ 7 days (Urgent)</option>
-									<option value="moderate">8-15 days</option>
-									<option value="safe">> 15 days</option>
-								</select>
-							</div>
-						</div>
-
-						<!-- Clear Filters Button -->
-						<div class="flex justify-end">
-							<button
-								onclick={() => {
-									deletedFilterType = '';
-									deletedFilterDaysLeft = '';
-									loadDeletedItems();
-								}}
-								class="text-xs font-medium text-pink-600 hover:text-pink-700 sm:text-sm"
-							>
-								Clear Filters
-							</button>
-						</div>
-					</div>
-				{/if}
-
-				{#if filteredDeletedItems.length === 0}
-					<div class="py-12 text-center">
-						<svg class="mx-auto h-24 w-24 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-						</svg>
-						<h3 class="mt-4 text-lg font-medium text-gray-900">No recently deleted items</h3>
-						<p class="mt-2 text-sm text-gray-500">
-							{#if deletedFilterType || deletedFilterDaysLeft || deletedSearch}
-								No items match your current filters. Try adjusting your search criteria.
-							{:else}
-								Deleted items will appear here for 30 days before permanent deletion.
-							{/if}
-						</p>
-					</div>
-				{:else}
-					<div class="overflow-x-auto">
-						<table class="w-full">
-							<thead>
-								<tr class="border-b border-gray-200 bg-gray-50">
-									<th class="w-10 px-3 py-3 text-center text-xs font-semibold text-gray-400">#</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Type</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Name</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Category</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Deleted By</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Deleted Date</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Days Left</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-gray-200">
-								{#each filteredDeletedItems as item, i}
-									{@const data = item.type === 'category' ? item.categoryData : item.itemData}
-									<tr class="hover:bg-gray-50 transition-colors">
-										<td class="px-3 py-4 text-center">
-											<span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-500">{(deletedPage - 1) * deletedLimit + i + 1}</span>
-										</td>
-										<td class="px-6 py-4 text-sm">
-											<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {item.type === 'category' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}">
-												{item.type === 'category' ? 'Category' : 'Item'}
-											</span>
-										</td>
-										<td class="px-6 py-4 text-sm font-medium text-gray-900">{data.name}</td>
-										<td class="px-6 py-4 text-sm text-gray-600">
-											{item.type === 'category' ? 'N/A' : (data.category || 'N/A')}
-										</td>
-										<td class="px-6 py-4 text-sm text-gray-600">{item.deletedByName}</td>
-										<td class="px-6 py-4 text-sm text-gray-600">{formatTimestamp(item.deletedAt)}</td>
-										<td class="px-6 py-4">
-											<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {item.daysRemaining <= 7 ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}">
-												{item.daysRemaining} days
-											</span>
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-
-					<!-- Pagination -->
-					{#if deletedTotal > deletedLimit}
-						<Pagination
-							currentPage={deletedPage}
-							totalPages={Math.ceil(deletedTotal / deletedLimit)}
-							totalItems={deletedTotal}
-							itemsPerPage={deletedLimit}
-							onPageChange={(p) => { deletedPage = p; loadDeletedItems(); }}
-							class="mt-4"
-						/>
-					{:else if filteredDeletedItems.length < deletedItems.length}
-						<div class="mt-4 border-t border-gray-200 pt-4 text-center text-xs text-gray-700 sm:text-sm">
-							Showing {filteredDeletedItems.length} of {deletedItems.length} items (filtered)
-						</div>
-					{/if}
-				{/if}
-			</div>
 		{/if}
 		</div>
 	</div>
