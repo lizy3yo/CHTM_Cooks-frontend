@@ -22,14 +22,8 @@
 		Package,
 		FolderTree,
 		AlertTriangle,
-		Star,
-		Archive,
-		Trash2,
-		Edit,
-		Sliders,
 		Download
 	} from 'lucide-svelte';
-	import ActionMenu from '$lib/components/ui/ActionMenu.svelte';
 	import ExportModal from '$lib/components/custodian/ExportModal.svelte';
 	import ItemBorrowersModal from '$lib/components/ui/ItemBorrowersModal.svelte';
 
@@ -322,51 +316,6 @@
 
 	// Load data on component mount
 	onMount(() => {
-		const hideReadOnlyElements = () => {
-			document.querySelectorAll('button, a, div, span').forEach(el => {
-				const txt = el.textContent?.toLowerCase().trim() ?? '';
-				if (
-					txt === 'add item' ||
-					txt === 'add new item' ||
-					txt === 'import items' ||
-					txt === 'import' ||
-					txt === 'confirm pickup' ||
-					txt === 'confirm return' ||
-					txt === 'inspect & confirm return' ||
-					txt === 'ready for pickup' ||
-					txt === 'resolve obligation' ||
-					txt === 'adjust stock' ||
-					txt === 'mark required' ||
-					txt === 'remove required' ||
-					txt === 'archive' ||
-					txt === 'archive item' ||
-					txt === 'edit details' ||
-					txt === 'edit item' ||
-					txt === 'prepare items' ||
-					txt === 'mark ready' ||
-					txt === 'resolve' ||
-					txt === 'action' ||
-					txt === 'actions' ||
-					txt === 'open actions' ||
-					txt === 'item actions' ||
-					txt === 'bulk import' ||
-					txt === 'bulk import items' ||
-					txt === 'import inventory'
-				) {
-					if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.classList.contains('action-menu') || el.getAttribute('aria-label') === 'Actions' || el.getAttribute('aria-label') === 'Item actions' || el.getAttribute('aria-label') === 'Open actions') {
-						(el as HTMLElement).style.display = 'none';
-					}
-				}
-			});
-			document.querySelectorAll('button[aria-label="Item actions"], button[aria-label="Open actions"], button[aria-label="Actions"], .action-menu-trigger').forEach(el => {
-				(el as HTMLElement).style.display = 'none';
-			});
-		};
-		setTimeout(hideReadOnlyElements, 50);
-		setTimeout(hideReadOnlyElements, 250);
-		const observer = new MutationObserver(hideReadOnlyElements);
-		observer.observe(document.body, { childList: true, subtree: true });
-
 		console.log('[INVENTORY-SSE]  Component mounted, loading data...');
 		console.log('[INVENTORY-SSE]  Has cached data:', hasCachedData);
 
@@ -409,7 +358,6 @@
 		window.addEventListener('keydown', handleKeydown);
 		document.addEventListener('click', handleClickOutside);
 		return () => {
-			observer.disconnect();
 			window.removeEventListener('keydown', handleKeydown);
 			document.removeEventListener('click', handleClickOutside);
 		};
@@ -3612,54 +3560,6 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 								<div class="flex items-center justify-between gap-3">
 									<!-- Left: status alert or empty -->
 									<span></span>
-									<!-- Right: actions -->
-									<ActionMenu
-										align="right"
-										side="top"
-										triggerLabel="Actions"
-										items={[
-											{
-												label: selectedItem?.isrequired ? 'Remove Required' : 'Mark Required',
-												icon: Star,
-												variant: 'purple',
-												action: () => {
-													if (selectedItem) togglerequiredStatus(selectedItem);
-												}
-											},
-											{
-												label: 'Adjust Stock',
-												icon: Sliders,
-												variant: 'default',
-												action: () => {
-													if (selectedItem) openAdjustStock(selectedItem);
-												}
-											},
-											{
-												label: 'Edit Item',
-												icon: Edit,
-												variant: 'default',
-												action: () => {
-													if (selectedItem) editItem(selectedItem);
-												}
-											},
-											{
-												label: 'Archive',
-												icon: Archive,
-												variant: 'warning',
-												action: () => {
-													if (selectedItem) archiveItem(selectedItem);
-												}
-											},
-											{
-												label: 'Delete',
-												icon: Trash2,
-												variant: 'danger',
-												action: () => {
-													if (selectedItem) deleteItem(selectedItem);
-												}
-											}
-										]}
-									/>
 								</div>
 							</div>
 						</div>
@@ -4198,11 +4098,6 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
 											>Stock (Total | Avail | Rel)</th
 										>
-
-										<th
-											class="px-6 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase"
-											>Actions</th
-										>
 									</tr>
 								</thead>
 								<tbody class="divide-y divide-gray-200 bg-white">
@@ -4281,48 +4176,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 											<td class="px-6 py-4 text-sm text-gray-700">{item.toolsOrEquipment || '—'}</td
 											>
 
-											<!-- Actions cell -->
-											<td
-												class="px-4 py-4 text-right whitespace-nowrap"
-												onclick={(e) => e.stopPropagation()}
-											>
-												<ActionMenu
-													align="right"
-													triggerLabel="Item actions"
-													items={[
-														{
-															label: item.isrequired ? 'Remove Required' : 'Mark Required',
-															icon: Star,
-															variant: 'purple',
-															action: () => togglerequiredStatus(item)
-														},
-														{
-															label: 'Adjust Stock',
-															icon: Sliders,
-															variant: 'default',
-															action: () => openAdjustStock(item)
-														},
-														{
-															label: 'Edit Item',
-															icon: Edit,
-															variant: 'default',
-															action: () => editItem(item)
-														},
-														{
-															label: 'Archive',
-															icon: Archive,
-															variant: 'warning',
-															action: () => archiveItem(item)
-														},
-														{
-															label: 'Remove',
-															icon: Trash2,
-															variant: 'danger',
-															action: () => deleteItem(item)
-														}
-													]}
-												/>
-											</td>
+											<!-- (read-only: no actions for auditor) -->
 										</tr>
 									{/each}
 								</tbody>

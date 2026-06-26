@@ -12,8 +12,6 @@
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import HistorySkeletonLoader from '$lib/components/ui/HistorySkeletonLoader.svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
-	import ActionMenu from '$lib/components/ui/ActionMenu.svelte';
-	import { RotateCcw, Trash2 } from 'lucide-svelte';
 
 	type Tab = 'activity-logs' | 'request-history' | 'archived' | 'deleted';
 	
@@ -1302,7 +1300,6 @@
 									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Last Quantity</th>
 									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Condition</th>
 									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Archived Date</th>
-									<th class="px-6 py-3 text-center text-sm font-semibold text-gray-900">Actions</th>
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-gray-200">
@@ -1320,20 +1317,6 @@
 											</span>
 										</td>
 										<td class="px-6 py-4 text-sm text-gray-600">{formatTimestamp(item.updatedAt)}</td>
-										<td class="px-6 py-4 text-center">
-											<div class="flex items-center justify-center gap-2">
-												<button
-													onclick={() => restoreArchivedItem(item)}
-													class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-50 active:scale-95"
-													title="Restore to active inventory"
-												>
-													<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-													</svg>
-													Restore
-												</button>
-											</div>
-										</td>
 									</tr>
 								{/each}
 							</tbody>
@@ -1468,7 +1451,6 @@
 									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Deleted By</th>
 									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Deleted Date</th>
 									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Days Left</th>
-									<th class="px-6 py-3 text-center text-sm font-semibold text-gray-900">Actions</th>
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-gray-200">
@@ -1493,27 +1475,6 @@
 											<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {item.daysRemaining <= 7 ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}">
 												{item.daysRemaining} days
 											</span>
-										</td>
-										<td class="px-6 py-4 text-center" onclick={(e) => e.stopPropagation()}>
-											<ActionMenu
-												align="right"
-												triggerLabel="Item actions"
-												items={[
-													{
-														label: 'Restore',
-														icon: RotateCcw,
-														variant: 'success',
-														action: () => restoreDeletedItem(item)
-													},
-													{
-														label: 'Remove Forever',
-														icon: Trash2,
-														variant: 'danger',
-														divider: true,
-														action: () => permanentlyDelete(item)
-													}
-												]}
-											/>
 										</td>
 									</tr>
 								{/each}

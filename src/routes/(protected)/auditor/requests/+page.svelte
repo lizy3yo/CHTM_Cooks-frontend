@@ -748,51 +748,6 @@
 	}
 
 	onMount(() => {
-		const hideReadOnlyElements = () => {
-			document.querySelectorAll('button, a, div, span').forEach(el => {
-				const txt = el.textContent?.toLowerCase().trim() ?? '';
-				if (
-					txt === 'add item' ||
-					txt === 'add new item' ||
-					txt === 'import items' ||
-					txt === 'import' ||
-					txt === 'confirm pickup' ||
-					txt === 'confirm return' ||
-					txt === 'inspect & confirm return' ||
-					txt === 'ready for pickup' ||
-					txt === 'resolve obligation' ||
-					txt === 'adjust stock' ||
-					txt === 'mark required' ||
-					txt === 'remove required' ||
-					txt === 'archive' ||
-					txt === 'archive item' ||
-					txt === 'edit details' ||
-					txt === 'edit item' ||
-					txt === 'prepare items' ||
-					txt === 'mark ready' ||
-					txt === 'resolve' ||
-					txt === 'action' ||
-					txt === 'actions' ||
-					txt === 'open actions' ||
-					txt === 'item actions' ||
-					txt === 'bulk import' ||
-					txt === 'bulk import items' ||
-					txt === 'import inventory'
-				) {
-					if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.classList.contains('action-menu') || el.getAttribute('aria-label') === 'Actions' || el.getAttribute('aria-label') === 'Item actions' || el.getAttribute('aria-label') === 'Open actions') {
-						(el as HTMLElement).style.display = 'none';
-					}
-				}
-			});
-			document.querySelectorAll('button[aria-label="Item actions"], button[aria-label="Open actions"], button[aria-label="Actions"], .action-menu-trigger').forEach(el => {
-				(el as HTMLElement).style.display = 'none';
-			});
-		};
-		setTimeout(hideReadOnlyElements, 50);
-		setTimeout(hideReadOnlyElements, 250);
-		const observer = new MutationObserver(hideReadOnlyElements);
-		observer.observe(document.body, { childList: true, subtree: true });
-
 		// Parse search parameters
 		const tabParam = $page.url.searchParams.get('tab');
 		if (tabParam && ['pending', 'ready', 'active', 'unresolved', 'history'].includes(tabParam)) {
@@ -844,7 +799,6 @@
 		document.addEventListener('visibilitychange', onVisible);
 
 		return () => {
-			observer.disconnect();
 			unsubscribeSSE();
 			if (refreshTimer !== null) clearTimeout(refreshTimer);
 			clearInterval(pollInterval);
@@ -1592,69 +1546,8 @@
 
 											<!-- Card Footer -->
 											<div
-												class="flex justify-end gap-2 border-t border-gray-100 bg-gray-50/60 px-4 py-3 sm:px-5"
+												class="border-t border-gray-100 bg-gray-50/60 px-4 py-3 sm:px-5"
 											>
-												<div class="relative flex flex-wrap items-center gap-2">
-													{#if request.status === 'unresolved'}
-														<button
-															onclick={() => openResolveModal(request.rawId)}
-															disabled={resolvingRequestId === request.rawId}
-															class="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
-														>
-															{#if resolvingRequestId === request.rawId}
-																<svg
-																	class="h-4 w-4 animate-spin text-white"
-																	fill="none"
-																	viewBox="0 0 24 24"
-																>
-																	<circle
-																		class="opacity-25"
-																		cx="12"
-																		cy="12"
-																		r="10"
-																		stroke="currentColor"
-																		stroke-width="4"
-																	></circle>
-																	<path
-																		class="opacity-75"
-																		fill="currentColor"
-																		d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-																	></path>
-																</svg>
-																Loading...
-															{:else}
-																Resolve Obligation
-															{/if}
-														</button>
-													{/if}
-													{#if request.status === 'pending'}
-														<button
-															onclick={() => markReady(request.rawId)}
-															class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-green-700"
-														>
-															Ready for Pickup
-														</button>
-													{/if}
-													{#if request.status === 'ready'}
-														<button
-															onclick={() => confirmPickup(request.rawId)}
-															class="rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
-														>
-															Confirm Pickup
-														</button>
-													{/if}
-													{#if request.status === 'active' && ['borrowed', 'pending_return'].includes(request.rawStatus)}
-														<button
-															onclick={() => {
-																closeActionMenu();
-																confirmReturn(request.rawId);
-															}}
-															class="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
-														>
-															Confirm Return
-														</button>
-													{/if}
-												</div>
 											</div>
 										</div>
 									{/each}
@@ -1720,21 +1613,20 @@
 							{#if paginatedRequests.length > 0}
 								<div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
 									<div
-										class="hidden border-b border-gray-200 bg-gray-50 px-4 py-3 text-xs font-semibold tracking-wide text-gray-500 uppercase md:grid md:grid-cols-[32px_0.6fr_1fr_2.4fr_0.8fr_120px] md:items-center md:gap-4"
+										class="hidden border-b border-gray-200 bg-gray-50 px-4 py-3 text-xs font-semibold tracking-wide text-gray-500 uppercase md:grid md:grid-cols-[32px_0.6fr_1fr_2.4fr_0.8fr] md:items-center md:gap-4"
 									>
 										<span class="text-center text-gray-400">#</span>
 										<span>Request</span>
 										<span>Requested By</span>
 										<span>Items</span>
 										<span>Status</span>
-										<span class="text-right">Actions</span>
 									</div>
 									<div class="divide-y divide-gray-100">
 										{#each paginatedRequests as request, i}
 											<!-- svelte-ignore a11y_click_events_have_key_events -->
 											<!-- svelte-ignore a11y_no_static_element_interactions -->
 											<div
-												class="grid cursor-pointer gap-3 p-4 transition-colors md:grid-cols-[32px_0.6fr_1fr_2.4fr_0.8fr_120px] md:items-start md:gap-4 {highlightedRequestId ===
+												class="grid cursor-pointer gap-3 p-4 transition-colors md:grid-cols-[32px_0.6fr_1fr_2.4fr_0.8fr] md:items-start md:gap-4 {highlightedRequestId ===
 												request.rawId
 													? 'bg-pink-50/50 ring-1 ring-pink-300 ring-inset'
 													: 'hover:bg-gray-50'}"
@@ -1847,42 +1739,6 @@
 													</p>
 												</div>
 
-												<div class="relative flex flex-wrap items-center gap-2 md:justify-end">
-													{#if request.status === 'pending'}
-														<button
-															onclick={(e) => {
-																e.stopPropagation();
-																markReady(request.rawId);
-															}}
-															class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-green-700"
-														>
-															Ready for Pickup
-														</button>
-													{/if}
-													{#if request.status === 'ready'}
-														<button
-															onclick={(e) => {
-																e.stopPropagation();
-																confirmPickup(request.rawId);
-															}}
-															class="rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
-														>
-															Confirm Pickup
-														</button>
-													{/if}
-													{#if request.status === 'active' && ['borrowed', 'pending_return'].includes(request.rawStatus)}
-														<button
-															onclick={(e) => {
-																e.stopPropagation();
-																closeActionMenu();
-																confirmReturn(request.rawId);
-															}}
-															class="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
-														>
-															Confirm Return
-														</button>
-													{/if}
-												</div>
 											</div>
 										{/each}
 									</div>
@@ -2812,72 +2668,6 @@
 				<div
 					class="sticky bottom-0 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur-sm sm:px-8 sm:py-5"
 				>
-					<div
-						class="flex flex-col items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3"
-					>
-						{#if selectedRequest.status === 'pending'}
-							<button
-								onclick={() => {
-									const rawId = selectedRequest.rawId;
-									closeDetailModal();
-									markReady(rawId);
-								}}
-								class="rounded-xl bg-linear-to-r from-green-600 to-green-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:from-green-700 hover:to-green-800 active:scale-[0.98] sm:px-6 sm:py-3"
-							>
-								Ready for Pickup
-							</button>
-						{/if}
-						{#if selectedRequest.status === 'ready'}
-							<button
-								onclick={() => {
-									const rawId = selectedRequest.rawId;
-									closeDetailModal();
-									confirmPickup(rawId);
-								}}
-								class="rounded-xl bg-linear-to-r from-pink-600 to-pink-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:from-pink-700 hover:to-pink-800 active:scale-[0.98] sm:px-6 sm:py-3"
-							>
-								Confirm Pickup
-							</button>
-						{/if}
-						{#if selectedRequest.status === 'active' && ['borrowed', 'pending_return'].includes(selectedRequest.rawStatus)}
-							<button
-								onclick={() => {
-									confirmReturn(selectedRequest.rawId);
-								}}
-								class="rounded-xl bg-linear-to-r from-orange-600 to-orange-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:from-orange-700 hover:to-orange-800 active:scale-[0.98] sm:px-6 sm:py-3"
-							>
-								Inspect & Confirm Return
-							</button>
-						{/if}
-						{#if selectedRequest.status === 'unresolved'}
-							<button
-								onclick={() => openResolveModal(selectedRequest.rawId)}
-								disabled={resolvingRequestId === selectedRequest.rawId}
-								class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-linear-to-r from-amber-600 to-amber-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:from-amber-700 hover:to-amber-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:px-6 sm:py-3"
-							>
-								{#if resolvingRequestId === selectedRequest.rawId}
-									<svg class="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
-										<circle
-											class="opacity-25"
-											cx="12"
-											cy="12"
-											r="10"
-											stroke="currentColor"
-											stroke-width="4"
-										></circle>
-										<path
-											class="opacity-75"
-											fill="currentColor"
-											d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-										></path>
-									</svg>
-									Loading...
-								{:else}
-									Resolve Obligation
-								{/if}
-							</button>
-						{/if}
-					</div>
 				</div>
 			</div>
 		</div>
