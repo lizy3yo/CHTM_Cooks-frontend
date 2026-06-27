@@ -236,10 +236,10 @@
 				goto('/instructor/dashboard');
 			} else if (response.user.role === 'custodian') {
 				goto('/custodian/dashboard');
-			} else if (response.user.role === 'superadmin' || (response.user.role as string) === 'admin') {
+			} else if (response.user.role === 'superadmin') {
 				goto('/superadmin/dashboard');
-			} else if (response.user.role === 'supervisor') {
-				goto('/supervisor/dashboard');
+			} else if (response.user.role === 'admin') {
+				goto('/admin/dashboard');
 			} else {
 				goto('/admin/dashboard');
 			}

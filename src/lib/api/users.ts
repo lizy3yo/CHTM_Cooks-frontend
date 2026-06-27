@@ -8,7 +8,7 @@ import { getApiErrorMessage } from './session';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type UserRole = 'student' | 'custodian' | 'instructor' | 'superadmin' | 'supervisor';
+export type UserRole = 'student' | 'custodian' | 'instructor' | 'superadmin' | 'admin';
 export type UserStatus = 'active' | 'inactive';
 
 export interface UserResponse {

@@ -1,6 +1,6 @@
 // Re-export types from server and add frontend-specific types
 
-export type UserRole = 'student' | 'custodian' | 'instructor' | 'superadmin' | 'supervisor';
+export type UserRole = 'student' | 'custodian' | 'instructor' | 'superadmin' | 'admin';
 
 export interface UserResponse {
 	id: string;

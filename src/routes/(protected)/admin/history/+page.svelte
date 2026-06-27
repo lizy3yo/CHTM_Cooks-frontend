@@ -296,11 +296,11 @@
 		}
 	}
 
-	// Load Archived Items — removed (supervisor read-only: no Archived or Deleted tabs)
+	// Load Archived Items — removed (admin read-only: no Archived or Deleted tabs)
 
-	// Restore archived item — removed (supervisor read-only)
-	// Restore deleted item — removed (supervisor read-only)
-	// Permanently delete item — removed (supervisor read-only)
+	// Restore archived item — removed (admin read-only)
+	// Restore deleted item — removed (admin read-only)
+	// Permanently delete item — removed (admin read-only)
 
 	// Format timestamp
 	function formatTimestamp(date: Date | string): string {

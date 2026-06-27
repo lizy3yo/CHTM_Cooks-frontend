@@ -11,8 +11,8 @@
 	import SignOutModal from '$lib/components/ui/SignOutModal.svelte';
 	import logo from '$lib/assets/CHTM_LOGO.png';
 
-	// Only render on supervisor routes
-	const isSupervisorRoute = $derived($page.url.pathname.startsWith('/supervisor'));
+	// Only render on admin routes
+	const isAdminRoute = $derived($page.url.pathname.startsWith('/admin'));
 
 	let profileOpen = $state(false);
 	let notifOpen   = $state(false);
@@ -122,7 +122,7 @@
 
 <svelte:window onclick={handleWindowClick} onkeydown={(e) => e.key === 'Escape' && (profileOpen = false, notifOpen = false)} />
 
-{#if isSupervisorRoute}
+{#if isAdminRoute}
 <header
 	class="fixed inset-x-0 top-0 z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm transition-all duration-300 sm:px-6
 		{$sidebarCollapsed ? 'lg:pl-24' : 'lg:pl-76'}"
@@ -146,7 +146,7 @@
 				<img src={logo} alt="CHTM Logo" class="h-5 w-5 object-contain" />
 			</div>
 			<div class="leading-tight">
-				<p class="text-xs font-bold text-gray-900">Supervisor</p>
+				<p class="text-xs font-bold text-gray-900">Admin</p>
 				<p class="text-[10px] text-gray-400">Monitoring</p>
 			</div>
 		</div>
@@ -207,7 +207,7 @@
 				>
 					<div class="flex items-center justify-between border-b border-gray-100 px-4 py-3">
 						<p class="text-sm font-semibold text-gray-900">Notifications</p>
-						<a href="/supervisor/notifications" onclick={() => notifOpen = false} class="text-xs font-medium text-pink-600 hover:text-pink-700">View all</a>
+						<a href="/admin/notifications" onclick={() => notifOpen = false} class="text-xs font-medium text-pink-600 hover:text-pink-700">View all</a>
 					</div>
 					{#if loadingNotifications}
 						<div class="py-8 text-center text-sm text-gray-500">Loading notifications...</div>
@@ -284,13 +284,13 @@
 							<p class="truncate text-sm font-semibold text-gray-900">{$user.firstName} {$user.lastName}</p>
 							<p class="truncate text-xs text-gray-500">{$user.email}</p>
 						</div>
-						<a href="/supervisor/account/profile" onclick={() => profileOpen = false} role="menuitem" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 transition-colors hover:bg-pink-50 hover:text-pink-600">
+						<a href="/admin/account/profile" onclick={() => profileOpen = false} role="menuitem" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 transition-colors hover:bg-pink-50 hover:text-pink-600">
 							<User size={15} class="text-gray-400" /> Profile
 						</a>
-						<a href="/supervisor/account/settings" onclick={() => profileOpen = false} role="menuitem" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 transition-colors hover:bg-pink-50 hover:text-pink-600">
+						<a href="/admin/account/settings" onclick={() => profileOpen = false} role="menuitem" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 transition-colors hover:bg-pink-50 hover:text-pink-600">
 							<Settings size={15} class="text-gray-400" /> Settings
 						</a>
-						<a href="/supervisor/history" onclick={() => profileOpen = false} role="menuitem" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 transition-colors hover:bg-pink-50 hover:text-pink-600">
+						<a href="/admin/history" onclick={() => profileOpen = false} role="menuitem" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 transition-colors hover:bg-pink-50 hover:text-pink-600">
 							<History size={15} class="text-gray-400" /> History
 						</a>
 

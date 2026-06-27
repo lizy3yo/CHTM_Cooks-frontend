@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import SupervisorSidebar from '$lib/components/supervisor/SupervisorSidebar.svelte';
-	import SupervisorTopNav from '$lib/components/supervisor/SupervisorTopNav.svelte';
-	import SupervisorBottomNav from '$lib/components/supervisor/SupervisorBottomNav.svelte';
+	import AdminSidebar from '$lib/components/admin/AdminSidebar.svelte';
+	import AdminTopNav from '$lib/components/admin/AdminTopNav.svelte';
+	import AdminBottomNav from '$lib/components/admin/AdminBottomNav.svelte';
 	import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
 	import ConfirmDialogContainer from '$lib/components/ui/ConfirmDialogContainer.svelte';
 	import { sidebarCollapsed } from '$lib/stores/superadmin';
@@ -20,17 +20,17 @@
 		void authStore.verifySession();
 	});
 
-	// Redirect back if user is not a supervisor
+	// Redirect back if user is not an admin
 	$effect(() => {
-		if (!$isLoading && $user && $user.role !== 'supervisor') {
+		if (!$isLoading && $user && $user.role !== 'admin') {
 			goto('/');
 		}
 	});
 </script>
 
-{#if $user && $user.role === 'supervisor'}
+{#if $user && $user.role === 'admin'}
 <div class="flex min-h-screen bg-white">
-	<SupervisorSidebar />
+	<AdminSidebar />
 	
 	<!-- Main Content -->
 	<main class="min-w-0 flex-1 overflow-x-hidden bg-white transition-all duration-300 {$sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-72'}">
@@ -40,8 +40,8 @@
 	</main>
 </div>
 
-<SupervisorTopNav />
-<SupervisorBottomNav />
+<AdminTopNav />
+<AdminBottomNav />
 <ToastContainer />
 <ConfirmDialogContainer />
 {/if}

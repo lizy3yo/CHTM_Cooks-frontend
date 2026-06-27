@@ -290,7 +290,7 @@ const damageRateDisplay = $derived.by(() => {
 			params.set('filter', 'overdue');
 		}
 
-		return `/supervisor/requests?${params.toString()}`;
+		return `/admin/requests?${params.toString()}`;
 	}
 
 	async function confirmPickup(rawId: string): Promise<void> {
@@ -324,7 +324,7 @@ const damageRateDisplay = $derived.by(() => {
 	});
 </script>
 
-<svelte:head><title>Dashboard - Supervisor</title></svelte:head>
+<svelte:head><title>Dashboard - Admin</title></svelte:head>
 
 <div class="space-y-6">
 
@@ -350,7 +350,7 @@ const damageRateDisplay = $derived.by(() => {
 
 			<button
 				type="button"
-				onclick={() => goto('/supervisor/requests?tab=active')}
+				onclick={() => goto('/admin/requests?tab=active')}
 				class="rounded-xl border border-violet-200 bg-violet-50 p-4 shadow-sm hover:shadow-md hover:border-violet-300/60 hover:bg-violet-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-violet-500/20"
 			>
 				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-violet-700">
@@ -362,7 +362,7 @@ const damageRateDisplay = $derived.by(() => {
 
 			<button
 				type="button"
-				onclick={() => goto('/supervisor/requests?tab=pending')}
+				onclick={() => goto('/admin/requests?tab=pending')}
 				class="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm hover:shadow-md hover:border-amber-300/60 hover:bg-amber-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-amber-500/20"
 			>
 				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700">
@@ -374,7 +374,7 @@ const damageRateDisplay = $derived.by(() => {
 
 			<button
 				type="button"
-				onclick={() => goto('/supervisor/requests?tab=active&filter=overdue')}
+				onclick={() => goto('/admin/requests?tab=active&filter=overdue')}
 				class="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm hover:shadow-md hover:border-red-300/60 hover:bg-red-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-red-500/20"
 			>
 				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-red-800">
@@ -411,7 +411,7 @@ const damageRateDisplay = $derived.by(() => {
 						{/if}
 					{/if}
 				</div>
-				<a href="/supervisor/requests" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
+				<a href="/admin/requests" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
 					View all <ArrowRight size={13} />
 				</a>
 			</div>
@@ -591,7 +591,7 @@ const damageRateDisplay = $derived.by(() => {
 						<ClipboardList size={16} class="text-pink-500" />
 						<h2 class="text-sm font-semibold text-gray-900">Request Breakdown</h2>
 					</div>
-					<a href="/supervisor/requests" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
+					<a href="/admin/requests" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
 						Manage <ArrowRight size={13} />
 					</a>
 				</div>
@@ -634,7 +634,7 @@ const damageRateDisplay = $derived.by(() => {
 						<Package size={16} class="text-violet-500" />
 						<h2 class="text-sm font-semibold text-gray-900">Inventory Variance</h2>
 					</div>
-					<a href="/supervisor/analytics?tab=inventory" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
+					<a href="/admin/analytics?tab=inventory" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
 						Details <ArrowRight size={13} />
 					</a>
 				</div>
@@ -678,7 +678,7 @@ const damageRateDisplay = $derived.by(() => {
 						<Users size={16} class="text-rose-500" />
 						<h2 class="text-sm font-semibold text-gray-900">Student Risk</h2>
 					</div>
-					<a href="/supervisor/analytics?tab=students" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
+					<a href="/admin/analytics?tab=students" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
 						Full report <ArrowRight size={13} />
 					</a>
 				</div>
@@ -752,7 +752,7 @@ const damageRateDisplay = $derived.by(() => {
 						<TrendingUp size={16} class="text-pink-500" />
 						<h2 class="text-sm font-semibold text-gray-900">Most Borrowed This Month</h2>
 					</div>
-					<a href="/supervisor/analytics" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
+					<a href="/admin/analytics" class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700">
 						Full report <ArrowRight size={13} />
 					</a>
 				</div>

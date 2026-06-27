@@ -60,7 +60,7 @@
 		students: 0,
 		instructors: 0,
 		custodians: 0,
-		supervisors: 0
+		admins: 0
 	});
 
 	// ─── Create user form ────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@
 			const urlParams = new URLSearchParams(window.location.search);
 			const roleParam = urlParams.get('role');
 			const statusParam = urlParams.get('status');
-			if (roleParam === 'student' || roleParam === 'instructor' || roleParam === 'custodian' || roleParam === 'superadmin' || roleParam === 'supervisor') {
+			if (roleParam === 'student' || roleParam === 'instructor' || roleParam === 'custodian' || roleParam === 'superadmin' || roleParam === 'admin') {
 				selectedRole = roleParam;
 			}
 			if (statusParam === 'active' || statusParam === 'inactive' || statusParam === 'new-this-month') {
@@ -270,12 +270,12 @@
 
 	async function loadStats(forceRefresh = true) {
 		try {
-			const [all, students, instructors, custodians, supervisors] = await Promise.all([
+			const [all, students, instructors, custodians, admins] = await Promise.all([
 				usersAPI.getAll({ limit: 1, forceRefresh }),
 				usersAPI.getAll({ role: 'student', limit: 1, forceRefresh }),
 				usersAPI.getAll({ role: 'instructor', limit: 1, forceRefresh }),
 				usersAPI.getAll({ role: 'custodian', limit: 1, forceRefresh }),
-				usersAPI.getAll({ role: 'supervisor', limit: 1, forceRefresh })
+				usersAPI.getAll({ role: 'admin', limit: 1, forceRefresh })
 			]);
 			const allRes = await usersAPI.getAll({ limit: 1000, forceRefresh });
 			const now = new Date();
@@ -288,7 +288,7 @@
 				students: students.pagination.total,
 				instructors: instructors.pagination.total,
 				custodians: custodians.pagination.total,
-				supervisors: supervisors.pagination.total
+				admins: admins.pagination.total
 			};
 		} catch {
 			/* silent */
@@ -578,7 +578,7 @@
 			instructor: 'bg-violet-100 text-violet-800 border border-violet-200',
 			custodian: 'bg-pink-100 text-pink-800 border border-pink-200',
 			superadmin: 'bg-gray-900 text-white border border-gray-700',
-			supervisor: 'bg-teal-100 text-teal-800 border border-teal-200'
+			admin: 'bg-teal-100 text-teal-800 border border-teal-200'
 		};
 		return map[role] || 'bg-gray-100 text-gray-700';
 	}
@@ -599,7 +599,7 @@
 			instructor: 'from-violet-500 to-violet-700',
 			custodian: 'from-pink-500 to-rose-600',
 			superadmin: 'from-gray-700 to-gray-900',
-			supervisor: 'from-teal-500 to-teal-700'
+			admin: 'from-teal-500 to-teal-700'
 		};
 		return map[role] || 'from-pink-500 to-rose-600';
 	}
@@ -733,7 +733,7 @@
 						<option value="instructor">Instructor</option>
 						<option value="custodian">Custodian</option>
 						<option value="superadmin">Superadmin</option>
-						<option value="supervisor">Supervisor</option>
+						<option value="admin">Admin</option>
 					</select>
 					{#if createErrors.role}<p class={errorCls}>{createErrors.role}</p>{/if}
 				</div>
@@ -1063,7 +1063,7 @@
 							<option value="instructor">Instructor</option>
 							<option value="custodian">Custodian</option>
 							<option value="superadmin">Superadmin</option>
-							<option value="supervisor">Supervisor</option>
+							<option value="admin">Admin</option>
 						</select>
 					</div>
 					{#if editForm.role === 'student'}
@@ -1315,13 +1315,13 @@
 					<button
 						type="button"
 						onclick={() => {
-							selectedRole = selectedRole === 'supervisor' ? 'all' : 'supervisor';
+							selectedRole = selectedRole === 'admin' ? 'all' : 'admin';
 							onFilterChange();
 						}}
 						class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all duration-200 cursor-pointer active:scale-98 focus:outline-none focus:ring-2 focus:ring-teal-500/20
-						{selectedRole === 'supervisor' ? 'border-teal-300 bg-teal-100 text-teal-800 shadow-xs' : 'border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100/50'}"
+						{selectedRole === 'admin' ? 'border-teal-300 bg-teal-100 text-teal-800 shadow-xs' : 'border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100/50'}"
 					>
-						Supervisors <span class="font-bold">{stats.supervisors}</span>
+						Admins <span class="font-bold">{stats.admins}</span>
 					</button>
 				</div>
 			{/if}
@@ -1355,7 +1355,7 @@
 						<option value="instructor">Instructor</option>
 						<option value="custodian">Custodian</option>
 						<option value="superadmin">Superadmin</option>
-						<option value="supervisor">Supervisor</option>
+						<option value="admin">Admin</option>
 					</select>
 					{#if activeTab === 'all'}
 						<select

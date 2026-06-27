@@ -122,8 +122,7 @@
 					instructor: '/instructor/dashboard',
 					custodian: '/custodian/dashboard',
 					superadmin: '/superadmin/dashboard',
-					admin: '/superadmin/dashboard',
-					supervisor: '/supervisor/dashboard'
+					admin: '/admin/dashboard'
 				};
 				goto(routes[$user.role] || '/auth/login', { replaceState: true });
 			}

@@ -4178,7 +4178,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 											<td class="px-6 py-4 text-sm text-gray-700">{item.toolsOrEquipment || '—'}</td
 											>
 
-											<!-- (read-only: no actions for supervisor) -->
+											<!-- (read-only: no actions for admin) -->
 										</tr>
 									{/each}
 								</tbody>

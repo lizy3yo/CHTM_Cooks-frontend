@@ -1091,7 +1091,7 @@
 </script>
 
 <svelte:head>
-	<title>Requests & Borrowed Items - Supervisor Portal</title>
+	<title>Requests & Borrowed Items - Admin Portal</title>
 </svelte:head>
 
 	<div class="space-y-6">
