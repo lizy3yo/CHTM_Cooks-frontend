@@ -123,7 +123,7 @@
 					custodian: '/custodian/dashboard',
 					superadmin: '/superadmin/dashboard',
 					admin: '/superadmin/dashboard',
-					auditor: '/auditor/dashboard'
+					supervisor: '/supervisor/dashboard'
 				};
 				goto(routes[$user.role] || '/auth/login', { replaceState: true });
 			}

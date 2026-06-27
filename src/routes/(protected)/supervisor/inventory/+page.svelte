@@ -22,7 +22,9 @@
 		Package,
 		FolderTree,
 		AlertTriangle,
-		Download
+		Download,
+		Star,
+		Sliders
 	} from 'lucide-svelte';
 	import ExportModal from '$lib/components/custodian/ExportModal.svelte';
 	import ItemBorrowersModal from '$lib/components/ui/ItemBorrowersModal.svelte';
@@ -4176,7 +4178,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 											<td class="px-6 py-4 text-sm text-gray-700">{item.toolsOrEquipment || '—'}</td
 											>
 
-											<!-- (read-only: no actions for auditor) -->
+											<!-- (read-only: no actions for supervisor) -->
 										</tr>
 									{/each}
 								</tbody>

@@ -238,8 +238,8 @@
 				goto('/custodian/dashboard');
 			} else if (response.user.role === 'superadmin' || (response.user.role as string) === 'admin') {
 				goto('/superadmin/dashboard');
-			} else if (response.user.role === 'auditor') {
-				goto('/auditor/dashboard');
+			} else if (response.user.role === 'supervisor') {
+				goto('/supervisor/dashboard');
 			} else {
 				goto('/admin/dashboard');
 			}
