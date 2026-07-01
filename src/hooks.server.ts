@@ -103,11 +103,16 @@ const laravelProxyHandler: Handle = async ({ event, resolve }) => {
 					console.error('Failed to parse and encrypt request body:', e);
 				}
 			} else if (contentType.includes('multipart/form-data')) {
-				// Forward files and multipart data directly
-				requestOptions.body = event.request.body;
-				// Node.js fetch requires the 'duplex' option to be set when body is a stream.
-				// We must also retain the Content-Type header containing the boundary parameters.
-				Object.assign(requestOptions, { duplex: 'half' });
+				try {
+					const formData = await event.request.formData();
+					requestOptions.body = formData;
+					// Remove the content-type header so fetch will set its own boundary
+					headers.delete('content-type');
+				} catch (e) {
+					console.error('Failed to parse multipart/form-data request body:', e);
+					requestOptions.body = event.request.body;
+					Object.assign(requestOptions, { duplex: 'half' });
+				}
 			} else {
 				// Fallback for other request bodies
 				try {
