@@ -2067,14 +2067,27 @@
 		return [...xlsxRowSet].sort((a, b) => a - b);
 	}
 
+	/**
+	 * Extracts embedded images from an Excel worksheet using ExcelJS.
+	 *
+	 * Returns an object with two maps:
+	 *  - `byRow`     – Map<1-based Excel row number, File>  (anchor-position fallback)
+	 *  - `byNameKey` – Map<normalised "name|spec" composite key, File>  (primary match)
+	 *
+	 * The name key is built by reading the Name/Specification cells in the image's anchor
+	 * row so the import parser can match images by item identity instead of relying on
+	 * pixel-precise floating-image anchor positions (which ExcelJS frequently reports
+	 * off by 1-2 rows for tall or merged cells).
+	 */
 	async function extractEmbeddedImagesFromExcel(
 		data: ArrayBuffer,
-		sheetName: string
-	): Promise<Map<number, File>> {
-		// Returns Map<1-based Excel row number, File>
-		// Keyed by the actual row number, NOT a CSV line index.
-		// The caller is responsible for correlating to CSV line indices.
-		const imagesByRow = new Map<number, File>();
+		sheetName: string,
+		xlsxWorksheet?: any,
+		nameColIndex?: number,
+		specColIndex?: number
+	): Promise<{ byRow: Map<number, File>; byNameKey: Map<string, File> }> {
+		const byRow = new Map<number, File>();
+		const byNameKey = new Map<string, File>();
 
 		try {
 			const ExcelJS = await import('exceljs');
@@ -2083,13 +2096,32 @@
 
 			const worksheet = workbook.getWorksheet(sheetName) || workbook.worksheets[0];
 			if (!worksheet || typeof (worksheet as any).getImages !== 'function') {
-				return imagesByRow;
+				return { byRow, byNameKey };
 			}
 
 			const images = (worksheet as any).getImages() as any[];
 			if (!images || images.length === 0) {
-				return imagesByRow;
+				return { byRow, byNameKey };
 			}
+
+			// Read a cell value from the XLSX worksheet by 1-based row and 0-based col index.
+			const readXlsxCell = (rowNumber: number, colIndex: number): string => {
+				if (!xlsxWorksheet || typeof colIndex !== 'number') return '';
+				try {
+					// Encode column index (0-based) to Excel column letter(s): 0→A, 25→Z, 26→AA …
+					let col = colIndex;
+					let colStr = '';
+					do {
+						colStr = String.fromCharCode(65 + (col % 26)) + colStr;
+						col = Math.floor(col / 26) - 1;
+					} while (col >= 0);
+					const cellAddr = `${colStr}${rowNumber}`;
+					const cell = xlsxWorksheet[cellAddr];
+					return cell?.v != null ? String(cell.v).trim() : '';
+				} catch {
+					return '';
+				}
+			};
 
 			for (const img of images) {
 				const tl = img?.range?.tl;
@@ -2134,15 +2166,44 @@
 				// Convert to proper ArrayBuffer for File constructor
 				const arrayBuffer =
 					bytes.buffer instanceof ArrayBuffer ? bytes.buffer : bytes.slice().buffer;
-				const embeddedFile = new File([arrayBuffer], `excel-row-${excelRowNumber}.${ext}`, {
-					type: mime
-				});
-				imagesByRow.set(excelRowNumber, embeddedFile);
+
+				// Try to read the item name from the anchor row (and ±1 neighbours) to build a
+				// reliable composite key — handles minor off-by-one in ExcelJS anchor reporting.
+				let resolvedNameKey = '';
+				if (typeof nameColIndex === 'number' && nameColIndex >= 0) {
+					for (const candidateRow of [excelRowNumber, excelRowNumber - 1, excelRowNumber + 1]) {
+						if (candidateRow < 1) continue;
+						const cellName = readXlsxCell(candidateRow, nameColIndex);
+						if (cellName) {
+							const cellSpec =
+								typeof specColIndex === 'number' && specColIndex >= 0
+									? readXlsxCell(candidateRow, specColIndex)
+									: '';
+							resolvedNameKey = getItemCompositeKey(cellName, cellSpec);
+							break;
+						}
+					}
+				}
+
+				const embeddedFile = new File(
+					[arrayBuffer],
+					`excel-row-${excelRowNumber}.${ext}`,
+					{ type: mime }
+				);
+
+				// Primary match: by name+spec composite key (most reliable)
+				if (resolvedNameKey && !byNameKey.has(resolvedNameKey)) {
+					byNameKey.set(resolvedNameKey, embeddedFile);
+				}
+				// Fallback match: by Excel row number
+				if (!byRow.has(excelRowNumber)) {
+					byRow.set(excelRowNumber, embeddedFile);
+				}
 			}
 		} catch (err) {
 			console.warn('Could not extract embedded images from Excel:', err);
 		}
-		return imagesByRow;
+		return { byRow, byNameKey };
 	}
 
 	async function parseImportFile(file: File, sessionId: number) {
@@ -2171,19 +2232,65 @@
 					if (!worksheet || !worksheet['!ref']) continue;
 
 					const xlsxNonEmptyRows = getNonEmptyExcelRows(worksheet, XLSX);
-					// Extract images keyed by their 1-based Excel row number.
-					// Later, parseCSVText resolves each CSV line back to this row number.
-					const imagesByExcelRow = await extractEmbeddedImagesFromExcel(data, sheetName);
 
-					// Convert to CSV and parse
+					// Robust header detection: scan up to 30 lines (same algorithm as
+					// parseCSVText) so spreadsheets with title rows, school headers, or
+					// blank rows above the real column headers are handled correctly.
+					// The column index found here maps 1-to-1 to the XLSX column letter,
+					// so extractEmbeddedImagesFromExcel can read the Name cell in each
+					// image's anchor row to build reliable name+spec composite keys.
 					const csvText = XLSX.utils.sheet_to_csv(worksheet, { blankrows: false });
+					const csvLines = csvText.split(/\r?\n/).map((l: string) => l.replace(/^\uFEFF/, ''));
+					const sep = csvText.includes(';') && !csvText.includes(',') ? ';' : ',';
+
+					const normalH = (v: string) => v.trim().toLowerCase().replace(/\s+/g, ' ');
+					const isNameH = (v: string) => {
+						const n = normalH(v);
+						return n === 'name' || n === 'item name' || n === 'item' || n === 'itemname';
+					};
+					const isKnownH = (v: string) => {
+						const n = normalH(v);
+						return (
+							isNameH(n) ||
+							n === 'category' || n === 'specification' || n === 'spec' ||
+							n === 'picture' || n === 'image' || n === 'photo' ||
+							n === 'quantity' || n === 'qty' || n === 'count' ||
+							n === 'current count' || n === 'donations' || n === 'eom count' ||
+							n === 'status' || n === 'location' || n === 'storage location' ||
+							n === 'remarks' || n === 'tools or equipment' || n === 'tools'
+						);
+					};
+
+					let nameColIdx = -1;
+					let specColIdx = -1;
+
+					for (let li = 0; li < Math.min(30, csvLines.length); li++) {
+						const cols = csvLines[li].split(sep).map(normalH);
+						if (cols.some(isNameH) && cols.filter(isKnownH).length >= 2) {
+							nameColIdx = cols.findIndex(isNameH);
+							specColIdx = cols.findIndex((c: string) => c === 'specification' || c === 'spec');
+							break;
+						}
+					}
+
+					// Extract images keyed by name+spec (primary) and by row number (fallback).
+					const { byRow: imagesByExcelRow, byNameKey: imagesByNameKey } =
+						await extractEmbeddedImagesFromExcel(
+							data,
+							sheetName,
+							worksheet,
+							nameColIdx >= 0 ? nameColIdx : undefined,
+							specColIdx >= 0 ? specColIdx : undefined
+						);
+
 					if (!csvText.trim()) continue;
 
 					await parseCSVText(csvText, sheetName, imagesByExcelRow, {
 						append: appended,
 						silent: true,
 						csvLineToExcelRows: xlsxNonEmptyRows,
-						sessionId
+						sessionId,
+						embeddedImagesByNameKey: imagesByNameKey
 					});
 					if (!isImportSessionActive(sessionId)) return;
 					appended = true;
@@ -2268,6 +2375,8 @@
 			silent?: boolean;
 			csvLineToExcelRows?: number[];
 			sessionId?: number;
+			/** Name+spec keyed embedded images (primary match, more reliable than row anchor). */
+			embeddedImagesByNameKey?: Map<string, File>;
 		}
 	) {
 		try {
@@ -2605,35 +2714,43 @@
 				let hasImage = false;
 				let imageSource = '';
 
-				// Check for embedded Excel images using actual Excel row numbers.
+				// Check for embedded Excel images — try name+spec key first (reliable),
+				// then fall back to Excel row-anchor position (best-effort).
 				const excelRowForLine =
 					typeof nonEmptyPosition === 'number'
 						? options?.csvLineToExcelRows?.[nonEmptyPosition]
 						: undefined;
-				if (!pictureRef && embeddedImagesByExcelRow && typeof excelRowForLine === 'number') {
-					let resolvedImageRow: number | null = null;
-					const candidateRows = [excelRowForLine];
 
-					for (const candidateRow of candidateRows) {
-						if (
-							embeddedImagesByExcelRow.has(candidateRow) &&
-							!consumedEmbeddedImageRows.has(candidateRow)
-						) {
-							resolvedImageRow = candidateRow;
-							break;
+				if (!pictureRef && (options?.embeddedImagesByNameKey || embeddedImagesByExcelRow)) {
+					let embeddedFile: File | undefined;
+
+					// Stage 1: match by item name + specification composite key
+					if (options?.embeddedImagesByNameKey && name) {
+						const nameKey = getItemCompositeKey(name, specification);
+						embeddedFile = options.embeddedImagesByNameKey.get(nameKey);
+					}
+
+					// Stage 2: fall back to row-anchor position
+					if (!embeddedFile && embeddedImagesByExcelRow && typeof excelRowForLine === 'number') {
+						const candidateRows = [excelRowForLine, excelRowForLine - 1, excelRowForLine + 1];
+						for (const candidateRow of candidateRows) {
+							if (
+								embeddedImagesByExcelRow.has(candidateRow) &&
+								!consumedEmbeddedImageRows.has(candidateRow)
+							) {
+								embeddedFile = embeddedImagesByExcelRow.get(candidateRow);
+								consumedEmbeddedImageRows.add(candidateRow);
+								break;
+							}
 						}
 					}
 
-					if (resolvedImageRow !== null) {
-						const embeddedFile = embeddedImagesByExcelRow.get(resolvedImageRow);
-						if (embeddedFile) {
-							const embeddedKey = `excel_row_${excelRowForLine}_${embeddedFile.name}`;
-							importImageFiles.set(embeddedKey.toLowerCase(), embeddedFile);
-							pictureRef = embeddedKey;
-							hasImage = true;
-							imageSource = 'excel';
-							consumedEmbeddedImageRows.add(resolvedImageRow);
-						}
+					if (embeddedFile) {
+						const embeddedKey = `excel_name_${getItemCompositeKey(name, specification)}_${embeddedFile.name}`;
+						importImageFiles.set(embeddedKey.toLowerCase(), embeddedFile);
+						pictureRef = embeddedKey;
+						hasImage = true;
+						imageSource = 'excel';
 					}
 				}
 
