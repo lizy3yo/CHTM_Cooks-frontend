@@ -54,7 +54,8 @@ const cspDirectives: CSPDirectives = {
 		'https://api.cloudinary.com',
 		'https://cdn.jsdelivr.net',
 		'https://unpkg.com',
-		'https://lottie.host'
+		'https://lottie.host',
+		'https://vercel.com'
 	],
 
 	// Media: audio and video sources
@@ -79,7 +80,7 @@ const cspDirectives: CSPDirectives = {
 	'worker-src': ["'self'", 'blob:', 'https://cdn.jsdelivr.net', 'https://unpkg.com'],
 
 	// Web app manifests
-	'manifest-src': ["'self'"],
+	'manifest-src': ["'self'", 'https://vercel.com'],
 
 	// Upgrade insecure requests (HTTP to HTTPS)
 	'upgrade-insecure-requests': true,
