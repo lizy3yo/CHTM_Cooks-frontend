@@ -63,6 +63,14 @@ function serializeCookie(name: string, value: string, options: any = {}): string
  */
 const laravelProxyHandler: Handle = async ({ event, resolve }) => {
 	if (event.url.pathname.startsWith('/api')) {
+		// File uploads are handled natively by the SvelteKit server endpoint at
+		// src/routes/api/inventory/upload/+server.ts which uploads directly to Cloudinary.
+		// Bypassing the BFF proxy here avoids multipart boundary corruption in
+		// serverless environments (Vercel) when proxying through to Render.
+		if (event.url.pathname === '/api/inventory/upload') {
+			return resolve(event);
+		}
+
 		const laravelBaseUrl = env.LARAVEL_API_URL || 'http://127.0.0.1:8000';
 		const laravelUrl = `${laravelBaseUrl}${event.url.pathname}${event.url.search}`;
 
