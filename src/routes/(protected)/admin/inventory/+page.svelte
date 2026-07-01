@@ -18,14 +18,7 @@
 	import InventorySkeletonLoader from '$lib/components/ui/InventorySkeletonLoader.svelte';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
-	import {
-		Package,
-		FolderTree,
-		AlertTriangle,
-		Download,
-		Star,
-		Sliders
-	} from 'lucide-svelte';
+	import { Package, FolderTree, AlertTriangle, Download, Star, Sliders } from 'lucide-svelte';
 	import ExportModal from '$lib/components/custodian/ExportModal.svelte';
 	import ItemBorrowersModal from '$lib/components/ui/ItemBorrowersModal.svelte';
 
@@ -191,11 +184,11 @@
 		category: true,
 		specification: true,
 		toolsOrEquipment: true,
-		quantity: true,     // Current Count
+		quantity: true, // Current Count
 		eomCount: true,
-		variance: true,     // Variance
+		variance: true, // Variance
 		donations: true,
-		picture: true       // Image
+		picture: true // Image
 	});
 
 	function toggleAllImportFields(val: boolean) {
@@ -228,39 +221,43 @@
 
 			// Recalculate action and changed fields based on user toggles
 			const newChangedFields: string[] = [];
-			
+
 			if (selectedImportFields.category && item._provided.category) {
-				const existing = items.find(existingItem => existingItem.id === item._existingItemId);
+				const existing = items.find((existingItem) => existingItem.id === item._existingItemId);
 				if (existing && normalizeKeyPart(existing.category) !== normalizeKeyPart(item.category)) {
 					newChangedFields.push('category');
 				}
 			}
 			if (selectedImportFields.toolsOrEquipment && item._provided.toolsOrEquipment) {
-				const existing = items.find(existingItem => existingItem.id === item._existingItemId);
-				if (existing && normalizeKeyPart(existing.toolsOrEquipment || '') !== normalizeKeyPart(item.toolsOrEquipment || '')) {
+				const existing = items.find((existingItem) => existingItem.id === item._existingItemId);
+				if (
+					existing &&
+					normalizeKeyPart(existing.toolsOrEquipment || '') !==
+						normalizeKeyPart(item.toolsOrEquipment || '')
+				) {
 					newChangedFields.push('tools/equipment');
 				}
 			}
 			if (selectedImportFields.quantity && item._provided.quantity) {
-				const existing = items.find(existingItem => existingItem.id === item._existingItemId);
+				const existing = items.find((existingItem) => existingItem.id === item._existingItemId);
 				if (existing && (existing.quantity ?? 0) !== item.quantity) {
 					newChangedFields.push('quantity');
 				}
 			}
 			if (selectedImportFields.eomCount && item._provided.eomCount) {
-				const existing = items.find(existingItem => existingItem.id === item._existingItemId);
+				const existing = items.find((existingItem) => existingItem.id === item._existingItemId);
 				if (existing && (existing.eomCount ?? 0) !== item.eomCount) {
 					newChangedFields.push('eomCount');
 				}
 			}
 			if (selectedImportFields.donations && item._provided.donations) {
-				const existing = items.find(existingItem => existingItem.id === item._existingItemId);
+				const existing = items.find((existingItem) => existingItem.id === item._existingItemId);
 				if (existing && (existing.donations ?? 0) !== item.donations) {
 					newChangedFields.push('donations');
 				}
 			}
 			if (selectedImportFields.picture && item._hasImage) {
-				const existing = items.find(existingItem => existingItem.id === item._existingItemId);
+				const existing = items.find((existingItem) => existingItem.id === item._existingItemId);
 				if (existing) {
 					if (item._imageSource === 'url') {
 						if ((existing.picture || '') !== item._pictureRef) {
@@ -272,7 +269,7 @@
 				}
 			}
 
-			const existing = items.find(existingItem => existingItem.id === item._existingItemId);
+			const existing = items.find((existingItem) => existingItem.id === item._existingItemId);
 			if (existing && existing.archived) {
 				newChangedFields.push('archived->active');
 			}
@@ -364,8 +361,6 @@
 			document.removeEventListener('click', handleClickOutside);
 		};
 	});
-
-
 
 	/**
 	 * Refresh inventory data (debounced, prevents concurrent refreshes)
@@ -926,14 +921,18 @@
 	const requiredItems = $derived(activeItems.filter((item) => item.isrequired === true));
 
 	const totalOwned = $derived(
-		activeItems.reduce((sum, item) => sum + (item.currentCount ?? (item.quantity + (item.donations ?? 0))), 0)
+		activeItems.reduce(
+			(sum, item) => sum + (item.currentCount ?? item.quantity + (item.donations ?? 0)),
+			0
+		)
 	);
 	const totalAvailable = $derived(
-		activeItems.reduce((sum, item) => sum + (item.available ?? (item.quantity + (item.donations ?? 0))), 0)
+		activeItems.reduce(
+			(sum, item) => sum + (item.available ?? item.quantity + (item.donations ?? 0)),
+			0
+		)
 	);
-	const totalReleased = $derived(
-		activeItems.reduce((sum, item) => sum + (item.released ?? 0), 0)
-	);
+	const totalReleased = $derived(activeItems.reduce((sum, item) => sum + (item.released ?? 0), 0));
 	const flowPercentage = $derived(
 		totalOwned > 0 ? Math.round((totalAvailable / totalOwned) * 100) : 0
 	);
@@ -999,7 +998,7 @@
 			// Stock status filter
 			let matchesStatus = true;
 			const itemStatus = getItemStatus(item);
-			
+
 			if (statusFilter === 'in-stock') {
 				matchesStatus = itemStatus === 'In Stock';
 			} else if (statusFilter === 'out-of-stock') {
@@ -1011,8 +1010,8 @@
 	);
 	const sortedItems = $derived(
 		[...filteredItems].sort((a, b) =>
-			sortOrder === 'az' 
-				? (a.name || '').localeCompare(b.name || '') 
+			sortOrder === 'az'
+				? (a.name || '').localeCompare(b.name || '')
 				: (b.name || '').localeCompare(a.name || '')
 		)
 	);
@@ -1020,7 +1019,6 @@
 	const displayItems = $derived(
 		sortedItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 	);
-
 
 	// Debug logging for display items
 	$effect(() => {
@@ -1049,7 +1047,6 @@
 		currentPage = 1;
 	});
 
-
 	const displayCategories = $derived(
 		categories
 			.filter((category) => {
@@ -1061,8 +1058,8 @@
 				);
 			})
 			.sort((a, b) =>
-				sortOrder === 'az' 
-					? (a.name || '').localeCompare(b.name || '') 
+				sortOrder === 'az'
+					? (a.name || '').localeCompare(b.name || '')
 					: (b.name || '').localeCompare(a.name || '')
 			)
 	);
@@ -2697,7 +2694,9 @@
 	}
 
 	async function handleImportConfirm() {
-		const validItems = processedImportPreviewData.filter((item) => item._valid && item._selected !== false);
+		const validItems = processedImportPreviewData.filter(
+			(item) => item._valid && item._selected !== false
+		);
 		const actionableItems = processedImportPreviewData.filter(
 			(item) => item._importAction === 'create' || item._importAction === 'update'
 		);
@@ -2904,11 +2903,7 @@
 						}
 
 						// Replace image only when a new image is provided, is different and Image update is checked.
-						if (
-							selectedImportFields.picture &&
-							pictureUrl &&
-							pictureUrl !== existingItem.picture
-						) {
+						if (selectedImportFields.picture && pictureUrl && pictureUrl !== existingItem.picture) {
 							updateData.picture = pictureUrl;
 							updateData.replacePicture = true;
 						}
@@ -3162,14 +3157,13 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 											</svg>
 										</div>
 									{/if}
- 
+
 									<div class="min-w-0 flex-1">
 										<h2 class="text-base font-bold text-gray-900 sm:text-lg lg:text-xl">
 											{selectedItem.name}
 										</h2>
 										<p class="mt-0.5 text-xs text-gray-500 sm:text-sm">{selectedItem.category}</p>
 										<div class="mt-2 flex flex-wrap items-center gap-1.5 sm:gap-2">
-
 											{#if selectedItem.isrequired}
 												<span
 													class="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-purple-800 shadow-sm ring-1 ring-purple-200 sm:px-2.5 sm:py-1"
@@ -3339,7 +3333,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 											<div class="h-1 w-1 rounded-full bg-pink-500"></div>
 											Stock Information
 										</h3>
-										<div class="grid grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-3">
+										<div class="grid grid-cols-2 gap-2 lg:grid-cols-3 lg:gap-3">
 											<div
 												class="group rounded-lg border border-gray-200 bg-linear-to-br from-white to-gray-50 p-2.5 transition-all hover:border-pink-200 hover:shadow-md sm:rounded-xl sm:p-3 lg:p-4"
 											>
@@ -3408,8 +3402,13 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 
 											<button
 												type="button"
-												onclick={() => { if (selectedItem) { openBorrowersModal(selectedItem); closeModal(); } }}
-												class="group text-left rounded-lg border border-gray-200 bg-linear-to-br from-white to-gray-50 p-2.5 transition-all hover:border-pink-200 hover:shadow-md sm:rounded-xl sm:p-3 lg:p-4 hover:bg-blue-50/50"
+												onclick={() => {
+													if (selectedItem) {
+														openBorrowersModal(selectedItem);
+														closeModal();
+													}
+												}}
+												class="group rounded-lg border border-gray-200 bg-linear-to-br from-white to-gray-50 p-2.5 text-left transition-all hover:border-pink-200 hover:bg-blue-50/50 hover:shadow-md sm:rounded-xl sm:p-3 lg:p-4"
 											>
 												<div class="mb-1 flex items-center gap-1 sm:mb-1.5 sm:gap-1.5">
 													<div
@@ -3435,9 +3434,14 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 														Released
 													</p>
 												</div>
-												<p class="text-lg font-bold text-blue-600 sm:text-xl lg:text-2xl flex items-center gap-1.5">
+												<p
+													class="flex items-center gap-1.5 text-lg font-bold text-blue-600 sm:text-xl lg:text-2xl"
+												>
 													{selectedItem.released ?? 0}
-													<span class="text-[9px] font-medium text-gray-400 hover:text-blue-500 hover:underline">View details →</span>
+													<span
+														class="text-[9px] font-medium text-gray-400 hover:text-blue-500 hover:underline"
+														>View details →</span
+													>
 												</p>
 											</button>
 
@@ -3526,7 +3530,9 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 												class="group rounded-lg border border-gray-200 bg-linear-to-br from-white to-gray-50 p-2.5 transition-all hover:border-pink-200 hover:shadow-md sm:rounded-xl sm:p-3 lg:p-4"
 											>
 												<div class="mb-1.5 flex items-center gap-1.5 sm:mb-2 sm:gap-2">
-													<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-100 sm:h-8 sm:w-8 sm:rounded-xl lg:h-10 lg:w-10">
+													<div
+														class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-100 sm:h-8 sm:w-8 sm:rounded-xl lg:h-10 lg:w-10"
+													>
 														<svg
 															class="h-2.5 w-2.5 text-emerald-600 sm:h-3 sm:w-3 lg:h-4 lg:w-4"
 															fill="none"
@@ -3541,7 +3547,9 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 															/>
 														</svg>
 													</div>
-													<p class="text-[8px] leading-tight font-bold tracking-tight text-gray-500 uppercase sm:text-[9px] lg:text-xs">
+													<p
+														class="text-[8px] leading-tight font-bold tracking-tight text-gray-500 uppercase sm:text-[9px] lg:text-xs"
+													>
 														Donations
 													</p>
 												</div>
@@ -3551,7 +3559,6 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 											</div>
 										</div>
 									</div>
-
 								</div>
 							</div>
 						</div>
@@ -3657,21 +3664,19 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 
 	<!-- Global Skeleton Loading State -->
 	{#if false}
-		<InventorySkeletonLoader
-			view={activeTab === 'categories' ? 'categories' : 'all-items'}
-		/>
+		<InventorySkeletonLoader view={activeTab === 'categories' ? 'categories' : 'all-items'} />
 	{:else}
 		<!-- Stats Overview -->
 		{#if cardsLoading}
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 animate-pulse">
+			<div class="grid animate-pulse grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
 				{#each Array(4) as _}
-					<div class="rounded-lg bg-white p-3 shadow sm:p-5 h-20 sm:h-28">
-						<div class="flex items-center justify-between gap-2 h-full">
-							<div class="space-y-2 flex-1">
-								<div class="h-4 bg-gray-200 rounded w-2/3"></div>
-								<div class="h-6 bg-gray-200 rounded w-1/3"></div>
+					<div class="h-20 rounded-lg bg-white p-3 shadow sm:h-28 sm:p-5">
+						<div class="flex h-full items-center justify-between gap-2">
+							<div class="flex-1 space-y-2">
+								<div class="h-4 w-2/3 rounded bg-gray-200"></div>
+								<div class="h-6 w-1/3 rounded bg-gray-200"></div>
 							</div>
-							<div class="h-9 w-9 sm:h-12 sm:w-12 bg-gray-200 rounded-full"></div>
+							<div class="h-9 w-9 rounded-full bg-gray-200 sm:h-12 sm:w-12"></div>
 						</div>
 					</div>
 				{/each}
@@ -3679,7 +3684,9 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 		{:else}
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
 				<!-- Card 1: Total Lab Stock -->
-				<div class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200">
+				<div
+					class="rounded-lg border border-transparent bg-white p-3 shadow transition-all duration-200 sm:p-5"
+				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Total Lab Stock</p>
@@ -3688,7 +3695,9 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							</p>
 							<p class="mt-1 text-[10px] text-gray-400">Total items owned by lab</p>
 						</div>
-						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 sm:h-12 sm:w-12">
+						<div
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 sm:h-12 sm:w-12"
+						>
 							<Package size={18} class="text-blue-600 sm:hidden" />
 							<Package size={24} class="hidden text-blue-600 sm:block" />
 						</div>
@@ -3696,28 +3705,56 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 				</div>
 
 				<!-- Card 2: Physical Available -->
-				<div class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200">
+				<div
+					class="rounded-lg border border-transparent bg-white p-3 shadow transition-all duration-200 sm:p-5"
+				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Physical Available</p>
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">
+								Physical Available
+							</p>
 							<p class="mt-1 text-2xl font-semibold text-emerald-600 sm:mt-2 sm:text-3xl">
 								{totalAvailable}
 							</p>
 							<p class="mt-1 text-[10px] text-gray-400">Inside laboratory space</p>
 						</div>
-						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 sm:h-12 sm:w-12">
-							<svg class="h-5 w-5 text-emerald-600 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+						<div
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 sm:h-12 sm:w-12"
+						>
+							<svg
+								class="h-5 w-5 text-emerald-600 sm:hidden"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+								/>
 							</svg>
-							<svg class="hidden h-6 w-6 text-emerald-600 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+							<svg
+								class="hidden h-6 w-6 text-emerald-600 sm:block"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+								/>
 							</svg>
 						</div>
 					</div>
 				</div>
 
 				<!-- Card 3: Out / Released -->
-				<div class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200">
+				<div
+					class="rounded-lg border border-transparent bg-white p-3 shadow transition-all duration-200 sm:p-5"
+				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Released / Out</p>
@@ -3726,33 +3763,64 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							</p>
 							<p class="mt-1 text-[10px] text-gray-400">Currently out / checked out</p>
 						</div>
-						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 sm:h-12 sm:w-12">
-							<svg class="h-5 w-5 text-blue-600 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+						<div
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 sm:h-12 sm:w-12"
+						>
+							<svg
+								class="h-5 w-5 text-blue-600 sm:hidden"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+								/>
 							</svg>
-							<svg class="hidden h-6 w-6 text-blue-600 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+							<svg
+								class="hidden h-6 w-6 text-blue-600 sm:block"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+								/>
 							</svg>
 						</div>
 					</div>
 				</div>
 
 				<!-- Card 4: Flow Balance -->
-				<div class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200">
-					<div class="flex flex-col justify-between h-full">
-						<div class="flex items-center justify-between gap-2 mb-2">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Stock Flow Balance</p>
-							<span class="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-600/10">
+				<div
+					class="rounded-lg border border-transparent bg-white p-3 shadow transition-all duration-200 sm:p-5"
+				>
+					<div class="flex h-full flex-col justify-between">
+						<div class="mb-2 flex items-center justify-between gap-2">
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">
+								Stock Flow Balance
+							</p>
+							<span
+								class="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-600/10"
+							>
 								{flowPercentage}% Avail
 							</span>
 						</div>
-						<div class="space-y-1.5 flex-1 flex flex-col justify-center">
+						<div class="flex flex-1 flex-col justify-center space-y-1.5">
 							<!-- Dynamic progress flow bar -->
-							<div class="h-2 w-full rounded-full bg-blue-100 overflow-hidden flex">
-								<div class="h-full bg-emerald-500 transition-all duration-500" style="width: {flowPercentage}%"></div>
-								<div class="h-full bg-blue-500 transition-all duration-500 flex-1"></div>
+							<div class="flex h-2 w-full overflow-hidden rounded-full bg-blue-100">
+								<div
+									class="h-full bg-emerald-500 transition-all duration-500"
+									style="width: {flowPercentage}%"
+								></div>
+								<div class="h-full flex-1 bg-blue-500 transition-all duration-500"></div>
 							</div>
-							<div class="flex items-center justify-between text-[10px] text-gray-500 font-medium">
+							<div class="flex items-center justify-between text-[10px] font-medium text-gray-500">
 								<span class="flex items-center gap-1">
 									<span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
 									{totalAvailable} Available
@@ -3815,250 +3883,184 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 				{:else}
 					<!-- All Items View -->
 					<div class="p-4 sm:p-6">
-					<div class="mb-4 flex flex-col gap-3">
-						<!-- Premium Industry Standard Filter controls -->
-						<div class="flex flex-col gap-3">
-							<!-- 1. Full-Width Search Field -->
-							<div class="relative w-full">
-								<input
-									type="text"
-									placeholder="Search by name, description, or code..."
-									bind:value={query}
-									class="w-full rounded-lg border border-gray-200 py-2.5 pl-10 pr-4 text-sm bg-white shadow-sm transition-all hover:border-gray-300 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
-								/>
-								<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-									<svg
-										class="h-4 w-4 text-gray-400"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										viewBox="0 0 24 24"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-										/>
-									</svg>
-								</div>
-							</div>
-
-							<!-- 2. Three Column Dropdowns -->
-							<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-								<!-- Category Selector -->
+						<div class="mb-4 flex flex-col gap-3">
+							<!-- Premium Industry Standard Filter controls -->
+							<div class="flex flex-col gap-3">
+								<!-- 1. Full-Width Search Field -->
 								<div class="relative w-full">
-									<select
-										value={selectedCategory?.id || 'all'}
-										onchange={(e) => {
-											const val = e.currentTarget.value;
-											if (val === 'all') {
-												selectedCategory = null;
-											} else {
-												selectedCategory = categories.find(c => c.id === val) || null;
-											}
-										}}
-										class="w-full rounded-lg border border-gray-200 py-2.5 pl-3.5 pr-10 text-sm text-gray-700 bg-white shadow-sm transition-all hover:bg-gray-50/80 hover:border-gray-300 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none appearance-none cursor-pointer"
+									<input
+										type="text"
+										placeholder="Search by name, description, or code..."
+										bind:value={query}
+										class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pr-4 pl-10 text-sm shadow-sm transition-all hover:border-gray-300 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
+									/>
+									<div
+										class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5"
 									>
-										<option value="all">All Categories</option>
-										{#each categories as category}
-											<option value={category.id}>{category.name}</option>
-										{/each}
-									</select>
-									<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-										<svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-										</svg>
-									</div>
-								</div>
-
-
-
-								<!-- Alphabetical Sort Filter -->
-								<div class="relative w-full">
-									<select
-										bind:value={sortOrder}
-										class="w-full rounded-lg border border-gray-200 py-2.5 pl-3.5 pr-10 text-sm text-gray-700 bg-white shadow-sm transition-all hover:bg-gray-50/80 hover:border-gray-300 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none appearance-none cursor-pointer"
-									>
-										<option value="az">Name (A-Z)</option>
-										<option value="za">Name (Z-A)</option>
-									</select>
-									<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-										<svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-										</svg>
-									</div>
-								</div>
-							</div>
-						</div>
-
-						<!-- Active Filters Tags Strip -->
-						{#if selectedCategory || requiredFilter !== 'all' || statusFilter !== 'all'}
-							<div class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-150 bg-gray-50/50 p-2">
-								<span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider pl-1">Active Filters:</span>
-
-								{#if selectedCategory}
-									<span class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-600/10">
-										Category: {selectedCategory.name}
-										<button onclick={clearCategoryFilter} class="group rounded-full p-0.5 hover:bg-blue-100" aria-label="Clear category filter">
-											<svg class="h-3 w-3 text-blue-600 group-hover:text-blue-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-											</svg>
-										</button>
-									</span>
-								{/if}
-
-								{#if requiredFilter !== 'all'}
-									<span class="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700 ring-1 ring-purple-600/10">
-										Type: {requiredFilter === 'required' ? 'Required Only' : 'Regular Only'}
-										<button onclick={() => requiredFilter = 'all'} class="group rounded-full p-0.5 hover:bg-purple-100" aria-label="Clear required filter">
-											<svg class="h-3 w-3 text-purple-600 group-hover:text-purple-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-											</svg>
-										</button>
-									</span>
-								{/if}
-
-
-
-								<button
-									onclick={() => {
-										query = '';
-										selectedCategory = null;
-										requiredFilter = 'all';
-										statusFilter = 'all';
-									}}
-									class="ml-auto text-xs font-semibold text-pink-600 hover:text-pink-800 hover:underline cursor-pointer"
-								>
-									Clear All
-								</button>
-							</div>
-						{/if}
-					</div>
-
-					{#if displayItems.length === 0}
-						<div class="flex items-center justify-center bg-gray-50" style="min-height: 600px;">
-							<div class="px-4 text-center">
-								<div
-									class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-pink-100"
-								>
-									<svg
-										class="h-8 w-8 text-pink-600"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
+										<svg
+											class="h-4 w-4 text-gray-400"
+											fill="none"
+											stroke="currentColor"
 											stroke-width="2"
-											d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-										/>
-									</svg>
-								</div>
-								<h3 class="mt-6 text-lg font-semibold text-gray-900">No items found</h3>
-								<p class="mx-auto mt-2 max-w-sm text-sm text-gray-600">
-									{#if selectedCategory}
-										No items in this category. Try selecting a different category or clear the
-										filter.
-									{:else if query}
-										No items match your search. Try adjusting your search terms.
-									{:else}
-										Get started by adding your first inventory item to begin tracking your stock.
-									{/if}
-								</p>
-								{#if !selectedCategory && !query}
-									<button
-										onclick={openAddItemModal}
-										class="mt-6 inline-flex items-center gap-2 rounded-lg bg-pink-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 focus:outline-none"
-									>
-										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											viewBox="0 0 24 24"
+										>
 											<path
 												stroke-linecap="round"
 												stroke-linejoin="round"
-												stroke-width="2"
-												d="M12 4v16m8-8H4"
+												d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
 											/>
 										</svg>
-										Add Your First Item
-									</button>
-								{/if}
-								{#if selectedCategory}
-									<button
-										onclick={clearCategoryFilter}
-										class="mt-4 inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 focus:outline-none"
-									>
-										Clear Filter
-									</button>
-								{/if}
-							</div>
-						</div>
-					{:else}
-						<!-- Mobile card list — hidden on sm+ -->
-						<div class="divide-y divide-gray-100 sm:hidden">
-							{#each displayItems as item, i}
-								{@const status = getItemStatus(item)}
-								<button
-									class="w-full px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100"
-									onclick={() => openModal(item)}
-								>
-									<div class="flex items-center gap-3">
-										<span
-											class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600"
+									</div>
+								</div>
+
+								<!-- 2. Three Column Dropdowns -->
+								<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+									<!-- Category Selector -->
+									<div class="relative w-full">
+										<select
+											value={selectedCategory?.id || 'all'}
+											onchange={(e) => {
+												const val = e.currentTarget.value;
+												if (val === 'all') {
+													selectedCategory = null;
+												} else {
+													selectedCategory = categories.find((c) => c.id === val) || null;
+												}
+											}}
+											class="w-full cursor-pointer appearance-none rounded-lg border border-gray-200 bg-white py-2.5 pr-10 pl-3.5 text-sm text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:bg-gray-50/80 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
 										>
-											{(currentPage - 1) * PAGE_SIZE + i + 1}
-										</span>
+											<option value="all">All Categories</option>
+											{#each categories as category}
+												<option value={category.id}>{category.name}</option>
+											{/each}
+										</select>
 										<div
-											class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100"
+											class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3"
 										>
-											{#if item.picture}
-												<img
-													src={item.picture}
-													alt={item.name}
-													class="h-full w-full object-cover"
-													loading="lazy"
-												/>
-											{:else}
-												<ItemImagePlaceholder size="sm" />
-											{/if}
+											<svg
+												class="h-4 w-4 text-gray-400"
+												fill="none"
+												viewBox="0 0 24 24"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+											</svg>
 										</div>
-										<div class="min-w-0 flex-1">
-											<p class="truncate text-sm font-semibold text-gray-900">{truncateName(item.name)}</p>
-											<p class="truncate text-xs text-gray-500">
-												{item.specification || item.category}
-											</p>
-											<div class="mt-1 flex flex-wrap items-center gap-1">
-												{#if item.isrequired}
-													<span
-														class="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800"
-														>Required</span
-													>
-												{/if}
-												<span
-													class="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800"
-													>{item.category}</span
-												>
-												{#if status === 'Out of Stock'}
-													<span
-														class="inline-flex items-center gap-1 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-red-600/10"
-													>
-														<span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>
-														Out of Stock
-													</span>
-												{:else}
-													<span
-														class="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-600/10"
-													>
-														<span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-														In Stock
-													</span>
-												{/if}
-												<span class="text-[10px] text-gray-400"
-													>Total: {item.currentCount ?? getCurrentCount(item.quantity, item.donations ?? 0)} (Avail: {item.available ?? getCurrentCount(item.quantity, item.donations ?? 0)} · Rel: {item.released ?? 0}) · EOM: {item.eomCount}</span
-												>
-											</div>
+									</div>
+
+									<!-- Alphabetical Sort Filter -->
+									<div class="relative w-full">
+										<select
+											bind:value={sortOrder}
+											class="w-full cursor-pointer appearance-none rounded-lg border border-gray-200 bg-white py-2.5 pr-10 pl-3.5 text-sm text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:bg-gray-50/80 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
+										>
+											<option value="az">Name (A-Z)</option>
+											<option value="za">Name (Z-A)</option>
+										</select>
+										<div
+											class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3"
+										>
+											<svg
+												class="h-4 w-4 text-gray-400"
+												fill="none"
+												viewBox="0 0 24 24"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+											</svg>
 										</div>
+									</div>
+								</div>
+							</div>
+
+							<!-- Active Filters Tags Strip -->
+							{#if selectedCategory || requiredFilter !== 'all' || statusFilter !== 'all'}
+								<div
+									class="border-gray-150 flex flex-wrap items-center gap-2 rounded-lg border bg-gray-50/50 p-2"
+								>
+									<span class="pl-1 text-[10px] font-bold tracking-wider text-gray-400 uppercase"
+										>Active Filters:</span
+									>
+
+									{#if selectedCategory}
+										<span
+											class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-600/10"
+										>
+											Category: {selectedCategory.name}
+											<button
+												onclick={clearCategoryFilter}
+												class="group rounded-full p-0.5 hover:bg-blue-100"
+												aria-label="Clear category filter"
+											>
+												<svg
+													class="h-3 w-3 text-blue-600 group-hover:text-blue-800"
+													fill="none"
+													viewBox="0 0 24 24"
+													stroke="currentColor"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M6 18L18 6M6 6l12 12"
+													/>
+												</svg>
+											</button>
+										</span>
+									{/if}
+
+									{#if requiredFilter !== 'all'}
+										<span
+											class="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700 ring-1 ring-purple-600/10"
+										>
+											Type: {requiredFilter === 'required' ? 'Required Only' : 'Regular Only'}
+											<button
+												onclick={() => (requiredFilter = 'all')}
+												class="group rounded-full p-0.5 hover:bg-purple-100"
+												aria-label="Clear required filter"
+											>
+												<svg
+													class="h-3 w-3 text-purple-600 group-hover:text-purple-800"
+													fill="none"
+													viewBox="0 0 24 24"
+													stroke="currentColor"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M6 18L18 6M6 6l12 12"
+													/>
+												</svg>
+											</button>
+										</span>
+									{/if}
+
+									<button
+										onclick={() => {
+											query = '';
+											selectedCategory = null;
+											requiredFilter = 'all';
+											statusFilter = 'all';
+										}}
+										class="ml-auto cursor-pointer text-xs font-semibold text-pink-600 hover:text-pink-800 hover:underline"
+									>
+										Clear All
+									</button>
+								</div>
+							{/if}
+						</div>
+
+						{#if displayItems.length === 0}
+							<div class="flex items-center justify-center bg-gray-50" style="min-height: 600px;">
+								<div class="px-4 text-center">
+									<div
+										class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-pink-100"
+									>
 										<svg
-											class="h-4 w-4 shrink-0 text-gray-300"
+											class="h-8 w-8 text-pink-600"
 											fill="none"
 											stroke="currentColor"
 											viewBox="0 0 24 24"
@@ -4067,138 +4069,271 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 												stroke-linecap="round"
 												stroke-linejoin="round"
 												stroke-width="2"
-												d="M9 5l7 7-7 7"
+												d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
 											/>
 										</svg>
 									</div>
-								</button>
-							{/each}
-						</div>
-
-						<!-- Desktop table — hidden on mobile -->
-						<div class="hidden overflow-x-auto sm:block" style="min-height: 600px;">
-							<table class="min-w-full divide-y divide-gray-200">
-								<thead class="bg-gray-50">
-									<tr>
-										<th
-											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
-											>Item Name</th
+									<h3 class="mt-6 text-lg font-semibold text-gray-900">No items found</h3>
+									<p class="mx-auto mt-2 max-w-sm text-sm text-gray-600">
+										{#if selectedCategory}
+											No items in this category. Try selecting a different category or clear the
+											filter.
+										{:else if query}
+											No items match your search. Try adjusting your search terms.
+										{:else}
+											Get started by adding your first inventory item to begin tracking your stock.
+										{/if}
+									</p>
+									{#if !selectedCategory && !query}
+										<button
+											onclick={openAddItemModal}
+											class="mt-6 inline-flex items-center gap-2 rounded-lg bg-pink-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 focus:outline-none"
 										>
-										<th
-											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
-											>Category</th
+											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M12 4v16m8-8H4"
+												/>
+											</svg>
+											Add Your First Item
+										</button>
+									{/if}
+									{#if selectedCategory}
+										<button
+											onclick={clearCategoryFilter}
+											class="mt-4 inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 focus:outline-none"
 										>
-										<th
-											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
-											>Specification</th
-										>
-										<th
-											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
-											>Tools / Equipment</th
-										>
-										<th
-											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
-											>Stock (Total | Avail | Rel)</th
-										>
-									</tr>
-								</thead>
-								<tbody class="divide-y divide-gray-200 bg-white">
-									{#each displayItems as item, i}
-										{@const status = getItemStatus(item)}
-										<tr
-											class="cursor-pointer transition-colors hover:bg-gray-50"
-											onclick={() => openModal(item)}
-										>
-											<td class="px-6 py-4 whitespace-nowrap">
-												<div class="flex items-center gap-3">
-													<span
-														class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700"
-														>{(currentPage - 1) * PAGE_SIZE + i + 1}</span
-													>
-													<div
-														class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100"
-													>
-														{#if item.picture}
-															<img
-																src={item.picture}
-																alt={item.name}
-																class="h-full w-full object-cover"
-																loading="lazy"
-															/>
-														{:else}
-															<ItemImagePlaceholder size="sm" />
-														{/if}
-													</div>
-													<div class="flex flex-col gap-0.5">
-														{#if item.isrequired}
-															<span
-																class="inline-flex w-fit items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-purple-800 uppercase ring-1 ring-purple-200"
-															>
-																<svg class="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20"
-																	><path
-																		d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
-																	/></svg
-																>
-																required
-															</span>
-														{/if}
-														<div class="text-sm font-medium text-gray-900">{truncateName(item.name)}</div>
-													</div>
-												</div>
-											</td>
-											<td class="px-6 py-4 whitespace-nowrap">
-												<span
-													class="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800"
-													>{item.category}</span
-												>
-											</td>
-											<td class="px-6 py-4 text-sm text-gray-700">{item.specification || '—'}</td>
-											<td class="px-6 py-4 text-sm whitespace-nowrap" onclick={(e) => e.stopPropagation()}>
-												<div class="flex items-center gap-1.5 text-xs font-medium">
-													<span class="text-sm font-semibold text-gray-900 mr-1" title="Total Stock">
-														{item.currentCount ?? getCurrentCount(item.quantity, item.donations ?? 0)}
-													</span>
-													<span class="text-gray-300">|</span>
-													<span
-														class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-600/10 cursor-help"
-														title="Available (In Storage)"
-													>
-														{item.available ?? (item.currentCount ?? getCurrentCount(item.quantity, item.donations ?? 0))}
-													</span>
-													<button
-														type="button"
-														onclick={() => openBorrowersModal(item)}
-														class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 ring-1 ring-blue-600/10 hover:bg-blue-100 transition-colors"
-														title="Released (Click to view active borrowers)"
-													>
-														{item.released ?? 0}
-													</button>
-												</div>
-											</td>
-											<td class="px-6 py-4 text-sm text-gray-700">{item.toolsOrEquipment || '—'}</td
+											Clear Filter
+										</button>
+									{/if}
+								</div>
+							</div>
+						{:else}
+							<!-- Mobile card list — hidden on sm+ -->
+							<div class="divide-y divide-gray-100 sm:hidden">
+								{#each displayItems as item, i}
+									{@const status = getItemStatus(item)}
+									<button
+										class="w-full px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100"
+										onclick={() => openModal(item)}
+									>
+										<div class="flex items-center gap-3">
+											<span
+												class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600"
 											>
+												{(currentPage - 1) * PAGE_SIZE + i + 1}
+											</span>
+											<div
+												class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100"
+											>
+												{#if item.picture}
+													<img
+														src={item.picture}
+														alt={item.name}
+														class="h-full w-full object-cover"
+														loading="lazy"
+													/>
+												{:else}
+													<ItemImagePlaceholder size="sm" />
+												{/if}
+											</div>
+											<div class="min-w-0 flex-1">
+												<p class="truncate text-sm font-semibold text-gray-900">
+													{truncateName(item.name)}
+												</p>
+												<p class="truncate text-xs text-gray-500">
+													{item.specification || item.category}
+												</p>
+												<div class="mt-1 flex flex-wrap items-center gap-1">
+													{#if item.isrequired}
+														<span
+															class="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800"
+															>Required</span
+														>
+													{/if}
+													<span
+														class="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800"
+														>{item.category}</span
+													>
+													{#if status === 'Out of Stock'}
+														<span
+															class="inline-flex items-center gap-1 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-red-600/10"
+														>
+															<span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>
+															Out of Stock
+														</span>
+													{:else}
+														<span
+															class="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-600/10"
+														>
+															<span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+															In Stock
+														</span>
+													{/if}
+													<span class="text-[10px] text-gray-400"
+														>Total: {item.currentCount ??
+															getCurrentCount(item.quantity, item.donations ?? 0)} (Avail: {item.available ??
+															getCurrentCount(item.quantity, item.donations ?? 0)} · Rel: {item.released ??
+															0}) · EOM: {item.eomCount}</span
+													>
+												</div>
+											</div>
+											<svg
+												class="h-4 w-4 shrink-0 text-gray-300"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M9 5l7 7-7 7"
+												/>
+											</svg>
+										</div>
+									</button>
+								{/each}
+							</div>
 
-											<!-- (read-only: no actions for admin) -->
+							<!-- Desktop table — hidden on mobile -->
+							<div class="hidden overflow-x-auto sm:block" style="min-height: 600px;">
+								<table class="min-w-full divide-y divide-gray-200">
+									<thead class="bg-gray-50">
+										<tr>
+											<th
+												class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+												>Item Name</th
+											>
+											<th
+												class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+												>Category</th
+											>
+											<th
+												class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+												>Specification</th
+											>
+											<th
+												class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+												>Tools / Equipment</th
+											>
+											<th
+												class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+												>Stock (Total | Avail | Rel)</th
+											>
 										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
+									</thead>
+									<tbody class="divide-y divide-gray-200 bg-white">
+										{#each displayItems as item, i}
+											{@const status = getItemStatus(item)}
+											<tr
+												class="cursor-pointer transition-colors hover:bg-gray-50"
+												onclick={() => openModal(item)}
+											>
+												<td class="px-6 py-4 whitespace-nowrap">
+													<div class="flex items-center gap-3">
+														<span
+															class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700"
+															>{(currentPage - 1) * PAGE_SIZE + i + 1}</span
+														>
+														<div
+															class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100"
+														>
+															{#if item.picture}
+																<img
+																	src={item.picture}
+																	alt={item.name}
+																	class="h-full w-full object-cover"
+																	loading="lazy"
+																/>
+															{:else}
+																<ItemImagePlaceholder size="sm" />
+															{/if}
+														</div>
+														<div class="flex flex-col gap-0.5">
+															{#if item.isrequired}
+																<span
+																	class="inline-flex w-fit items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-purple-800 uppercase ring-1 ring-purple-200"
+																>
+																	<svg class="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20"
+																		><path
+																			d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
+																		/></svg
+																	>
+																	required
+																</span>
+															{/if}
+															<div class="text-sm font-medium text-gray-900">
+																{truncateName(item.name)}
+															</div>
+														</div>
+													</div>
+												</td>
+												<td class="px-6 py-4 whitespace-nowrap">
+													<span
+														class="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800"
+														>{item.category}</span
+													>
+												</td>
+												<td class="px-6 py-4 text-sm text-gray-700">{item.specification || '—'}</td>
+												<td
+													class="px-6 py-4 text-sm whitespace-nowrap"
+													onclick={(e) => e.stopPropagation()}
+												>
+													<div class="flex items-center gap-1.5 text-xs font-medium">
+														<span
+															class="mr-1 text-sm font-semibold text-gray-900"
+															title="Total Stock"
+														>
+															{item.currentCount ??
+																getCurrentCount(item.quantity, item.donations ?? 0)}
+														</span>
+														<span class="text-gray-300">|</span>
+														<span
+															class="inline-flex cursor-help items-center rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-600/10"
+															title="Available (In Storage)"
+														>
+															{item.available ??
+																item.currentCount ??
+																getCurrentCount(item.quantity, item.donations ?? 0)}
+														</span>
+														<button
+															type="button"
+															onclick={() => openBorrowersModal(item)}
+															class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 ring-1 ring-blue-600/10 transition-colors hover:bg-blue-100"
+															title="Released (Click to view active borrowers)"
+														>
+															{item.released ?? 0}
+														</button>
+													</div>
+												</td>
+												<td class="px-6 py-4 text-sm text-gray-700"
+													>{item.toolsOrEquipment || '—'}</td
+												>
 
-						<!-- Pagination -->
-						{#if totalPages > 1}
-							<Pagination
-								{currentPage}
-								{totalPages}
-								totalItems={sortedItems.length}
-								itemsPerPage={PAGE_SIZE}
-								onPageChange={(p) => {
-									currentPage = p;
-								}}
-							/>
+												<!-- (read-only: no actions for admin) -->
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+							</div>
+
+							<!-- Pagination -->
+							{#if totalPages > 1}
+								<Pagination
+									{currentPage}
+									{totalPages}
+									totalItems={sortedItems.length}
+									itemsPerPage={PAGE_SIZE}
+									onPageChange={(p) => {
+										currentPage = p;
+									}}
+								/>
+							{/if}
 						{/if}
-					{/if}
-				</div>
+					</div>
 				{/if}
 			{:else if activeTab === 'categories'}
 				{#if categoriesTabLoading}
@@ -4206,537 +4341,541 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 				{:else}
 					<!-- Categories View -->
 					<div class="p-4 sm:p-6">
-					<div class="mb-4 flex flex-col gap-3">
-						<div class="flex items-center justify-between gap-3">
-							<h3 class="text-base font-semibold text-gray-900 sm:text-lg">Item Categories</h3>
-							<button
-								onclick={() => (showCategoryModal = true)}
-								class="inline-flex shrink-0 items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 sm:px-4 sm:py-2 sm:text-sm"
-								disabled={loading}
-							>
-								<svg
-									class="mr-1.5 h-3.5 w-3.5"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
+						<div class="mb-4 flex flex-col gap-3">
+							<div class="flex items-center justify-between gap-3">
+								<h3 class="text-base font-semibold text-gray-900 sm:text-lg">Item Categories</h3>
+								<button
+									onclick={() => (showCategoryModal = true)}
+									class="inline-flex shrink-0 items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 sm:px-4 sm:py-2 sm:text-sm"
+									disabled={loading}
 								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M12 4v16m8-8H4"
-									/>
-								</svg>
-								Add Category
-							</button>
-						</div>
-						<!-- Search + Sort row -->
-						<div class="flex gap-2">
-							<div class="relative flex-1">
-								<input
-									type="text"
-									placeholder="Search categories..."
-									bind:value={query}
-									class="w-full rounded-lg border border-gray-300 py-2 pr-3 pl-9 text-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
-								/>
-								<svg
-									class="absolute top-2.5 left-3 h-4 w-4 text-gray-400"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-									/>
-								</svg>
+									<svg
+										class="mr-1.5 h-3.5 w-3.5"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M12 4v16m8-8H4"
+										/>
+									</svg>
+									Add Category
+								</button>
 							</div>
-							<select
-								bind:value={sortOrder}
-								class="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
-							>
-								<option value="az">A – Z</option>
-								<option value="za">Z – A</option>
-							</select>
+							<!-- Search + Sort row -->
+							<div class="flex gap-2">
+								<div class="relative flex-1">
+									<input
+										type="text"
+										placeholder="Search categories..."
+										bind:value={query}
+										class="w-full rounded-lg border border-gray-300 py-2 pr-3 pl-9 text-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
+									/>
+									<svg
+										class="absolute top-2.5 left-3 h-4 w-4 text-gray-400"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+										/>
+									</svg>
+								</div>
+								<select
+									bind:value={sortOrder}
+									class="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
+								>
+									<option value="az">A – Z</option>
+									<option value="za">Z – A</option>
+								</select>
+							</div>
 						</div>
-					</div>
 
-					{#if displayCategories.length === 0}
-						<div class="py-12 text-center">
-							<svg
-								class="mx-auto h-24 w-24 text-pink-600"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-								/>
-							</svg>
-							<h3 class="mt-4 text-lg font-medium text-gray-900">No categories yet</h3>
-							<p class="mt-2 text-sm text-gray-500">
-								Get started by creating your first category to organize your inventory items.
-							</p>
-							<button
-								onclick={() => (showCategoryModal = true)}
-								class="mt-4 inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-							>
-								<svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						{#if displayCategories.length === 0}
+							<div class="py-12 text-center">
+								<svg
+									class="mx-auto h-24 w-24 text-pink-600"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
 									<path
 										stroke-linecap="round"
 										stroke-linejoin="round"
 										stroke-width="2"
-										d="M12 4v16m8-8H4"
+										d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
 									/>
 								</svg>
-								Add Your First Category
-							</button>
-						</div>
-					{:else}
-						<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-							{#each displayCategories as category}
-								<div
-									onclick={() => openCategory(category)}
-									onkeydown={(e) => {
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											openCategory(category);
-										}
-									}}
-									role="button"
-									tabindex="0"
-									aria-label={`Open category ${category.name}`}
-									class="relative cursor-pointer rounded-lg border border-gray-200 p-3 transition-all hover:border-emerald-500 hover:shadow-md sm:p-4"
+								<h3 class="mt-4 text-lg font-medium text-gray-900">No categories yet</h3>
+								<p class="mt-2 text-sm text-gray-500">
+									Get started by creating your first category to organize your inventory items.
+								</p>
+								<button
+									onclick={() => (showCategoryModal = true)}
+									class="mt-4 inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
 								>
-									<div class="flex items-center justify-between gap-2">
-										<div class="min-w-0 flex-1">
-											<h4 class="truncate text-sm font-semibold text-gray-900 sm:text-base">
-												{category.name}
-											</h4>
-											<p class="mt-0.5 text-xs text-gray-500">{category.itemCount} items</p>
-											{#if category.description}
-												<p class="mt-0.5 truncate text-xs text-gray-400">{category.description}</p>
-											{/if}
-										</div>
-										<div class="flex shrink-0 items-center gap-2">
-											{#if category.picture}
-												<img
-													src={category.picture}
-													alt={category.name}
-													class="h-9 w-9 rounded-full object-cover sm:h-10 sm:w-10"
-												/>
-											{:else}
-												<span
-													class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-600 sm:h-10 sm:w-10"
-												>
-													<svg
-														class="h-4 w-4 sm:h-5 sm:w-5"
-														fill="none"
-														stroke="currentColor"
-														viewBox="0 0 24 24"
-													>
-														<path
-															stroke-linecap="round"
-															stroke-linejoin="round"
-															stroke-width="2"
-															d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-														/>
-													</svg>
-												</span>
-											{/if}
-											<!-- Ellipsis Menu -->
-											<div class="relative">
-												<button
-													onclick={(e) => toggleDropdown(category.id, e)}
-													class="rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-													aria-label="Category options"
-												>
-													<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-														<path
-															d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"
-														/>
-													</svg>
-												</button>
-												{#if openDropdownId === category.id}
-													<div
-														class="ring-opacity-5 absolute right-0 z-30 mt-2 w-48 origin-top-right rounded-lg bg-white shadow-lg ring-1 ring-black"
-													>
-														<div class="py-1">
-															<button
-																onclick={(e) => openEditCategory(category, e)}
-																class="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100"
-															>
-																<svg
-																	class="h-4 w-4 text-gray-500"
-																	fill="none"
-																	stroke="currentColor"
-																	viewBox="0 0 24 24"
-																>
-																	<path
-																		stroke-linecap="round"
-																		stroke-linejoin="round"
-																		stroke-width="2"
-																		d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-																	/>
-																</svg>
-																Edit Category
-															</button>
-															<button
-																onclick={(e) => deleteCategory(category, e)}
-																class="flex w-full items-center gap-3 px-4 py-2 text-left text-sm transition-colors {category.itemCount >
-																0
-																	? 'cursor-not-allowed text-gray-400'
-																	: 'text-red-600 hover:bg-red-50'}"
-																disabled={category.itemCount > 0}
-															>
-																<svg
-																	class="h-4 w-4"
-																	fill="none"
-																	stroke="currentColor"
-																	viewBox="0 0 24 24"
-																>
-																	<path
-																		stroke-linecap="round"
-																		stroke-linejoin="round"
-																		stroke-width="2"
-																		d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-																	/>
-																</svg>
-																Delete Category
-																{#if category.itemCount > 0}
-																	<span class="ml-auto text-xs">(has items)</span>
-																{/if}
-															</button>
-														</div>
-													</div>
+									<svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M12 4v16m8-8H4"
+										/>
+									</svg>
+									Add Your First Category
+								</button>
+							</div>
+						{:else}
+							<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+								{#each displayCategories as category}
+									<div
+										onclick={() => openCategory(category)}
+										onkeydown={(e) => {
+											if (e.key === 'Enter' || e.key === ' ') {
+												e.preventDefault();
+												openCategory(category);
+											}
+										}}
+										role="button"
+										tabindex="0"
+										aria-label={`Open category ${category.name}`}
+										class="relative cursor-pointer rounded-lg border border-gray-200 p-3 transition-all hover:border-emerald-500 hover:shadow-md sm:p-4"
+									>
+										<div class="flex items-center justify-between gap-2">
+											<div class="min-w-0 flex-1">
+												<h4 class="truncate text-sm font-semibold text-gray-900 sm:text-base">
+													{category.name}
+												</h4>
+												<p class="mt-0.5 text-xs text-gray-500">{category.itemCount} items</p>
+												{#if category.description}
+													<p class="mt-0.5 truncate text-xs text-gray-400">
+														{category.description}
+													</p>
 												{/if}
+											</div>
+											<div class="flex shrink-0 items-center gap-2">
+												{#if category.picture}
+													<img
+														src={category.picture}
+														alt={category.name}
+														class="h-9 w-9 rounded-full object-cover sm:h-10 sm:w-10"
+													/>
+												{:else}
+													<span
+														class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-600 sm:h-10 sm:w-10"
+													>
+														<svg
+															class="h-4 w-4 sm:h-5 sm:w-5"
+															fill="none"
+															stroke="currentColor"
+															viewBox="0 0 24 24"
+														>
+															<path
+																stroke-linecap="round"
+																stroke-linejoin="round"
+																stroke-width="2"
+																d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+															/>
+														</svg>
+													</span>
+												{/if}
+												<!-- Ellipsis Menu -->
+												<div class="relative">
+													<button
+														onclick={(e) => toggleDropdown(category.id, e)}
+														class="rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+														aria-label="Category options"
+													>
+														<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+															<path
+																d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"
+															/>
+														</svg>
+													</button>
+													{#if openDropdownId === category.id}
+														<div
+															class="ring-opacity-5 absolute right-0 z-30 mt-2 w-48 origin-top-right rounded-lg bg-white shadow-lg ring-1 ring-black"
+														>
+															<div class="py-1">
+																<button
+																	onclick={(e) => openEditCategory(category, e)}
+																	class="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100"
+																>
+																	<svg
+																		class="h-4 w-4 text-gray-500"
+																		fill="none"
+																		stroke="currentColor"
+																		viewBox="0 0 24 24"
+																	>
+																		<path
+																			stroke-linecap="round"
+																			stroke-linejoin="round"
+																			stroke-width="2"
+																			d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+																		/>
+																	</svg>
+																	Edit Category
+																</button>
+																<button
+																	onclick={(e) => deleteCategory(category, e)}
+																	class="flex w-full items-center gap-3 px-4 py-2 text-left text-sm transition-colors {category.itemCount >
+																	0
+																		? 'cursor-not-allowed text-gray-400'
+																		: 'text-red-600 hover:bg-red-50'}"
+																	disabled={category.itemCount > 0}
+																>
+																	<svg
+																		class="h-4 w-4"
+																		fill="none"
+																		stroke="currentColor"
+																		viewBox="0 0 24 24"
+																	>
+																		<path
+																			stroke-linecap="round"
+																			stroke-linejoin="round"
+																			stroke-width="2"
+																			d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+																		/>
+																	</svg>
+																	Delete Category
+																	{#if category.itemCount > 0}
+																		<span class="ml-auto text-xs">(has items)</span>
+																	{/if}
+																</button>
+															</div>
+														</div>
+													{/if}
+												</div>
 											</div>
 										</div>
 									</div>
-								</div>
-							{/each}
-						</div>
-					{/if}
-				</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
 
-				<!-- Category Creation Modal -->
-				{#if showCategoryModal}
-					<div class="fixed inset-0 z-50 overflow-y-auto">
-						<div
-							class="fixed inset-0 bg-black/40 backdrop-blur-sm"
-							role="button"
-							tabindex="0"
-							aria-label="Close add category modal"
-							onclick={() => (showCategoryModal = false)}
-							onkeydown={(e) => {
-								if (e.key === 'Enter' || e.key === ' ') {
-									e.preventDefault();
-									showCategoryModal = false;
-								}
-							}}
-						></div>
-						<div class="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4">
+					<!-- Category Creation Modal -->
+					{#if showCategoryModal}
+						<div class="fixed inset-0 z-50 overflow-y-auto">
 							<div
-								class="relative z-50 w-full max-w-md rounded-t-2xl border border-gray-100 bg-white shadow-2xl sm:rounded-2xl"
-							>
-								<div class="border-b border-gray-200 px-4 py-3 sm:px-5 sm:py-4">
-									<h3 class="text-base font-semibold text-gray-900 sm:text-lg">Add New Category</h3>
-									<p class="mt-1 text-xs text-gray-500">
-										Create a category to organize inventory items.
-									</p>
-								</div>
-								<div class="max-h-[70vh] overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
-									<form onsubmit={handleCreateCategory} class="space-y-3">
-										<div>
-											<label for="categoryName" class="block text-sm font-medium text-gray-700"
-												>Category Name *</label
-											>
-											<input
-												type="text"
-												id="categoryName"
-												bind:value={newCategoryName}
-												required
-												class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
-												placeholder="e.g., Cookware"
-											/>
-										</div>
-										<div>
-											<label
-												for="categoryDescription"
-												class="block text-sm font-medium text-gray-700">Description</label
-											>
-											<input
-												type="text"
-												id="categoryDescription"
-												bind:value={newCategoryDescription}
-												class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
-												placeholder="Optional description"
-											/>
-										</div>
-										<div>
-											<label
-												for="categoryImageInput"
-												class="mb-2 block text-sm font-medium text-gray-700">Category Image</label
-											>
-											<div
-												class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2.5"
-											>
-												<button
-													type="button"
-													onclick={() => categoryPictureInput?.click()}
-													class="inline-flex items-center gap-1.5 rounded-lg bg-pink-600 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-pink-700"
-													disabled={uploadingCategoryImage || loading}
+								class="fixed inset-0 bg-black/40 backdrop-blur-sm"
+								role="button"
+								tabindex="0"
+								aria-label="Close add category modal"
+								onclick={() => (showCategoryModal = false)}
+								onkeydown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										showCategoryModal = false;
+									}
+								}}
+							></div>
+							<div class="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4">
+								<div
+									class="relative z-50 w-full max-w-md rounded-t-2xl border border-gray-100 bg-white shadow-2xl sm:rounded-2xl"
+								>
+									<div class="border-b border-gray-200 px-4 py-3 sm:px-5 sm:py-4">
+										<h3 class="text-base font-semibold text-gray-900 sm:text-lg">
+											Add New Category
+										</h3>
+										<p class="mt-1 text-xs text-gray-500">
+											Create a category to organize inventory items.
+										</p>
+									</div>
+									<div class="max-h-[70vh] overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
+										<form onsubmit={handleCreateCategory} class="space-y-3">
+											<div>
+												<label for="categoryName" class="block text-sm font-medium text-gray-700"
+													>Category Name *</label
 												>
-													{#if uploadingCategoryImage}
-														<div
-															class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-														></div>
-													{:else}
-														<svg
-															class="h-4 w-4"
-															fill="none"
-															stroke="currentColor"
-															viewBox="0 0 24 24"
-															><path
-																stroke-linecap="round"
-																stroke-linejoin="round"
-																stroke-width="2"
-																d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7M16 3l-4 4-4-4"
-															/></svg
-														>
-													{/if}
-													Upload Image
-												</button>
-												<span class="min-w-0 flex-1 truncate text-xs text-gray-600"
-													>{newCategoryPictureFile
-														? newCategoryPictureFile.name
-														: 'No file chosen'}</span
+												<input
+													type="text"
+													id="categoryName"
+													bind:value={newCategoryName}
+													required
+													class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
+													placeholder="e.g., Cookware"
+												/>
+											</div>
+											<div>
+												<label
+													for="categoryDescription"
+													class="block text-sm font-medium text-gray-700">Description</label
 												>
-												{#if newCategoryPicture}
-													<img
-														src={newCategoryPicture}
-														alt="preview"
-														class="h-14 w-14 rounded-lg border border-gray-200 object-cover"
-													/>
+												<input
+													type="text"
+													id="categoryDescription"
+													bind:value={newCategoryDescription}
+													class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
+													placeholder="Optional description"
+												/>
+											</div>
+											<div>
+												<label
+													for="categoryImageInput"
+													class="mb-2 block text-sm font-medium text-gray-700">Category Image</label
+												>
+												<div
+													class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2.5"
+												>
 													<button
 														type="button"
-														onclick={() => {
+														onclick={() => categoryPictureInput?.click()}
+														class="inline-flex items-center gap-1.5 rounded-lg bg-pink-600 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-pink-700"
+														disabled={uploadingCategoryImage || loading}
+													>
+														{#if uploadingCategoryImage}
+															<div
+																class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+															></div>
+														{:else}
+															<svg
+																class="h-4 w-4"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+																><path
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																	stroke-width="2"
+																	d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7M16 3l-4 4-4-4"
+																/></svg
+															>
+														{/if}
+														Upload Image
+													</button>
+													<span class="min-w-0 flex-1 truncate text-xs text-gray-600"
+														>{newCategoryPictureFile
+															? newCategoryPictureFile.name
+															: 'No file chosen'}</span
+													>
+													{#if newCategoryPicture}
+														<img
+															src={newCategoryPicture}
+															alt="preview"
+															class="h-14 w-14 rounded-lg border border-gray-200 object-cover"
+														/>
+														<button
+															type="button"
+															onclick={() => {
+																try {
+																	URL.revokeObjectURL(newCategoryPicture);
+																} catch (e) {}
+																newCategoryPicture = '';
+																newCategoryPictureFile = null;
+															}}
+															class="text-xs text-red-500 hover:text-red-700 sm:text-sm"
+															>Remove</button
+														>
+													{/if}
+													<input
+														id="categoryImageInput"
+														type="file"
+														accept="image/*"
+														onchange={handleCategoryPictureChange}
+														bind:this={categoryPictureInput}
+														class="hidden"
+													/>
+												</div>
+											</div>
+											<div class="flex flex-col-reverse gap-1.5 pt-1.5 sm:flex-row sm:justify-end">
+												<button
+													type="button"
+													onclick={() => {
+														showCategoryModal = false;
+														newCategoryName = '';
+														newCategoryDescription = '';
+														if (newCategoryPicture && newCategoryPicture.startsWith('blob:')) {
 															try {
 																URL.revokeObjectURL(newCategoryPicture);
 															} catch (e) {}
-															newCategoryPicture = '';
-															newCategoryPictureFile = null;
-														}}
-														class="text-xs text-red-500 hover:text-red-700 sm:text-sm"
-														>Remove</button
-													>
-												{/if}
-												<input
-													id="categoryImageInput"
-													type="file"
-													accept="image/*"
-													onchange={handleCategoryPictureChange}
-													bind:this={categoryPictureInput}
-													class="hidden"
-												/>
+														}
+														newCategoryPicture = '';
+														newCategoryPictureFile = null;
+													}}
+													class="inline-flex min-w-27 items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+												>
+													Cancel
+												</button>
+												<button
+													type="submit"
+													class="inline-flex min-w-27 items-center justify-center rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-pink-700"
+													disabled={loading}
+												>
+													Create Category
+												</button>
 											</div>
-										</div>
-										<div class="flex flex-col-reverse gap-1.5 pt-1.5 sm:flex-row sm:justify-end">
-											<button
-												type="button"
-												onclick={() => {
-													showCategoryModal = false;
-													newCategoryName = '';
-													newCategoryDescription = '';
-													if (newCategoryPicture && newCategoryPicture.startsWith('blob:')) {
-														try {
-															URL.revokeObjectURL(newCategoryPicture);
-														} catch (e) {}
-													}
-													newCategoryPicture = '';
-													newCategoryPictureFile = null;
-												}}
-												class="inline-flex min-w-27 items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-											>
-												Cancel
-											</button>
-											<button
-												type="submit"
-												class="inline-flex min-w-27 items-center justify-center rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-pink-700"
-												disabled={loading}
-											>
-												Create Category
-											</button>
-										</div>
-									</form>
+										</form>
+									</div>
 								</div>
 							</div>
 						</div>
-					</div>
-				{/if}
+					{/if}
 
-				<!-- Category Edit Modal -->
-				{#if showEditCategoryModal && editingCategory}
-					<div class="fixed inset-0 z-50 overflow-y-auto">
-						<div
-							class="fixed inset-0 bg-black/40 backdrop-blur-sm"
-							role="button"
-							tabindex="0"
-							aria-label="Close edit category modal"
-							onclick={() => (showEditCategoryModal = false)}
-							onkeydown={(e) => {
-								if (e.key === 'Enter' || e.key === ' ') {
-									e.preventDefault();
-									showEditCategoryModal = false;
-								}
-							}}
-						></div>
-						<div class="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4">
+					<!-- Category Edit Modal -->
+					{#if showEditCategoryModal && editingCategory}
+						<div class="fixed inset-0 z-50 overflow-y-auto">
 							<div
-								class="relative z-50 w-full max-w-md rounded-t-2xl border border-gray-100 bg-white shadow-2xl sm:rounded-2xl"
-							>
-								<div class="border-b border-gray-200 px-4 py-3 sm:px-5 sm:py-4">
-									<h3 class="text-base font-semibold text-gray-900 sm:text-lg">Edit Category</h3>
-									<p class="mt-1 text-xs text-gray-500">Update category details and media.</p>
-								</div>
-								<div class="max-h-[70vh] overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
-									<form onsubmit={handleEditCategory} class="space-y-3">
-										<div>
-											<label for="editCategoryName" class="block text-sm font-medium text-gray-700"
-												>Category Name *</label
-											>
-											<input
-												type="text"
-												id="editCategoryName"
-												bind:value={newCategoryName}
-												required
-												class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
-												placeholder="e.g., Cookware"
-											/>
-										</div>
-										<div>
-											<label
-												for="editCategoryDescription"
-												class="block text-sm font-medium text-gray-700">Description</label
-											>
-											<input
-												type="text"
-												id="editCategoryDescription"
-												bind:value={newCategoryDescription}
-												class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
-												placeholder="Optional description"
-											/>
-										</div>
-										<div>
-											<label
-												for="editCategoryImageInput"
-												class="mb-2 block text-sm font-medium text-gray-700">Category Image</label
-											>
-											<div
-												class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2.5"
-											>
-												<button
-													type="button"
-													onclick={() => editCategoryPictureInput?.click()}
-													class="inline-flex items-center gap-1.5 rounded-lg bg-pink-600 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-pink-700"
-													disabled={uploadingCategoryImage || loading}
+								class="fixed inset-0 bg-black/40 backdrop-blur-sm"
+								role="button"
+								tabindex="0"
+								aria-label="Close edit category modal"
+								onclick={() => (showEditCategoryModal = false)}
+								onkeydown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										showEditCategoryModal = false;
+									}
+								}}
+							></div>
+							<div class="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4">
+								<div
+									class="relative z-50 w-full max-w-md rounded-t-2xl border border-gray-100 bg-white shadow-2xl sm:rounded-2xl"
+								>
+									<div class="border-b border-gray-200 px-4 py-3 sm:px-5 sm:py-4">
+										<h3 class="text-base font-semibold text-gray-900 sm:text-lg">Edit Category</h3>
+										<p class="mt-1 text-xs text-gray-500">Update category details and media.</p>
+									</div>
+									<div class="max-h-[70vh] overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
+										<form onsubmit={handleEditCategory} class="space-y-3">
+											<div>
+												<label
+													for="editCategoryName"
+													class="block text-sm font-medium text-gray-700">Category Name *</label
 												>
-													{#if uploadingCategoryImage}
-														<div
-															class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-														></div>
-													{:else}
-														<svg
-															class="h-4 w-4"
-															fill="none"
-															stroke="currentColor"
-															viewBox="0 0 24 24"
-															><path
-																stroke-linecap="round"
-																stroke-linejoin="round"
-																stroke-width="2"
-																d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7M16 3l-4 4-4-4"
-															/></svg
-														>
-													{/if}
-													Upload Image
-												</button>
-												<span class="min-w-0 flex-1 truncate text-xs text-gray-600"
-													>{newCategoryPictureFile
-														? newCategoryPictureFile.name
-														: 'No file chosen'}</span
+												<input
+													type="text"
+													id="editCategoryName"
+													bind:value={newCategoryName}
+													required
+													class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
+													placeholder="e.g., Cookware"
+												/>
+											</div>
+											<div>
+												<label
+													for="editCategoryDescription"
+													class="block text-sm font-medium text-gray-700">Description</label
 												>
-												{#if newCategoryPicture}
-													<img
-														src={newCategoryPicture}
-														alt="preview"
-														class="h-14 w-14 rounded-lg border border-gray-200 object-cover"
-													/>
+												<input
+													type="text"
+													id="editCategoryDescription"
+													bind:value={newCategoryDescription}
+													class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
+													placeholder="Optional description"
+												/>
+											</div>
+											<div>
+												<label
+													for="editCategoryImageInput"
+													class="mb-2 block text-sm font-medium text-gray-700">Category Image</label
+												>
+												<div
+													class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2.5"
+												>
 													<button
 														type="button"
-														onclick={() => {
-															try {
-																if (newCategoryPicture.startsWith('blob:'))
-																	URL.revokeObjectURL(newCategoryPicture);
-															} catch (e) {}
-															newCategoryPicture = editingCategory?.picture || '';
-															newCategoryPictureFile = null;
-														}}
-														class="text-xs text-red-500 hover:text-red-700 sm:text-sm"
-														>Remove</button
+														onclick={() => editCategoryPictureInput?.click()}
+														class="inline-flex items-center gap-1.5 rounded-lg bg-pink-600 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-pink-700"
+														disabled={uploadingCategoryImage || loading}
 													>
-												{/if}
-												<input
-													id="editCategoryImageInput"
-													type="file"
-													accept="image/*"
-													onchange={handleCategoryPictureChange}
-													bind:this={editCategoryPictureInput}
-													class="hidden"
-												/>
+														{#if uploadingCategoryImage}
+															<div
+																class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+															></div>
+														{:else}
+															<svg
+																class="h-4 w-4"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+																><path
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																	stroke-width="2"
+																	d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7M16 3l-4 4-4-4"
+																/></svg
+															>
+														{/if}
+														Upload Image
+													</button>
+													<span class="min-w-0 flex-1 truncate text-xs text-gray-600"
+														>{newCategoryPictureFile
+															? newCategoryPictureFile.name
+															: 'No file chosen'}</span
+													>
+													{#if newCategoryPicture}
+														<img
+															src={newCategoryPicture}
+															alt="preview"
+															class="h-14 w-14 rounded-lg border border-gray-200 object-cover"
+														/>
+														<button
+															type="button"
+															onclick={() => {
+																try {
+																	if (newCategoryPicture.startsWith('blob:'))
+																		URL.revokeObjectURL(newCategoryPicture);
+																} catch (e) {}
+																newCategoryPicture = editingCategory?.picture || '';
+																newCategoryPictureFile = null;
+															}}
+															class="text-xs text-red-500 hover:text-red-700 sm:text-sm"
+															>Remove</button
+														>
+													{/if}
+													<input
+														id="editCategoryImageInput"
+														type="file"
+														accept="image/*"
+														onchange={handleCategoryPictureChange}
+														bind:this={editCategoryPictureInput}
+														class="hidden"
+													/>
+												</div>
 											</div>
-										</div>
-										<div class="flex flex-col-reverse gap-1.5 pt-1.5 sm:flex-row sm:justify-end">
-											<button
-												type="button"
-												onclick={() => {
-													showEditCategoryModal = false;
-													editingCategory = null;
-													newCategoryName = '';
-													newCategoryDescription = '';
-													if (newCategoryPicture && newCategoryPicture.startsWith('blob:')) {
-														try {
-															URL.revokeObjectURL(newCategoryPicture);
-														} catch (e) {}
-													}
-													newCategoryPicture = '';
-													newCategoryPictureFile = null;
-												}}
-												class="inline-flex min-w-27 items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-											>
-												Cancel
-											</button>
-											<button
-												type="submit"
-												class="inline-flex min-w-27 items-center justify-center rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-pink-700"
-												disabled={loading}
-											>
-												Update Category
-											</button>
-										</div>
-									</form>
+											<div class="flex flex-col-reverse gap-1.5 pt-1.5 sm:flex-row sm:justify-end">
+												<button
+													type="button"
+													onclick={() => {
+														showEditCategoryModal = false;
+														editingCategory = null;
+														newCategoryName = '';
+														newCategoryDescription = '';
+														if (newCategoryPicture && newCategoryPicture.startsWith('blob:')) {
+															try {
+																URL.revokeObjectURL(newCategoryPicture);
+															} catch (e) {}
+														}
+														newCategoryPicture = '';
+														newCategoryPictureFile = null;
+													}}
+													class="inline-flex min-w-27 items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+												>
+													Cancel
+												</button>
+												<button
+													type="submit"
+													class="inline-flex min-w-27 items-center justify-center rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-pink-700"
+													disabled={loading}
+												>
+													Update Category
+												</button>
+											</div>
+										</form>
+									</div>
 								</div>
 							</div>
 						</div>
-					</div>
+					{/if}
 				{/if}
-				{/if}
-
 			{/if}
 		</div>
 	{/if}
@@ -5630,13 +5769,13 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 											class="hidden"
 										/>
 									</label>
-									{:else if importFile}
-										<!-- File Preview Card -->
-										<div class="rounded-lg border-2 border-emerald-500 bg-white p-4 transition-all">
-											<div class="flex items-start gap-4">
-												<!-- File Icon -->
-												<div class="shrink-0">
-													{#if importFile && getFileIcon(importFile.name) === 'csv'}
+								{:else if importFile}
+									<!-- File Preview Card -->
+									<div class="rounded-lg border-2 border-emerald-500 bg-white p-4 transition-all">
+										<div class="flex items-start gap-4">
+											<!-- File Icon -->
+											<div class="shrink-0">
+												{#if importFile && getFileIcon(importFile.name) === 'csv'}
 													<div
 														class="flex h-12 w-12 items-center justify-center rounded-lg bg-green-100"
 													>
@@ -5719,8 +5858,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 								{/if}
 							</div>
 
-
-{#if importing}
+							{#if importing}
 								<div class="flex items-center justify-center gap-3 py-8">
 									<div
 										class="h-6 w-6 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent"
@@ -5761,7 +5899,9 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 									class="rounded-2xl border border-pink-100 bg-linear-to-br from-pink-50 to-pink-100/50 p-5 shadow-sm"
 								>
 									<p class="text-xs font-bold tracking-wide text-pink-600 uppercase">Total Rows</p>
-									<p class="mt-1.5 text-3xl font-black text-pink-900">{processedImportPreviewData.length}</p>
+									<p class="mt-1.5 text-3xl font-black text-pink-900">
+										{processedImportPreviewData.length}
+									</p>
 								</div>
 								<div
 									class="rounded-2xl border border-green-100 bg-linear-to-br from-green-50 to-green-100/50 p-5 shadow-sm"
@@ -5784,17 +5924,18 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 								>
 									<p class="text-xs font-bold tracking-wide text-amber-600 uppercase">No Change</p>
 									<p class="mt-1.5 text-3xl font-black text-amber-900">
-										{processedImportPreviewData.filter((i) => i._importAction === 'no-change').length}
+										{processedImportPreviewData.filter((i) => i._importAction === 'no-change')
+											.length}
 									</p>
 								</div>
 							</div>
 
 							<!-- Selective Update Configuration Panel -->
-							<div class="rounded-2xl border border-pink-100 bg-pink-50/10 p-5 shadow-xs space-y-4">
+							<div class="space-y-4 rounded-2xl border border-pink-100 bg-pink-50/10 p-5 shadow-xs">
 								<div class="flex items-center justify-between border-b border-pink-100/50 pb-2">
 									<div class="flex items-center gap-2">
 										<Sliders class="h-4.5 w-4.5 text-pink-600" />
-										<h3 class="text-xs font-bold text-pink-900 tracking-wide uppercase">
+										<h3 class="text-xs font-bold tracking-wide text-pink-900 uppercase">
 											Fields to Update / Import
 										</h3>
 									</div>
@@ -5802,15 +5943,15 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 										<button
 											type="button"
 											onclick={() => toggleAllImportFields(true)}
-											class="text-[11px] font-bold text-pink-600 hover:text-pink-700 transition-colors"
+											class="text-[11px] font-bold text-pink-600 transition-colors hover:text-pink-700"
 										>
 											Select All
 										</button>
-										<span class="text-pink-200 text-[11px]">|</span>
+										<span class="text-[11px] text-pink-200">|</span>
 										<button
 											type="button"
 											onclick={() => toggleAllImportFields(false)}
-											class="text-[11px] font-bold text-gray-500 hover:text-gray-700 transition-colors"
+											class="text-[11px] font-bold text-gray-500 transition-colors hover:text-gray-700"
 										>
 											Clear All
 										</button>
@@ -5819,93 +5960,117 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 
 								<div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
 									<!-- Name -->
-									<label class="flex items-center gap-2.5 cursor-pointer rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 hover:bg-pink-50/20 hover:border-pink-200 transition-all select-none shadow-xs">
+									<label
+										class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 shadow-xs transition-all select-none hover:border-pink-200 hover:bg-pink-50/20"
+									>
 										<input
 											type="checkbox"
 											bind:checked={selectedImportFields.name}
-											class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+											class="h-4.5 w-4.5 cursor-pointer rounded border-gray-300 text-pink-600 focus:ring-pink-500"
 										/>
-										<span class="text-xs font-semibold text-gray-800 leading-none">Name</span>
+										<span class="text-xs leading-none font-semibold text-gray-800">Name</span>
 									</label>
 
 									<!-- Category -->
-									<label class="flex items-center gap-2.5 cursor-pointer rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 hover:bg-pink-50/20 hover:border-pink-200 transition-all select-none shadow-xs">
+									<label
+										class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 shadow-xs transition-all select-none hover:border-pink-200 hover:bg-pink-50/20"
+									>
 										<input
 											type="checkbox"
 											bind:checked={selectedImportFields.category}
-											class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+											class="h-4.5 w-4.5 cursor-pointer rounded border-gray-300 text-pink-600 focus:ring-pink-500"
 										/>
-										<span class="text-xs font-semibold text-gray-800 leading-none">Category</span>
+										<span class="text-xs leading-none font-semibold text-gray-800">Category</span>
 									</label>
 
 									<!-- Specification -->
-									<label class="flex items-center gap-2.5 cursor-pointer rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 hover:bg-pink-50/20 hover:border-pink-200 transition-all select-none shadow-xs">
+									<label
+										class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 shadow-xs transition-all select-none hover:border-pink-200 hover:bg-pink-50/20"
+									>
 										<input
 											type="checkbox"
 											bind:checked={selectedImportFields.specification}
-											class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+											class="h-4.5 w-4.5 cursor-pointer rounded border-gray-300 text-pink-600 focus:ring-pink-500"
 										/>
-										<span class="text-xs font-semibold text-gray-800 leading-none">Specification</span>
+										<span class="text-xs leading-none font-semibold text-gray-800"
+											>Specification</span
+										>
 									</label>
 
 									<!-- Tools or Equipment -->
-									<label class="flex items-center gap-2.5 cursor-pointer rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 hover:bg-pink-50/20 hover:border-pink-200 transition-all select-none shadow-xs">
+									<label
+										class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 shadow-xs transition-all select-none hover:border-pink-200 hover:bg-pink-50/20"
+									>
 										<input
 											type="checkbox"
 											bind:checked={selectedImportFields.toolsOrEquipment}
-											class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+											class="h-4.5 w-4.5 cursor-pointer rounded border-gray-300 text-pink-600 focus:ring-pink-500"
 										/>
-										<span class="text-xs font-semibold text-gray-800 leading-none">Tools/Equipment</span>
+										<span class="text-xs leading-none font-semibold text-gray-800"
+											>Tools/Equipment</span
+										>
 									</label>
 
 									<!-- Current Count -->
-									<label class="flex items-center gap-2.5 cursor-pointer rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 hover:bg-pink-50/20 hover:border-pink-200 transition-all select-none shadow-xs">
+									<label
+										class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 shadow-xs transition-all select-none hover:border-pink-200 hover:bg-pink-50/20"
+									>
 										<input
 											type="checkbox"
 											bind:checked={selectedImportFields.quantity}
-											class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+											class="h-4.5 w-4.5 cursor-pointer rounded border-gray-300 text-pink-600 focus:ring-pink-500"
 										/>
-										<span class="text-xs font-semibold text-gray-800 leading-none">Current Count</span>
+										<span class="text-xs leading-none font-semibold text-gray-800"
+											>Current Count</span
+										>
 									</label>
 
 									<!-- EOM Count -->
-									<label class="flex items-center gap-2.5 cursor-pointer rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 hover:bg-pink-50/20 hover:border-pink-200 transition-all select-none shadow-xs">
+									<label
+										class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 shadow-xs transition-all select-none hover:border-pink-200 hover:bg-pink-50/20"
+									>
 										<input
 											type="checkbox"
 											bind:checked={selectedImportFields.eomCount}
-											class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+											class="h-4.5 w-4.5 cursor-pointer rounded border-gray-300 text-pink-600 focus:ring-pink-500"
 										/>
-										<span class="text-xs font-semibold text-gray-800 leading-none">EOM Count</span>
+										<span class="text-xs leading-none font-semibold text-gray-800">EOM Count</span>
 									</label>
 
 									<!-- Donations -->
-									<label class="flex items-center gap-2.5 cursor-pointer rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 hover:bg-pink-50/20 hover:border-pink-200 transition-all select-none shadow-xs">
+									<label
+										class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 shadow-xs transition-all select-none hover:border-pink-200 hover:bg-pink-50/20"
+									>
 										<input
 											type="checkbox"
 											bind:checked={selectedImportFields.donations}
-											class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+											class="h-4.5 w-4.5 cursor-pointer rounded border-gray-300 text-pink-600 focus:ring-pink-500"
 										/>
-										<span class="text-xs font-semibold text-gray-800 leading-none">Donations</span>
+										<span class="text-xs leading-none font-semibold text-gray-800">Donations</span>
 									</label>
 
 									<!-- Variance -->
-									<label class="flex items-center gap-2.5 cursor-pointer rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 hover:bg-pink-50/20 hover:border-pink-200 transition-all select-none shadow-xs">
+									<label
+										class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 shadow-xs transition-all select-none hover:border-pink-200 hover:bg-pink-50/20"
+									>
 										<input
 											type="checkbox"
 											bind:checked={selectedImportFields.variance}
-											class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+											class="h-4.5 w-4.5 cursor-pointer rounded border-gray-300 text-pink-600 focus:ring-pink-500"
 										/>
-										<span class="text-xs font-semibold text-gray-800 leading-none">Variance</span>
+										<span class="text-xs leading-none font-semibold text-gray-800">Variance</span>
 									</label>
 
 									<!-- Image -->
-									<label class="flex items-center gap-2.5 cursor-pointer rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 hover:bg-pink-50/20 hover:border-pink-200 transition-all select-none shadow-xs">
+									<label
+										class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-100 bg-white/60 px-3 py-2.5 shadow-xs transition-all select-none hover:border-pink-200 hover:bg-pink-50/20"
+									>
 										<input
 											type="checkbox"
 											bind:checked={selectedImportFields.picture}
-											class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+											class="h-4.5 w-4.5 cursor-pointer rounded border-gray-300 text-pink-600 focus:ring-pink-500"
 										/>
-										<span class="text-xs font-semibold text-gray-800 leading-none">Image</span>
+										<span class="text-xs leading-none font-semibold text-gray-800">Image</span>
 									</label>
 								</div>
 							</div>
@@ -5973,7 +6138,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 														type="checkbox"
 														checked={allRowsSelected}
 														onchange={toggleAllRows}
-														class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+														class="h-4.5 w-4.5 cursor-pointer rounded border-gray-300 text-pink-600 focus:ring-pink-500"
 													/>
 												</th>
 												<th
@@ -6012,7 +6177,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 															: item._importAction === 'no-change'
 																? 'bg-amber-50/40 hover:bg-amber-50'
 																: item._importAction === 'skip'
-																	? 'opacity-40 bg-gray-50'
+																	? 'bg-gray-50 opacity-40'
 																	: 'bg-red-50'}
 												>
 													<td class="w-12 px-4 py-3 text-center">
@@ -6020,12 +6185,14 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 															type="checkbox"
 															checked={item._selected !== false}
 															onchange={(e) => {
-																const originalItem = importPreviewData.find((i) => i._rowNumber === item._rowNumber);
+																const originalItem = importPreviewData.find(
+																	(i) => i._rowNumber === item._rowNumber
+																);
 																if (originalItem) {
 																	originalItem._selected = e.currentTarget.checked;
 																}
 															}}
-															class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+															class="h-4.5 w-4.5 cursor-pointer rounded border-gray-300 text-pink-600 focus:ring-pink-500"
 														/>
 													</td>
 													<td class="px-4 py-3 whitespace-nowrap">
@@ -6069,9 +6236,21 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 																No Change
 															</span>
 														{:else if item._importAction === 'skip'}
-															<span class="inline-flex items-center gap-1 text-xs text-gray-400 select-none">
-																<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																	<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+															<span
+																class="inline-flex items-center gap-1 text-xs text-gray-400 select-none"
+															>
+																<svg
+																	class="h-4 w-4"
+																	fill="none"
+																	stroke="currentColor"
+																	viewBox="0 0 24 24"
+																>
+																	<path
+																		stroke-linecap="round"
+																		stroke-linejoin="round"
+																		stroke-width="2"
+																		d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+																	/>
 																</svg>
 																Skipped
 															</span>
@@ -6269,8 +6448,8 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 
 <ExportModal
 	bind:show={showExportModal}
-	items={items}
-	isExporting={isExporting}
+	{items}
+	{isExporting}
 	onExport={handleExportConfirm}
 	onCancel={() => exportAbortController?.abort()}
 />

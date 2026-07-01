@@ -321,6 +321,18 @@ export const inventoryItemsAPI = {
 	},
 
 	/**
+	 * Delete multiple inventory items (bulk soft delete)
+	 */
+	async bulkDelete(ids: string[]): Promise<{ success: boolean; message: string }> {
+		const response = await fetchWithAuthRetry(
+			'/api/inventory/items/bulk-delete',
+			getFetchOptions('DELETE', { ids: ids.map((id) => parseInt(id)) })
+		);
+
+		return handleResponse(response);
+	},
+
+	/**
 	 * Get all active borrowers for inventory items
 	 */
 	async getAllBorrowers(): Promise<{

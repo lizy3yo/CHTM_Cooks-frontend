@@ -36,6 +36,7 @@
 	type Tab = 'all-items' | 'categories';
 
 	let activeTab = $state<Tab>('all-items');
+	let selectedIds = $state<string[]>([]);
 	let requiredFilter = $state<'all' | 'required' | 'regular'>('all');
 	let statusFilter = $state('all');
 	let showAddItemModal = $state(false);
@@ -1053,6 +1054,13 @@
 		statusFilter;
 		sortOrder;
 		currentPage = 1;
+		selectedIds = [];
+	});
+
+	// Reset selection when changing page
+	$effect(() => {
+		currentPage;
+		selectedIds = [];
 	});
 
 
@@ -1516,6 +1524,81 @@
 		} catch (err: any) {
 			toastStore.error(err.message || 'Failed to delete item');
 			console.error('Error deleting item:', err);
+			loading = false;
+		}
+	}
+
+	function toggleSelection(id: string) {
+		if (selectedIds.includes(id)) {
+			selectedIds = selectedIds.filter((x) => x !== id);
+		} else {
+			selectedIds = [...selectedIds, id];
+		}
+	}
+
+	const isAllPageSelected = $derived(
+		displayItems.length > 0 && displayItems.every((item) => selectedIds.includes(item.id))
+	);
+
+	function toggleSelectAll() {
+		if (isAllPageSelected) {
+			const pageIds = displayItems.map((item) => item.id);
+			selectedIds = selectedIds.filter((id) => !pageIds.includes(id));
+		} else {
+			const newIds = [...selectedIds];
+			displayItems.forEach((item) => {
+				if (!newIds.includes(item.id)) {
+					newIds.push(item.id);
+				}
+			});
+			selectedIds = newIds;
+		}
+	}
+
+	async function deleteSelected() {
+		if (selectedIds.length === 0) return;
+
+		const confirmed = await confirmStore.danger(
+			`Are you sure you want to remove the ${selectedIds.length} selected items? This action cannot be undone.`,
+			'Remove Selected Items',
+			'Remove All',
+			'Cancel'
+		);
+
+		if (!confirmed) return;
+
+		try {
+			loading = true;
+
+			// Delete from API
+			await inventoryItemsAPI.bulkDelete(selectedIds);
+
+			// Recalculate category counts before filtering
+			const deletedItems = items.filter((item) => selectedIds.includes(item.id));
+			deletedItems.forEach((item) => {
+				if (item.categoryId) {
+					const categoryIndex = categories.findIndex((c) => c.id === item.categoryId);
+					if (categoryIndex !== -1) {
+						categories[categoryIndex] = {
+							...categories[categoryIndex],
+							itemCount: Math.max(0, categories[categoryIndex].itemCount - 1)
+						};
+					}
+				}
+			});
+
+			// Filter out deleted items from local state
+			items = items.filter((item) => !selectedIds.includes(item.id));
+
+			selectedIds = [];
+			toastStore.success('Selected items deleted successfully');
+
+			inventoryStore.setItems(items);
+			inventoryStore.setCategories(categories);
+		} catch (err) {
+			console.error('Error during bulk deletion:', err);
+			toastStore.error('Failed to delete selected items');
+		} finally {
 			loading = false;
 		}
 	}
@@ -4047,85 +4130,136 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							</div>
 						</div>
 					{:else}
+						<!-- Bulk Actions Banner -->
+						{#if selectedIds.length > 0}
+							<div class="m-4 flex items-center justify-between rounded-lg bg-pink-50 border border-pink-200 px-4 py-3 shadow-xs animate-fadeIn">
+								<div class="flex items-center gap-2">
+									<span class="text-xs font-semibold text-pink-700 sm:text-sm">
+										{selectedIds.length} item{selectedIds.length > 1 ? 's' : ''} selected
+									</span>
+									<button
+										onclick={() => selectedIds = []}
+										class="text-[11px] sm:text-xs text-pink-500 hover:text-pink-700 font-semibold underline cursor-pointer"
+									>
+										Clear selection
+									</button>
+								</div>
+								<button
+									onclick={deleteSelected}
+									disabled={loading}
+									class="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-[11px] sm:text-xs font-semibold text-white shadow-xs transition-colors hover:bg-red-700 focus:outline-hidden disabled:opacity-50 cursor-pointer"
+								>
+									<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+									</svg>
+									Delete Selected
+								</button>
+							</div>
+						{/if}
+
+						<!-- Mobile Select All Bar -->
+						<div class="flex items-center justify-between border-b border-gray-100 px-4 py-2.5 sm:hidden">
+							<label class="flex items-center gap-2.5 text-xs font-semibold text-gray-700 cursor-pointer select-none">
+								<input
+									type="checkbox"
+									class="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+									checked={isAllPageSelected}
+									onchange={toggleSelectAll}
+								/>
+								Select All (Page)
+							</label>
+						</div>
+
 						<!-- Mobile card list — hidden on sm+ -->
 						<div class="divide-y divide-gray-100 sm:hidden">
 							{#each displayItems as item, i}
 								{@const status = getItemStatus(item)}
-								<button
-									class="w-full px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100"
-									onclick={() => openModal(item)}
-								>
-									<div class="flex items-center gap-3">
-										<span
-											class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600"
-										>
-											{(currentPage - 1) * PAGE_SIZE + i + 1}
-										</span>
-										<div
-											class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100"
-										>
-											{#if item.picture}
-												<img
-													src={item.picture}
-													alt={item.name}
-													class="h-full w-full object-cover"
-													loading="lazy"
-												/>
-											{:else}
-												<ItemImagePlaceholder size="sm" />
-											{/if}
-										</div>
-										<div class="min-w-0 flex-1">
-											<p class="truncate text-sm font-semibold text-gray-900">{truncateName(item.name)}</p>
-											<p class="truncate text-xs text-gray-500">
-												{item.specification || item.category}
-											</p>
-											<div class="mt-1 flex flex-wrap items-center gap-1">
-												{#if item.isrequired}
-													<span
-														class="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800"
-														>Required</span
-													>
-												{/if}
-												<span
-													class="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800"
-													>{item.category}</span
-												>
-												{#if status === 'Out of Stock'}
-													<span
-														class="inline-flex items-center gap-1 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-red-600/10"
-													>
-														<span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>
-														Out of Stock
-													</span>
-												{:else}
-													<span
-														class="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-600/10"
-													>
-														<span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-														In Stock
-													</span>
-												{/if}
-												<span class="text-[10px] text-gray-400"
-													>Total: {item.currentCount ?? getCurrentCount(item.quantity, item.donations ?? 0)} (Avail: {item.available ?? getCurrentCount(item.quantity, item.donations ?? 0)} · Rel: {item.released ?? 0}) · EOM: {item.eomCount}</span
-												>
-											</div>
-										</div>
-										<svg
-											class="h-4 w-4 shrink-0 text-gray-300"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M9 5l7 7-7 7"
-											/>
-										</svg>
+								<div class="relative flex items-center px-4 py-3 hover:bg-gray-50 {selectedIds.includes(item.id) ? 'bg-pink-50/20' : ''}">
+									<div class="mr-2">
+										<input
+											type="checkbox"
+											class="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+											checked={selectedIds.includes(item.id)}
+											onchange={() => toggleSelection(item.id)}
+											onclick={(e) => e.stopPropagation()}
+										/>
 									</div>
-								</button>
+									<button
+										class="flex-1 min-w-0 text-left transition-colors"
+										onclick={() => openModal(item)}
+									>
+										<div class="flex items-center gap-3">
+											<span
+												class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600"
+											>
+												{(currentPage - 1) * PAGE_SIZE + i + 1}
+											</span>
+											<div
+												class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100"
+											>
+												{#if item.picture}
+													<img
+														src={item.picture}
+														alt={item.name}
+														class="h-full w-full object-cover"
+														loading="lazy"
+													/>
+												{:else}
+													<ItemImagePlaceholder size="sm" />
+												{/if}
+											</div>
+											<div class="min-w-0 flex-1">
+												<p class="truncate text-sm font-semibold text-gray-900">{truncateName(item.name)}</p>
+												<p class="truncate text-xs text-gray-500">
+													{item.specification || item.category}
+												</p>
+												<div class="mt-1 flex flex-wrap items-center gap-1">
+													{#if item.isrequired}
+														<span
+															class="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800"
+															>Required</span
+														>
+													{/if}
+													<span
+														class="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800"
+														>{item.category}</span
+													>
+													{#if status === 'Out of Stock'}
+														<span
+															class="inline-flex items-center gap-1 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-red-600/10"
+														>
+															<span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>
+															Out of Stock
+														</span>
+													{:else}
+														<span
+															class="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-600/10"
+														>
+															<span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+															In Stock
+														</span>
+													{/if}
+													<span class="text-[10px] text-gray-400"
+														>Total: {item.currentCount ?? getCurrentCount(item.quantity, item.donations ?? 0)} (Avail: {item.available ?? getCurrentCount(item.quantity, item.donations ?? 0)} · Rel: {item.released ?? 0}) · EOM: {item.eomCount}</span
+													>
+												</div>
+											</div>
+											<svg
+												class="h-4 w-4 shrink-0 text-gray-300"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M9 5l7 7-7 7"
+												/>
+											</svg>
+										</div>
+									</button>
+								</div>
 							{/each}
 						</div>
 
@@ -4134,6 +4268,14 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							<table class="min-w-full divide-y divide-gray-200">
 								<thead class="bg-gray-50">
 									<tr>
+										<th class="w-10 px-6 py-3 text-left">
+											<input
+												type="checkbox"
+												class="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+												checked={isAllPageSelected}
+												onchange={toggleSelectAll}
+											/>
+										</th>
 										<th
 											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
 											>Item Name</th
@@ -4165,9 +4307,17 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 									{#each displayItems as item, i}
 										{@const status = getItemStatus(item)}
 										<tr
-											class="cursor-pointer transition-colors hover:bg-gray-50"
+											class="cursor-pointer transition-colors hover:bg-gray-50 {selectedIds.includes(item.id) ? 'bg-pink-50/20' : ''}"
 											onclick={() => openModal(item)}
 										>
+											<td class="px-6 py-4 whitespace-nowrap" onclick={(e) => e.stopPropagation()}>
+												<input
+													type="checkbox"
+													class="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+													checked={selectedIds.includes(item.id)}
+													onchange={() => toggleSelection(item.id)}
+												/>
+											</td>
 											<td class="px-6 py-4 whitespace-nowrap">
 												<div class="flex items-center gap-3">
 													<span
