@@ -104,12 +104,23 @@ const laravelProxyHandler: Handle = async ({ event, resolve }) => {
 				}
 			} else if (contentType.includes('multipart/form-data')) {
 				try {
-					const arrayBuffer = await event.request.arrayBuffer();
-					requestOptions.body = arrayBuffer;
+					const formData = await event.request.formData();
+					const newFormData = new FormData();
+					for (const [key, value] of formData.entries()) {
+						newFormData.append(key, value);
+					}
+					requestOptions.body = newFormData;
+					headers.delete('content-type');
 				} catch (e) {
-					console.error('Failed to parse multipart request body as ArrayBuffer:', e);
-					requestOptions.body = event.request.body;
-					Object.assign(requestOptions, { duplex: 'half' });
+					console.error('Failed to parse multipart request body as FormData:', e);
+					try {
+						const arrayBuffer = await event.request.arrayBuffer();
+						requestOptions.body = arrayBuffer;
+					} catch (err) {
+						console.error('Fallback to ArrayBuffer failed:', err);
+						requestOptions.body = event.request.body;
+						Object.assign(requestOptions, { duplex: 'half' });
+					}
 				}
 			} else {
 				// Fallback for other request bodies
