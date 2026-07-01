@@ -103,8 +103,14 @@ const laravelProxyHandler: Handle = async ({ event, resolve }) => {
 					console.error('Failed to parse and encrypt request body:', e);
 				}
 			} else if (contentType.includes('multipart/form-data')) {
-				requestOptions.body = event.request.body;
-				Object.assign(requestOptions, { duplex: 'half' });
+				try {
+					const arrayBuffer = await event.request.arrayBuffer();
+					requestOptions.body = arrayBuffer;
+				} catch (e) {
+					console.error('Failed to parse multipart request body as ArrayBuffer:', e);
+					requestOptions.body = event.request.body;
+					Object.assign(requestOptions, { duplex: 'half' });
+				}
 			} else {
 				// Fallback for other request bodies
 				try {
@@ -399,6 +405,7 @@ function getAllowedOrigin(origin: string | null): string {
 	const allowedOrigins = [
 		'http://localhost:5173',
 		'http://localhost:3000',
+		'https://chtmcooks.vercel.app',
 		'https://yourdomain.com',
 		'https://www.yourdomain.com'
 		// Add your production domains here
