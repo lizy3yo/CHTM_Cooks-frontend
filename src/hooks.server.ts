@@ -67,7 +67,7 @@ const laravelProxyHandler: Handle = async ({ event, resolve }) => {
 		// src/routes/api/inventory/upload/+server.ts which uploads directly to Cloudinary.
 		// Bypassing the BFF proxy here avoids multipart boundary corruption in
 		// serverless environments (Vercel) when proxying through to Render.
-		if (event.url.pathname === '/api/inventory/upload') {
+		if (event.url.pathname === '/api/inventory/upload' || event.url.pathname === '/api/auth/profile/photo') {
 			return resolve(event);
 		}
 
