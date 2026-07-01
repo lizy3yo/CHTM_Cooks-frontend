@@ -198,3 +198,60 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		);
 	}
 };
+
+export const DELETE: RequestHandler = async ({ cookies }) => {
+	// ── Authentication ────────────────────────────────────────────────────────
+	const accessToken = cookies.get('access_token');
+	if (!accessToken) {
+		return json({ error: 'Unauthorized', message: 'No active session.' }, { status: 401 });
+	}
+
+	const laravelBaseUrl = env.LARAVEL_API_URL || 'http://127.0.0.1:8000';
+
+	try {
+		// Forward delete request to Laravel
+		const laravelRes = await fetch(`${laravelBaseUrl}/api/auth/profile/photo`, {
+			method: 'DELETE',
+			headers: {
+				'Authorization': `Bearer ${accessToken}`,
+				'Accept': 'application/json'
+			}
+		});
+
+		const responseText = await laravelRes.text();
+		
+		if (!laravelRes.ok) {
+			console.error('[profile-photo] Backend rejected profile photo removal:', responseText);
+			return json(
+				{ error: 'Removal failed', message: 'Could not remove profile photo in backend.' },
+				{ status: laravelRes.status }
+			);
+		}
+
+		// Decrypt backend response if encrypted
+		const isEncrypted = laravelRes.headers.get('X-Response-Encrypted') === 'true' ||
+			laravelRes.headers.get('x-response-encrypted') === 'true';
+
+		let finalData;
+		if (isEncrypted && responseText) {
+			const encryptedJson = JSON.parse(responseText);
+			finalData = decrypt(
+				encryptedJson.payload,
+				encryptedJson.iv,
+				encryptedJson.tag,
+				encryptedJson.timestamp
+			);
+		} else {
+			finalData = JSON.parse(responseText);
+		}
+
+		return json(finalData);
+	} catch (err) {
+		const message = err instanceof Error ? err.message : 'Unknown error';
+		console.error('[profile-photo] Error communicating with Laravel backend:', message);
+		return json(
+			{ error: 'Removal failed', message: 'Could not update user record in database.' },
+			{ status: 502 }
+		);
+	}
+};
