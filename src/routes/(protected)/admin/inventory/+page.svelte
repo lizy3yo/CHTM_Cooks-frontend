@@ -3617,49 +3617,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 			</div>
 		{/if}
 
-		<div class="flex flex-wrap gap-2">
-			<button
-				onclick={openImportModal}
-				class="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 focus:ring-2 focus:ring-emerald-500 focus:outline-none sm:px-4"
-				disabled={loading}
-			>
-				<svg class="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-					/>
-				</svg>
-				<span class="hidden sm:inline">Import Items</span>
-				<span class="sm:hidden">Import</span>
-			</button>
-			<button
-				onclick={() => (showExportModal = true)}
-				class="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none sm:px-4"
-				disabled={isExporting || loading}
-			>
-				<Download class="mr-1.5 h-4 w-4" />
-				<span class="hidden sm:inline">Export</span>
-				<span class="sm:hidden">Export</span>
-			</button>
-			<button
-				onclick={openAddItemModal}
-				class="inline-flex items-center rounded-lg bg-pink-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:outline-none sm:px-4"
-				disabled={loading}
-			>
-				<svg class="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M12 4v16m8-8H4"
-					/>
-				</svg>
-				<span class="hidden sm:inline">Add New Item</span>
-				<span class="sm:hidden">Add Item</span>
-			</button>
-		</div>
+
 	</div>
 
 	<!-- Global Skeleton Loading State -->
