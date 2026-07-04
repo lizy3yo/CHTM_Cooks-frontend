@@ -22,7 +22,9 @@
 		X
 	} from 'lucide-svelte';
 
-	type Tab = 'overview' | 'borrowing' | 'loss-damage' | 'inventory' | 'students';
+	import ProcessedTransactionsTab from '$lib/components/reports/ProcessedTransactionsTab.svelte';
+
+	type Tab = 'overview' | 'borrowing' | 'loss-damage' | 'inventory' | 'students' | 'processed';
 	type DatePreset = 'today' | 'last7' | 'mtd' | 'custom';
 
 	const initialTo = todayISO();
@@ -601,7 +603,7 @@
 	<div class="rounded-xl border border-gray-200 bg-white shadow-sm">
 		<div class="border-b border-gray-200 px-4">
 			<nav class="flex gap-4 overflow-x-auto" aria-label="Report tabs">
-				{#each [{ id: 'overview', label: 'Overview', icon: BarChart3 }, { id: 'borrowing', label: 'Borrowing Analytics', icon: Package }, { id: 'loss-damage', label: 'Loss & Damage', icon: AlertTriangle }, { id: 'inventory', label: 'Inventory', icon: Package }, { id: 'students', label: 'Student Risk', icon: Users }] as tab}
+				{#each [{ id: 'overview', label: 'Overview', icon: BarChart3 }, { id: 'borrowing', label: 'Borrowing Analytics', icon: Package }, { id: 'loss-damage', label: 'Loss & Damage', icon: AlertTriangle }, { id: 'inventory', label: 'Inventory', icon: Package }, { id: 'students', label: 'Student Risk', icon: Users }, { id: 'processed', label: 'Processed Transactions', icon: FileText }] as tab}
 					<button
 						onclick={() => (activeTab = tab.id as Tab)}
 						class="flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition {activeTab ===
@@ -625,6 +627,10 @@
 				<div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
 					{error}
 				</div>
+			</div>
+		{:else if activeTab === 'processed'}
+			<div class="p-6">
+				<ProcessedTransactionsTab />
 			</div>
 		{:else if (activeTab === 'overview' && summaryReport) || report}
 			<div class="space-y-6 p-6">

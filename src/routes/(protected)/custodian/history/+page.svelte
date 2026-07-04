@@ -15,7 +15,7 @@
 	import ActionMenu from '$lib/components/ui/ActionMenu.svelte';
 	import { RotateCcw, Trash2 } from 'lucide-svelte';
 
-	type Tab = 'activity-logs' | 'request-history' | 'archived' | 'deleted';
+	type Tab = 'activity-logs' | 'archived' | 'deleted';
 	
 	let activeTab = $state<Tab>('activity-logs');
 	
@@ -27,14 +27,12 @@
 	
 	let initialLoadComplete = $state(hasCachedData);
 	let activityLogsLoading = $state(!hasCachedData);
-	let requestHistoryLoading = $state(true);
 	let archivedLoading = $state(true);
 	let deletedLoading = $state(true);
 	let inFlightLoadId = 0;
 
 	const activeTabLoading = $derived(
 		activeTab === 'activity-logs' ? activityLogsLoading :
-		activeTab === 'request-history' ? requestHistoryLoading :
 		activeTab === 'archived' ? archivedLoading :
 		deletedLoading
 	);
@@ -69,21 +67,6 @@
 	let filterEndDate = $state('');
 	let activitySearchQuery = $state('');
 	let showActivityFilters = $state(false);
-
-	// Request History state
-	let requestHistory = $state<any[]>([]);
-	let requestHistoryTotal = $state(0);
-	let requestHistoryPage = $state(1);
-	let requestHistoryLimit = $state(50);
-	let requestHistorySearch = $state('');
-	let requestHistoryLoaded = $state(false); // Track if request history has been loaded
-	let requestHistoryFilterStatus = $state('');
-	let requestHistoryFilterStartDate = $state('');
-	let requestHistoryFilterEndDate = $state('');
-	let showRequestHistoryFilters = $state(false);
-	let showRequestDetailModal = $state(false);
-	let selectedHistoryRequest = $state<any>(null);
-	let itemPictureCache = $state<Map<string, string>>(new Map());
 
 	// Archived Items filters
 	let archivedFilterCondition = $state('');
@@ -164,8 +147,6 @@
 		// Only load data if not already loaded to prevent unnecessary refreshes
 		if (tab === 'activity-logs') {
 			if (!activityLogsLoaded) loadActivityLogs();
-		} else if (tab === 'request-history') {
-			if (!requestHistoryLoaded) loadRequestHistory();
 		} else if (tab === 'archived') {
 			if (!archivedLoaded) loadArchivedItems(false, false);
 		} else if (tab === 'deleted') {
@@ -186,12 +167,6 @@
 			forceRefresh
 		});
 
-		const requestsPromise = borrowRequestsAPI.list({
-			statuses: ['returned', 'resolved', 'cancelled', 'rejected'],
-			page: requestHistoryPage,
-			limit: requestHistoryLimit
-		});
-
 		const archivedPromise = archivedItemsAPI.getArchived({
 			search: archivedSearch || undefined,
 			page: archivedPage,
@@ -208,7 +183,6 @@
 
 		const results = await Promise.allSettled([
 			activityPromise,
-			requestsPromise,
 			archivedPromise,
 			deletedPromise
 		]);
@@ -225,24 +199,11 @@
 		}
 		activityLogsLoading = false;
 
-		// 2. Settle Request History (second)
+		// 2. Settle Archived Items (second)
 		await new Promise(r => setTimeout(r, 120));
 		if (loadId !== inFlightLoadId) return;
 
-		const reqRes = results[1];
-		if (reqRes.status === 'fulfilled') {
-			requestHistory = reqRes.value.requests;
-			requestHistoryTotal = reqRes.value.total;
-			requestHistoryLoaded = true;
-			await backfillItemPictures();
-		}
-		requestHistoryLoading = false;
-
-		// 3. Settle Archived Items (third)
-		await new Promise(r => setTimeout(r, 120));
-		if (loadId !== inFlightLoadId) return;
-
-		const archRes = results[2];
+		const archRes = results[1];
 		if (archRes.status === 'fulfilled') {
 			archivedItems = archRes.value.items;
 			archivedTotal = archRes.value.total;
@@ -253,11 +214,11 @@
 		}
 		archivedLoading = false;
 
-		// 4. Settle Deleted Items (fourth)
+		// 3. Settle Deleted Items (third)
 		await new Promise(r => setTimeout(r, 120));
 		if (loadId !== inFlightLoadId) return;
 
-		const delRes = results[3];
+		const delRes = results[2];
 		if (delRes.status === 'fulfilled') {
 			deletedItems = delRes.value.items;
 			deletedTotal = delRes.value.total;
@@ -314,9 +275,6 @@
 			
 			if (activeTab === 'activity-logs') {
 				await loadActivityLogs(false, true);
-			} else if (activeTab === 'request-history') {
-				borrowRequestsAPI.invalidateCache();
-				await loadRequestHistory(false);
 			} else if (activeTab === 'archived') {
 				await loadArchivedItems(false, true);
 			} else if (activeTab === 'deleted') {
@@ -331,54 +289,7 @@
 		}
 	}
 
-	// Load Request History
-	async function loadRequestHistory(showLoader = true) {
-		if (showLoader) {
-			if (requestHistory.length === 0) requestHistoryLoading = true;
-			await loadAllHistoryProgressive(true);
-		} else {
-			try {
-				const response = await borrowRequestsAPI.list({
-					statuses: ['returned', 'resolved', 'cancelled', 'rejected'],
-					page: requestHistoryPage,
-					limit: requestHistoryLimit
-				});
-				requestHistory = response.requests;
-				requestHistoryTotal = response.total;
-				requestHistoryLoaded = true;
-				await backfillItemPictures();
-			} catch (err: any) {
-				toastStore.error(err.message || 'Failed to load request history');
-			}
-		}
-	}
 
-	// Backfill item pictures from catalog
-	async function backfillItemPictures(): Promise<void> {
-		const missingIds = new Set<string>();
-		for (const req of requestHistory) {
-			for (const item of req.items) {
-				if (item.itemId && !item.picture && !itemPictureCache.has(item.itemId)) {
-					missingIds.add(item.itemId);
-				}
-			}
-		}
-
-		if (missingIds.size === 0) return;
-
-		try {
-			const response = await catalogAPI.getCatalog({ availability: 'all', limit: 300 });
-			const next = new Map(itemPictureCache);
-			for (const catalogItem of response.items) {
-				if (missingIds.has(catalogItem.id) && catalogItem.picture) {
-					next.set(catalogItem.id, catalogItem.picture);
-				}
-			}
-			itemPictureCache = next;
-		} catch {
-			// Keep graceful fallback when catalog pictures are unavailable.
-		}
-	}
 
 	// Load Archived Items
 	async function loadArchivedItems(showLoader = true, forceRefresh = false) {
@@ -500,29 +411,6 @@
 		return `REQ-${id.slice(-6).toUpperCase()}`;
 	}
 
-	// Get status badge color for requests
-	function getRequestStatusColor(status: string): string {
-		const colors: Record<string, string> = {
-			returned: 'bg-green-100 text-green-800',
-			resolved: 'bg-emerald-100 text-emerald-800',
-			cancelled: 'bg-gray-100 text-gray-800',
-			rejected: 'bg-red-100 text-red-800'
-		};
-		return colors[status] || 'bg-gray-100 text-gray-800';
-	}
-
-	// Open request detail modal
-	function openRequestDetailModal(request: any) {
-		selectedHistoryRequest = request;
-		showRequestDetailModal = true;
-	}
-
-	// Close request detail modal
-	function closeRequestDetailModal() {
-		showRequestDetailModal = false;
-		selectedHistoryRequest = null;
-	}
-
 	// Get action badge color
 	function getActionColor(action: string): string {
 		const colors: Record<string, string> = {
@@ -586,47 +474,6 @@
 					userName.toLowerCase().includes(query) ||
 					ipAddress.toLowerCase().includes(query) ||
 					userRole.toLowerCase().includes(query)
-				);
-			});
-		}
-
-		return filtered;
-	});
-
-	const filteredRequestHistory = $derived.by(() => {
-		let filtered = requestHistory;
-
-		// Apply status filter
-		if (requestHistoryFilterStatus) {
-			filtered = filtered.filter(req => req.status === requestHistoryFilterStatus);
-		}
-
-		// Apply date range filter
-		if (requestHistoryFilterStartDate) {
-			const startDate = new Date(requestHistoryFilterStartDate);
-			filtered = filtered.filter(req => new Date(req.createdAt) >= startDate);
-		}
-
-		if (requestHistoryFilterEndDate) {
-			const endDate = new Date(requestHistoryFilterEndDate);
-			endDate.setHours(23, 59, 59, 999); // Include the entire end date
-			filtered = filtered.filter(req => new Date(req.createdAt) <= endDate);
-		}
-
-		// Apply search filter
-		if (requestHistorySearch) {
-			const query = requestHistorySearch.toLowerCase();
-			filtered = filtered.filter(req => {
-				const studentName = req.student?.fullName || req.student?.firstName || '';
-				const studentEmail = req.student?.email || '';
-				const requestId = req.id || '';
-				const items = req.items?.map((item: any) => item.name).join(' ') || '';
-				
-				return (
-					studentName.toLowerCase().includes(query) ||
-					studentEmail.toLowerCase().includes(query) ||
-					requestId.toLowerCase().includes(query) ||
-					items.toLowerCase().includes(query)
 				);
 			});
 		}
@@ -724,7 +571,6 @@
 
 {#if activeTabLoading && (
 	activeTab === 'activity-logs' ? activityLogs.length === 0 :
-	activeTab === 'request-history' ? requestHistory.length === 0 :
 	activeTab === 'archived' ? archivedItems.length === 0 :
 	deletedItems.length === 0
 )}
@@ -751,21 +597,6 @@
 				{#if activityTotal > 0}
 					<span class="rounded-full px-1.5 py-0.5 text-[10px] {activeTab === 'activity-logs' ? 'bg-pink-100 text-pink-600' : 'bg-gray-100 text-gray-600'}">
 						{activityTotal}
-					</span>
-				{/if}
-			</button>
-
-			<button
-				onclick={() => switchTab('request-history')}
-				class="flex flex-1 items-center justify-center gap-1 border-b-2 px-1 py-3 text-[11px] font-medium whitespace-nowrap transition-colors sm:text-sm {activeTab === 'request-history'
-					? 'border-pink-500 text-pink-600'
-					: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
-			>
-				<span class="hidden sm:inline">Requests</span>
-				<span class="sm:hidden">Requests</span>
-				{#if requestHistoryTotal > 0}
-					<span class="rounded-full px-1.5 py-0.5 text-[10px] {activeTab === 'request-history' ? 'bg-pink-100 text-pink-600' : 'bg-gray-100 text-gray-600'}">
-						{requestHistoryTotal}
 					</span>
 				{/if}
 			</button>
@@ -985,206 +816,6 @@
 					{:else if filteredActivityLogs.length < activityLogs.length}
 						<div class="mt-4 border-t border-gray-200 pt-4 text-center text-xs text-gray-700 sm:text-sm">
 							Showing {filteredActivityLogs.length} of {activityLogs.length} entries (filtered)
-						</div>
-					{/if}
-				{/if}
-			</div>
-
-		{:else if activeTab === 'request-history'}
-			<!-- Request History Tab -->
-			<div>
-				<div class="mb-4 sm:mb-6">
-					<h3 class="text-base font-semibold text-gray-900 sm:text-lg">Borrow Request History</h3>
-					<p class="mt-1 text-xs text-gray-500 sm:text-sm">Complete history of all student borrow requests processed by custodians</p>
-				</div>
-
-				<!-- Search Bar and Filter Button -->
-				<div class="mb-4 flex gap-2 sm:mb-6">
-					<div class="relative flex-1">
-						<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 sm:pl-4">
-							<svg class="h-4 w-4 text-gray-400 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-							</svg>
-						</div>
-						<input
-							type="text"
-							placeholder="Search requests..."
-							bind:value={requestHistorySearch}
-							class="block w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-500 shadow-sm transition-colors hover:border-gray-400 focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-0 sm:py-3 sm:pl-11 sm:pr-4"
-						/>
-					</div>
-					<button
-						onclick={() => showRequestHistoryFilters = !showRequestHistoryFilters}
-						class="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-0 sm:px-4 sm:py-3 {showRequestHistoryFilters ? 'bg-gray-50 border-pink-500 text-pink-600' : ''}"
-					>
-						<svg class="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-						</svg>
-						<span class="hidden sm:inline">Filters</span>
-					</button>
-				</div>
-
-				<!-- Filters Section -->
-				{#if showRequestHistoryFilters}
-					<div class="mb-4 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:mb-6 sm:space-y-4">
-						<!-- Row 1: Status and Date Range -->
-						<div class="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-							<div>
-								<label for="request-status-filter" class="mb-1 block text-xs font-medium text-gray-700 sm:text-sm">Status</label>
-								<select
-									id="request-status-filter"
-									bind:value={requestHistoryFilterStatus}
-									class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors hover:border-gray-400 focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-0 sm:px-4 sm:py-2.5"
-								>
-									<option value="">All Statuses</option>
-									<option value="returned">Returned</option>
-									<option value="resolved">Resolved</option>
-									<option value="cancelled">Cancelled</option>
-									<option value="rejected">Declined</option>
-								</select>
-							</div>
-
-							<div>
-								<label for="request-start-date" class="mb-1 block text-xs font-medium text-gray-700 sm:text-sm">Start Date</label>
-								<input
-									type="date"
-									id="request-start-date"
-									bind:value={requestHistoryFilterStartDate}
-									class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors hover:border-gray-400 focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-0 sm:px-4 sm:py-2.5"
-								/>
-							</div>
-
-							<div>
-								<label for="request-end-date" class="mb-1 block text-xs font-medium text-gray-700 sm:text-sm">End Date</label>
-								<input
-									type="date"
-									id="request-end-date"
-									bind:value={requestHistoryFilterEndDate}
-									class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition-colors hover:border-gray-400 focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-0 sm:px-4 sm:py-2.5"
-								/>
-							</div>
-						</div>
-
-						<!-- Clear Filters Button -->
-						<div class="flex justify-end">
-							<button
-								onclick={() => {
-									requestHistoryFilterStatus = '';
-									requestHistoryFilterStartDate = '';
-									requestHistoryFilterEndDate = '';
-									loadRequestHistory();
-								}}
-								class="text-xs font-medium text-pink-600 hover:text-pink-700 sm:text-sm"
-							>
-								Clear Filters
-							</button>
-						</div>
-					</div>
-				{/if}
-
-				<!-- Request History Table -->
-				{#if filteredRequestHistory.length === 0}
-					<div class="py-12 text-center">
-						<svg class="mx-auto h-24 w-24 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-						</svg>
-						<h3 class="mt-4 text-lg font-medium text-gray-900">No request history found</h3>
-						<p class="mt-2 text-sm text-gray-500">
-							{#if requestHistoryFilterStatus || requestHistoryFilterStartDate || requestHistoryFilterEndDate || requestHistorySearch}
-								No requests match your current filters. Try adjusting your search criteria.
-							{:else}
-								Completed, resolved, cancelled, and declined requests will appear here.
-							{/if}
-						</p>
-					</div>
-				{:else}
-					<div class="overflow-x-auto">
-						<table class="w-full">
-							<thead>
-								<tr class="border-b border-gray-200 bg-gray-50">
-									<th class="w-10 px-3 py-3 text-center text-xs font-semibold text-gray-400">#</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Request ID</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Student</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Items</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Status</th>
-									<th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Date</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-gray-200">
-								{#each filteredRequestHistory as request, i}
-									<tr 
-										onclick={() => openRequestDetailModal(request)}
-										class="cursor-pointer hover:bg-gray-50 transition-colors"
-									>
-										<td class="px-3 py-4 text-center">
-											<span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-500">{(requestHistoryPage - 1) * requestHistoryLimit + i + 1}</span>
-										</td>
-										<td class="px-6 py-4 text-sm font-medium text-gray-900">{formatRequestId(request.id)}</td>
-										<td class="px-6 py-4">
-											{#if request.student}
-												<div class="flex items-center gap-3">
-													<div
-														class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-pink-100 text-sm font-semibold text-pink-700 ring-2 ring-pink-200"
-													>
-														{#if request.student.profilePhotoUrl}
-															<img
-																src={request.student.profilePhotoUrl}
-																alt={request.student.fullName || 'Student'}
-																class="h-full w-full object-cover"
-																loading="lazy"
-															/>
-														{:else}
-															{(request.student.fullName || request.student.firstName || 'ST')
-																.split(' ')
-																.filter(Boolean)
-																.slice(0, 2)
-																.map((part: string) => part[0]?.toUpperCase() || '')
-																.join('')}
-														{/if}
-													</div>
-													<div>
-														<div class="text-sm font-medium text-gray-900">
-															{request.student.fullName || `${request.student.firstName || ''} ${request.student.lastName || ''}`.trim() || 'N/A'}
-														</div>
-														<div class="text-xs text-gray-500">{request.student.email || 'N/A'}</div>
-													</div>
-												</div>
-											{:else}
-												<div class="text-sm text-gray-500">N/A</div>
-											{/if}
-										</td>
-										<td class="px-6 py-4 text-sm text-gray-600">
-											{#if request.items.length === 1}
-												{request.items[0].name}
-											{:else}
-												{request.items.length} items
-											{/if}
-										</td>
-										<td class="px-6 py-4">
-											<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {getRequestStatusColor(request.status)}">
-												{request.status.replace('_', ' ').toUpperCase()}
-											</span>
-										</td>
-										<td class="px-6 py-4 text-sm text-gray-600">{formatTimestamp(request.createdAt)}</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-
-					<!-- Pagination -->
-					{#if requestHistoryTotal > requestHistoryLimit}
-						<Pagination
-							currentPage={requestHistoryPage}
-							totalPages={Math.ceil(requestHistoryTotal / requestHistoryLimit)}
-							totalItems={requestHistoryTotal}
-							itemsPerPage={requestHistoryLimit}
-							onPageChange={(p) => { requestHistoryPage = p; loadRequestHistory(); }}
-							class="mt-4"
-						/>
-					{:else if filteredRequestHistory.length < requestHistory.length}
-						<div class="mt-4 border-t border-gray-200 pt-4 text-center text-xs text-gray-700 sm:text-sm">
-							Showing {filteredRequestHistory.length} of {requestHistory.length} requests (filtered)
 						</div>
 					{/if}
 				{/if}
@@ -1543,381 +1174,3 @@
 	</div>
 </div>
 {/if}
-
-<!-- Request Detail Modal -->
-{#if showRequestDetailModal && selectedHistoryRequest}
-	<div class="fixed inset-0 z-50 overflow-y-auto">
-		<div
-			class="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
-			aria-hidden="true"
-		></div>
-		<div class="flex min-h-full items-end justify-center sm:items-center sm:p-4">
-			<div
-				class="animate-scaleIn relative w-full max-w-4xl overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
-			>
-				<!-- Header -->
-				<div
-					class="sticky top-0 z-10 border-b border-gray-200 bg-white/95 px-4 py-4 backdrop-blur-sm sm:px-8 sm:py-6"
-				>
-					<div class="flex items-start justify-between gap-3">
-						<div class="flex min-w-0 flex-1 items-start gap-3">
-							<div
-								class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-pink-500 to-pink-600 shadow-lg shadow-pink-500/30 sm:h-12 sm:w-12"
-							>
-								<svg
-									class="h-5 w-5 text-white sm:h-6 sm:w-6"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2.5"
-										d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-									/>
-								</svg>
-							</div>
-							<div class="min-w-0 flex-1">
-								<h2 class="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
-									Request Details
-								</h2>
-								<p class="mt-0.5 font-mono text-xs font-semibold text-pink-600 sm:text-sm">
-									{formatRequestId(selectedHistoryRequest.id)}
-								</p>
-								<div
-									class="mt-2 inline-flex items-center gap-2 rounded-full px-2.5 py-1 sm:px-3 sm:py-1.5 {getRequestStatusColor(selectedHistoryRequest.status)} shadow-sm ring-1 ring-black/5"
-								>
-									<span class="h-1.5 w-1.5 rounded-full bg-current"></span>
-									<span class="text-[10px] font-bold sm:text-xs"
-										>{selectedHistoryRequest.status.replace('_', ' ').toUpperCase()}</span
-									>
-								</div>
-							</div>
-						</div>
-						<button
-							onclick={closeRequestDetailModal}
-							aria-label="Close modal"
-							class="rounded-xl p-2 text-gray-400 transition-all hover:bg-gray-100 hover:text-gray-600 active:scale-95 sm:p-2.5"
-						>
-							<svg
-								class="h-5 w-5 sm:h-6 sm:w-6"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M6 18L18 6M6 6l12 12"
-								/>
-							</svg>
-						</button>
-					</div>
-				</div>
-
-				<!-- Content -->
-				<div class="max-h-[70vh] overflow-y-auto px-4 py-5 sm:px-8 sm:py-8">
-					<div class="space-y-6 sm:space-y-8">
-						<!-- Student Information -->
-						<div>
-							<h3
-								class="mb-4 flex items-center gap-2 text-sm font-bold tracking-wider text-gray-900 uppercase"
-							>
-								<div class="h-1 w-1 rounded-full bg-pink-500"></div>
-								Student Information
-							</h3>
-							<div
-								class="rounded-2xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-4 sm:p-5"
-							>
-								{#if selectedHistoryRequest.student}
-									<div class="flex items-center gap-4">
-										<div
-											class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-pink-100 text-lg font-semibold text-pink-700 ring-2 ring-pink-200 sm:h-16 sm:w-16 sm:text-xl"
-										>
-											{#if selectedHistoryRequest.student.profilePhotoUrl}
-												<img
-													src={selectedHistoryRequest.student.profilePhotoUrl}
-													alt={selectedHistoryRequest.student.fullName || 'Student'}
-													class="h-full w-full object-cover"
-													loading="lazy"
-												/>
-											{:else}
-												{(selectedHistoryRequest.student.fullName || selectedHistoryRequest.student.firstName || 'ST')
-													.split(' ')
-													.filter(Boolean)
-													.slice(0, 2)
-													.map((part: string) => part[0]?.toUpperCase() || '')
-													.join('')}
-											{/if}
-										</div>
-										<div class="min-w-0 flex-1">
-											<p class="text-base font-bold text-gray-900 sm:text-lg">
-												{selectedHistoryRequest.student.fullName || `${selectedHistoryRequest.student.firstName || ''} ${selectedHistoryRequest.student.lastName || ''}`.trim() || 'N/A'}
-											</p>
-											{#if selectedHistoryRequest.student.yearLevel || selectedHistoryRequest.student.block}
-												<p class="mt-0.5 text-xs text-gray-600 sm:text-sm">
-													{selectedHistoryRequest.student.yearLevel || 'N/A'} • Block {selectedHistoryRequest.student.block || 'N/A'}
-												</p>
-											{/if}
-											<div
-												class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500"
-											>
-												<span class="truncate">{selectedHistoryRequest.student.email || 'N/A'}</span>
-											</div>
-										</div>
-									</div>
-								{:else}
-									<p class="text-sm text-gray-500">Student information not available</p>
-								{/if}
-							</div>
-						</div>
-
-						<!-- Request Information -->
-						<div>
-							<h3
-								class="mb-4 flex items-center gap-2 text-sm font-bold tracking-wider text-gray-900 uppercase"
-							>
-								<div class="h-1 w-1 rounded-full bg-pink-500"></div>
-								Request Information
-							</h3>
-							<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-								<div
-									class="group rounded-xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-3 transition-all hover:border-pink-200 hover:shadow-md sm:p-4"
-								>
-									<div class="mb-2 flex items-center gap-1.5 sm:gap-2">
-										<svg
-											class="h-3.5 w-3.5 text-pink-500 sm:h-4 sm:w-4"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-											/>
-										</svg>
-										<p
-											class="text-[10px] font-bold tracking-wider text-gray-500 uppercase sm:text-xs"
-										>
-											Request Date
-										</p>
-									</div>
-									<p class="text-sm font-bold text-gray-900 sm:text-base">
-										{formatTimestamp(selectedHistoryRequest.createdAt)}
-									</p>
-								</div>
-								<div
-									class="group rounded-xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-3 transition-all hover:border-pink-200 hover:shadow-md sm:p-4"
-								>
-									<div class="mb-2 flex items-center gap-1.5 sm:gap-2">
-										<svg
-											class="h-3.5 w-3.5 text-pink-500 sm:h-4 sm:w-4"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-											/>
-										</svg>
-										<p
-											class="text-[10px] font-bold tracking-wider text-gray-500 uppercase sm:text-xs"
-										>
-											Borrow Period
-										</p>
-									</div>
-									<p class="text-sm font-bold text-gray-900 sm:text-base">
-										{new Date(selectedHistoryRequest.borrowDate).toLocaleDateString('en-US', {
-											month: 'short',
-											day: 'numeric'
-										})} – {new Date(selectedHistoryRequest.returnDate).toLocaleDateString('en-US', {
-											month: 'short',
-											day: 'numeric'
-										})}
-									</p>
-								</div>
-								<div
-									class="group rounded-xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-3 transition-all hover:border-pink-200 hover:shadow-md sm:p-4"
-								>
-									<div class="mb-2 flex items-center gap-1.5 sm:gap-2">
-										<svg
-											class="h-3.5 w-3.5 text-pink-500 sm:h-4 sm:w-4"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-											/>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-											/>
-										</svg>
-										<p
-											class="text-[10px] font-bold tracking-wider text-gray-500 uppercase sm:text-xs"
-										>
-											Usage Location
-										</p>
-									</div>
-									<p class="text-sm font-bold text-gray-900 sm:text-base">
-										{#if selectedHistoryRequest.usageLocation === 'school'}
-											<span class="inline-flex items-center gap-1.5">
-												<span class="h-2 w-2 rounded-full bg-green-500"></span>
-												In-School Use
-											</span>
-										{:else if selectedHistoryRequest.usageLocation === 'outdoor'}
-											<span class="inline-flex items-center gap-1.5">
-												<span class="h-2 w-2 rounded-full bg-blue-500"></span>
-												Outdoor/Off-Campus
-											</span>
-										{:else}
-											<span class="text-gray-400">Not specified</span>
-										{/if}
-									</p>
-								</div>
-								{#if selectedHistoryRequest.returnedAt}
-									<div
-										class="group rounded-xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-3 transition-all hover:border-pink-200 hover:shadow-md sm:p-4"
-									>
-										<div class="mb-2 flex items-center gap-1.5 sm:gap-2">
-											<svg
-												class="h-3.5 w-3.5 text-pink-500 sm:h-4 sm:w-4"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-											>
-												<path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													stroke-width="2"
-													d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-												/>
-											</svg>
-											<p
-												class="text-[10px] font-bold tracking-wider text-gray-500 uppercase sm:text-xs"
-											>
-												Returned At
-											</p>
-										</div>
-										<p class="text-sm font-bold text-gray-900 sm:text-base">
-											{formatTimestamp(selectedHistoryRequest.returnedAt)}
-										</p>
-									</div>
-								{/if}
-								<div
-									class="group col-span-1 rounded-xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-3 transition-all hover:border-pink-200 hover:shadow-md sm:col-span-2 sm:p-4"
-								>
-									<div class="mb-2 flex items-center gap-1.5 sm:gap-2">
-										<svg
-											class="h-3.5 w-3.5 text-pink-500 sm:h-4 sm:w-4"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-											/>
-										</svg>
-										<p
-											class="text-[10px] font-bold tracking-wider text-gray-500 uppercase sm:text-xs"
-										>
-											Purpose & Details
-										</p>
-									</div>
-									<p class="text-sm leading-relaxed font-semibold text-gray-900 sm:text-base">
-										{selectedHistoryRequest.purpose || 'N/A'}
-									</p>
-								</div>
-							</div>
-						</div>
-
-						<!-- Requested Items -->
-						<div>
-							<h3
-								class="mb-4 flex items-center gap-2 text-sm font-bold tracking-wider text-gray-900 uppercase"
-							>
-								<div class="h-1 w-1 rounded-full bg-pink-500"></div>
-								Requested Items ({selectedHistoryRequest.items.length})
-							</h3>
-							<div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-								<!-- Desktop Table Header -->
-								<div class="hidden sm:grid grid-cols-12 border-b border-gray-200 bg-gray-50 px-4 py-2.5 text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
-									<span class="col-span-8">Item</span>
-									<span class="col-span-2 text-center">Code</span>
-									<span class="col-span-2 text-center">Qty</span>
-								</div>
-								
-								<!-- Table Rows -->
-								<div class="divide-y divide-gray-100">
-									{#each selectedHistoryRequest.items as item}
-										{@const pic = item.picture ?? itemPictureCache.get(item.itemId)}
-										{@const code = item.code ?? (item.itemId ? item.itemId.slice(-6).toUpperCase() : 'N/A')}
-										<div class="grid items-center gap-3 bg-white p-3 sm:grid-cols-12 sm:p-4 transition-colors hover:bg-gray-50/50">
-											<!-- Item Info -->
-											<div class="col-span-12 flex items-center gap-3 sm:col-span-8 min-w-0">
-												{#if pic}
-													<img
-														src={pic}
-														alt={item.name}
-														class="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-gray-200"
-														loading="lazy"
-													/>
-												{:else}
-													<div class="h-10 w-10 shrink-0 overflow-hidden rounded-lg ring-1 ring-gray-200">
-														<ItemImagePlaceholder size="sm" />
-													</div>
-												{/if}
-												<div class="flex flex-col gap-1 min-w-0">
-													<span class="truncate text-sm font-semibold text-gray-900">{item.name}</span>
-												</div>
-											</div>
-											
-											<!-- Mobile/Desktop Details -->
-											<div class="col-span-6 flex items-center justify-between sm:col-span-2 sm:justify-center border-t border-gray-100 pt-3 sm:border-0 sm:pt-0">
-												<span class="text-[10px] font-semibold text-gray-500 uppercase sm:hidden">Code</span>
-												<span class="font-mono text-sm font-medium text-gray-600">{code}</span>
-											</div>
-											<div class="col-span-6 flex items-center justify-between sm:col-span-2 sm:justify-center border-t border-gray-100 pt-3 sm:border-0 sm:pt-0 border-l border-gray-100 pl-3 sm:border-0 sm:pl-0">
-												<span class="text-[10px] font-semibold text-gray-500 uppercase sm:hidden">Qty</span>
-												<span class="text-sm font-bold text-gray-900 tabular-nums">{item.quantity}</span>
-											</div>
-										</div>
-									{/each}
-								</div>
-							</div>
-						</div>
-					</div>
-				</div>
-
-				<!-- Footer -->
-				<div
-					class="sticky bottom-0 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur-sm sm:px-8 sm:py-5"
-				>
-					<button
-						onclick={closeRequestDetailModal}
-						class="w-full rounded-xl bg-gray-100 px-5 py-2.5 text-sm font-bold text-gray-700 transition-all hover:bg-gray-200 active:scale-[0.98] sm:px-6 sm:py-3"
-					>
-						Close
-					</button>
-				</div>
-			</div>
-		</div>
-	</div>
-{/if}
-
