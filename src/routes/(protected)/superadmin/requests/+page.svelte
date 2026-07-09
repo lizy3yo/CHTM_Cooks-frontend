@@ -1664,6 +1664,9 @@
 	<ItemInspectionModal
 		items={inspectionItems}
 		requestId={(selectedRequest as any).rawId}
+		studentName={(selectedRequest as any).student?.name}
+		leaderName={(selectedRequest as any).instructorData?.fullName ?? (selectedRequest as any).approvedBy}
+		sessionDate={(selectedRequest as any).borrowDate}
 		onSubmit={handleInspectionSubmit}
 		onCancel={() => {
 			showInspectionModal = false;
