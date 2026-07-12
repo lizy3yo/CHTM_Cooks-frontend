@@ -327,8 +327,8 @@ const CLIENT_CACHE_VERSION = 'v10';
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<AnalyticsReport>>();
 
-function buildAnalyticsCacheKey(period: AnalyticsPeriod, from?: string, to?: string): string {
-	return `analytics:${CLIENT_CACHE_VERSION}:${period}:${from ?? ''}:${to ?? ''}`;
+function buildAnalyticsCacheKey(period: AnalyticsPeriod, from?: string, to?: string, classCodeId?: string, instructorId?: string, studentId?: string, custodianId?: string): string {
+	return `analytics:${CLIENT_CACHE_VERSION}:${period}:${from ?? ''}:${to ?? ''}:${classCodeId ?? ''}:${instructorId ?? ''}:${studentId ?? ''}:${custodianId ?? ''}`;
 }
 
 function getCached(key: string): AnalyticsReport | null {
@@ -355,8 +355,8 @@ export function clearAnalyticsCache(): void {
 }
 
 export function peekCachedAnalytics(opts: FetchAnalyticsOptions = {}): AnalyticsReport | null {
-	const { period = 'month', from, to } = opts;
-	const cacheKey = buildAnalyticsCacheKey(period, from, to);
+	const { period = 'month', from, to, classCodeId, instructorId, studentId, custodianId } = opts;
+	const cacheKey = buildAnalyticsCacheKey(period, from, to, classCodeId, instructorId, studentId, custodianId);
 	return getCached(cacheKey);
 }
 
@@ -366,8 +366,8 @@ const SUMMARY_CACHE_VERSION = 'sv1';
 const summaryCache = new Map<string, { data: Partial<AnalyticsReport>; expiresAt: number }>();
 const inFlightSummary = new Map<string, Promise<Partial<AnalyticsReport>>>();
 
-function buildAnalyticsSummaryCacheKey(period: AnalyticsPeriod, from?: string, to?: string): string {
-	return `analytics:summary:${SUMMARY_CACHE_VERSION}:${period}:${from ?? ''}:${to ?? ''}`;
+function buildAnalyticsSummaryCacheKey(period: AnalyticsPeriod, from?: string, to?: string, classCodeId?: string, instructorId?: string, studentId?: string, custodianId?: string): string {
+	return `analytics:summary:${SUMMARY_CACHE_VERSION}:${period}:${from ?? ''}:${to ?? ''}:${classCodeId ?? ''}:${instructorId ?? ''}:${studentId ?? ''}:${custodianId ?? ''}`;
 }
 
 function getCachedSummary(key: string): Partial<AnalyticsReport> | null {
@@ -386,16 +386,16 @@ function setCachedSummary(key: string, data: Partial<AnalyticsReport>): void {
 }
 
 export function peekCachedAnalyticsSummary(opts: FetchAnalyticsOptions = {}): Partial<AnalyticsReport> | null {
-	const { period = 'month', from, to } = opts;
-	const cacheKey = buildAnalyticsSummaryCacheKey(period, from, to);
+	const { period = 'month', from, to, classCodeId, instructorId, studentId, custodianId } = opts;
+	const cacheKey = buildAnalyticsSummaryCacheKey(period, from, to, classCodeId, instructorId, studentId, custodianId);
 	return getCachedSummary(cacheKey);
 }
 
 export async function fetchAnalyticsSummary(opts: FetchAnalyticsOptions = {}): Promise<Partial<AnalyticsReport>> {
-	const { period = 'month', from, to, forceRefresh = false } = opts;
-	const cacheKey = buildAnalyticsSummaryCacheKey(period, from, to);
+	const { period = 'month', from, to, classCodeId, instructorId, studentId, custodianId, forceRefresh = false } = opts;
+	const cacheKey = buildAnalyticsSummaryCacheKey(period, from, to, classCodeId, instructorId, studentId, custodianId);
 
-	console.log('[Analytics API] Fetching analytics summary...', { period, from, to, forceRefresh });
+	console.log('[Analytics API] Fetching analytics summary...', { period, from, to, classCodeId, instructorId, studentId, custodianId, forceRefresh });
 
 	if (!forceRefresh) {
 		const cached = getCachedSummary(cacheKey);
@@ -414,6 +414,10 @@ export async function fetchAnalyticsSummary(opts: FetchAnalyticsOptions = {}): P
 	const params = new URLSearchParams({ period });
 	if (from) params.set('from', from);
 	if (to) params.set('to', to);
+	if (classCodeId) params.set('class_code_id', classCodeId);
+	if (instructorId) params.set('instructor_id', instructorId);
+	if (studentId) params.set('student_id', studentId);
+	if (custodianId) params.set('custodian_id', custodianId);
 	if (forceRefresh) params.set('_t', String(Date.now()));
 
 	const request = (async () => {
@@ -446,6 +450,10 @@ export interface FetchAnalyticsOptions {
 	period?: AnalyticsPeriod;
 	from?: string;
 	to?: string;
+	classCodeId?: string;
+	instructorId?: string;
+	studentId?: string;
+	custodianId?: string;
 	forceRefresh?: boolean;
 }
 
@@ -534,10 +542,10 @@ function normalizeAnalyticsReport(raw: AnalyticsReport): AnalyticsReport {
 }
 
 export async function fetchAnalytics(opts: FetchAnalyticsOptions = {}): Promise<AnalyticsReport> {
-	const { period = 'month', from, to, forceRefresh = false } = opts;
-	const cacheKey = buildAnalyticsCacheKey(period, from, to);
+	const { period = 'month', from, to, classCodeId, instructorId, studentId, custodianId, forceRefresh = false } = opts;
+	const cacheKey = buildAnalyticsCacheKey(period, from, to, classCodeId, instructorId, studentId, custodianId);
 
-	console.log('[Analytics API] Fetching analytics...', { period, from, to, forceRefresh });
+	console.log('[Analytics API] Fetching analytics...', { period, from, to, classCodeId, instructorId, studentId, custodianId, forceRefresh });
 
 	if (!forceRefresh) {
 		const cached = getCached(cacheKey);
@@ -556,6 +564,10 @@ export async function fetchAnalytics(opts: FetchAnalyticsOptions = {}): Promise<
 	const params = new URLSearchParams({ period });
 	if (from) params.set('from', from);
 	if (to) params.set('to', to);
+	if (classCodeId) params.set('class_code_id', classCodeId);
+	if (instructorId) params.set('instructor_id', instructorId);
+	if (studentId) params.set('student_id', studentId);
+	if (custodianId) params.set('custodian_id', custodianId);
 	if (forceRefresh) params.set('_t', String(Date.now()));
 
 	const requestPromise = (async () => {

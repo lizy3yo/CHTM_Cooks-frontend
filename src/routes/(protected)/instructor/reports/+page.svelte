@@ -9,6 +9,8 @@
 		type AnalyticsReport,
 		type AnalyticsPeriod
 	} from '$lib/api/analyticsReports';
+	import { classCodesAPI, type ClassCodeResponse } from '$lib/api/classCodes';
+	import { usersAPI, type UserResponse } from '$lib/api/users';
 	import { toastStore } from '$lib/stores/toast';
 	import ReportsSkeletonLoader from '$lib/components/ui/ReportsSkeletonLoader.svelte';
 	import {
@@ -53,6 +55,18 @@
 	let customTo = $state(initialTo);
 	let inventoryItemsQuery = $state('');
 	let inventoryVarianceFilter = $state<'all' | 'over' | 'under'>('all');
+
+	// Dropdown filter options
+	let classCodes = $state<ClassCodeResponse[]>([]);
+	let instructors = $state<UserResponse[]>([]);
+	let students = $state<UserResponse[]>([]);
+	let custodians = $state<UserResponse[]>([]);
+
+	// Selections
+	let selectedClassCodeId = $state<string>('');
+	let selectedInstructorId = $state<string>('');
+	let selectedStudentId = $state<string>('');
+	let selectedCustodianId = $state<string>('');
 
 	const numberFmt = new Intl.NumberFormat();
 
@@ -109,6 +123,10 @@
 					period,
 					from: customFrom || undefined,
 					to: customTo || undefined,
+					classCodeId: selectedClassCodeId || undefined,
+					instructorId: selectedInstructorId || undefined,
+					studentId: selectedStudentId || undefined,
+					custodianId: selectedCustodianId || undefined,
 					forceRefresh
 				});
 				summaryReport = s as Partial<AnalyticsReport>;
@@ -139,6 +157,10 @@
 					period,
 					from: customFrom || undefined,
 					to: customTo || undefined,
+					classCodeId: selectedClassCodeId || undefined,
+					instructorId: selectedInstructorId || undefined,
+					studentId: selectedStudentId || undefined,
+					custodianId: selectedCustodianId || undefined,
 					forceRefresh
 				})
 			]);
@@ -156,6 +178,10 @@
 					period,
 					from: customFrom || undefined,
 					to: customTo || undefined,
+					classCodeId: selectedClassCodeId || undefined,
+					instructorId: selectedInstructorId || undefined,
+					studentId: selectedStudentId || undefined,
+					custodianId: selectedCustodianId || undefined,
 					forceRefresh
 				})
 			]);
@@ -172,7 +198,11 @@
 				fetchAnalytics({
 					period,
 					from: customFrom || undefined,
-					to: customTo || undefined
+					to: customTo || undefined,
+					classCodeId: selectedClassCodeId || undefined,
+					instructorId: selectedInstructorId || undefined,
+					studentId: selectedStudentId || undefined,
+					custodianId: selectedCustodianId || undefined
 				})
 			]);
 			if (lossDamageResult[0].status === 'fulfilled') {
@@ -188,7 +218,11 @@
 				fetchAnalytics({
 					period,
 					from: customFrom || undefined,
-					to: customTo || undefined
+					to: customTo || undefined,
+					classCodeId: selectedClassCodeId || undefined,
+					instructorId: selectedInstructorId || undefined,
+					studentId: selectedStudentId || undefined,
+					custodianId: selectedCustodianId || undefined
 				})
 			]);
 			if (inventoryResult[0].status === 'fulfilled') {
@@ -204,14 +238,17 @@
 				fetchAnalytics({
 					period,
 					from: customFrom || undefined,
-					to: customTo || undefined
+					to: customTo || undefined,
+					classCodeId: selectedClassCodeId || undefined,
+					instructorId: selectedInstructorId || undefined,
+					studentId: selectedStudentId || undefined,
+					custodianId: selectedCustodianId || undefined
 				})
 			]);
 			if (studentRiskResult[0].status === 'fulfilled') {
 				report = studentRiskResult[0].value;
 			}
 			studentRiskLoading = false;
-
 		} catch (err) {
 			console.error('[Reports] Sequential load failed:', err);
 			error = err instanceof Error ? err.message : 'Failed to load analytics';
@@ -448,6 +485,25 @@
 
 	onMount(() => {
 		hasMounted = true;
+		// Load dropdown options asynchronously
+		void (async () => {
+			try {
+				const classRes = await classCodesAPI.getAll({ limit: 1000 });
+				classCodes = classRes.classCodes;
+
+				const instRes = await usersAPI.getAll({ role: 'instructor', limit: 1000 });
+				instructors = instRes.users;
+
+				const studRes = await usersAPI.getAll({ role: 'student', limit: 1000 });
+				students = studRes.users;
+
+				const custRes = await usersAPI.getAll({ role: 'custodian', limit: 1000 });
+				custodians = custRes.users;
+			} catch (e) {
+				console.error('Failed to load filter options', e);
+			}
+		})();
+
 		if (!initialReport) {
 			void loadReport();
 		}
@@ -456,6 +512,16 @@
 			if (pendingLoadTimer) clearTimeout(pendingLoadTimer);
 			unsubscribeSSE?.();
 		};
+	});
+
+	$effect(() => {
+		selectedClassCodeId;
+		selectedInstructorId;
+		selectedStudentId;
+		selectedCustodianId;
+		if (hasMounted) {
+			scheduleLoad();
+		}
 	});
 
 	// ─── Export ───────────────────────────────────────────────────────────
@@ -500,6 +566,11 @@
 				if (exportCustomFrom) params.set('from', exportCustomFrom);
 				if (exportCustomTo) params.set('to', exportCustomTo);
 			}
+
+			if (selectedClassCodeId) params.set('class_code_id', selectedClassCodeId);
+			if (selectedInstructorId) params.set('instructor_id', selectedInstructorId);
+			if (selectedStudentId) params.set('student_id', selectedStudentId);
+			if (selectedCustodianId) params.set('custodian_id', selectedCustodianId);
 
 			const selectedKeys = Object.entries(exportSections)
 				.filter(([_, enabled]) => enabled)
@@ -560,7 +631,7 @@
 		</button>
 	</div>
 
-	<div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+	<div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-4">
 		<div class="flex flex-wrap items-center gap-3">
 			<span class="text-sm font-semibold text-gray-700">Date Range:</span>
 			{#each [{ id: 'today', label: 'Today' }, { id: 'last7', label: 'Last 7 Days' }, { id: 'mtd', label: 'Month-to-Date' }, { id: 'custom', label: 'Custom' }] as option}
@@ -575,7 +646,7 @@
 			{/each}
 		</div>
 		{#if datePreset === 'custom'}
-			<div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 				<div>
 					<label for="custom-from" class="block text-xs font-medium text-gray-700">From</label>
 					<input
@@ -598,6 +669,47 @@
 				</div>
 			</div>
 		{/if}
+
+		<div class="border-t border-gray-100 pt-4">
+			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				<div>
+					<label for="filter-class" class="block text-xs font-semibold uppercase tracking-wider text-gray-500">Class / Section</label>
+					<select id="filter-class" bind:value={selectedClassCodeId} class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500">
+						<option value="">All Classes</option>
+						{#each classCodes as classCode}
+							<option value={classCode.id}>{classCode.courseCode} - {classCode.section} ({classCode.code})</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label for="filter-instructor" class="block text-xs font-semibold uppercase tracking-wider text-gray-500">Instructor</label>
+					<select id="filter-instructor" bind:value={selectedInstructorId} class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500">
+						<option value="">All Instructors</option>
+						{#each instructors as instructor}
+							<option value={instructor.id}>{instructor.firstName} {instructor.lastName}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label for="filter-student" class="block text-xs font-semibold uppercase tracking-wider text-gray-500">Student</label>
+					<select id="filter-student" bind:value={selectedStudentId} class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500">
+						<option value="">All Students</option>
+						{#each students as student}
+							<option value={student.id}>{student.firstName} {student.lastName}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label for="filter-custodian" class="block text-xs font-semibold uppercase tracking-wider text-gray-500">Custodian / Staff</label>
+					<select id="filter-custodian" bind:value={selectedCustodianId} class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500">
+						<option value="">All Custodians</option>
+						{#each custodians as custodian}
+							<option value={custodian.id}>{custodian.firstName} {custodian.lastName}</option>
+						{/each}
+					</select>
+				</div>
+			</div>
+		</div>
 	</div>
 
 	<div class="rounded-xl border border-gray-200 bg-white shadow-sm">
