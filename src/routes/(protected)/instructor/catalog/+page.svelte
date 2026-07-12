@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { catalogAPI, type CatalogResponse, type CatalogFilters, type CatalogItem } from '$lib/api/catalog';
-	import { inventoryHistoryAPI } from '$lib/api/inventoryHistory';
+	import { inventoryActivityLogsAPI } from '$lib/api/inventoryActivityLogs';
 	import { subscribeToInventoryChanges } from '$lib/api/inventory';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import CatalogItemModal from '$lib/components/ui/CatalogItemModal.svelte';
@@ -361,7 +361,7 @@
 			// Refresh the full catalog in the background so subsequent views
 			// are up-to-date, but don't block the current interaction.
 			catalogAPI.invalidateCatalogCache();
-			inventoryHistoryAPI.invalidateCache();
+			inventoryActivityLogsAPI.invalidateCache();
 			fetchCatalog({ background: true, forceRefresh: true }).catch(() => {/* non-fatal */});
 
 			setTimeout(() => {

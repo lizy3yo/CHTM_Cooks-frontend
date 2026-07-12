@@ -5,8 +5,8 @@
 	import { profileStore } from '$lib/stores/profile';
 	import { borrowRequestsAPI } from '$lib/api/borrowRequests';
 	import { catalogAPI } from '$lib/api/catalog';
-	import { inventoryHistoryAPI } from '$lib/api/inventoryHistory';
-	import type { InventoryHistoryEntry } from '$lib/api/inventoryHistory';
+	import { inventoryActivityLogsAPI } from '$lib/api/inventoryActivityLogs';
+	import type { InventoryActivityLogEntry } from '$lib/api/inventoryActivityLogs';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 
@@ -31,7 +31,7 @@
 	let inFlightLoadId = 0;
 
 	// Activity Logs state
-	let activityLogs = $state<InventoryHistoryEntry[]>([]);
+	let activityLogs = $state<InventoryActivityLogEntry[]>([]);
 	let activityTotal = $state(0);
 	let activityPage = $state(1);
 	let activityLimit = $state(20); // Items per page
@@ -88,7 +88,7 @@
 		}
 		
 		// Check for cached activity logs first for instant render
-		const cachedActivityLogs = inventoryHistoryAPI.peekCachedHistory({
+		const cachedActivityLogs = inventoryActivityLogsAPI.peekCachedLogs({
 			action: filterAction || undefined,
 			entityType: filterEntityType as any || undefined,
 			startDate: filterStartDate || undefined,
@@ -98,31 +98,31 @@
 		});
 
 		if (cachedActivityLogs) {
-			activityLogs = cachedActivityLogs.history;
+			activityLogs = cachedActivityLogs.activityLogs;
 			activityTotal = cachedActivityLogs.total;
 			activityLogsLoaded = true;
 			activityLogsLoading = false;
 			initialLoadComplete = true;
-			console.log('[HISTORY-CACHE] Using cached activity logs:', cachedActivityLogs.history.length, 'items');
+			console.log('[ACTIVITY-LOGS-CACHE] Using cached activity logs:', cachedActivityLogs.activityLogs.length, 'items');
 			
 			// Background progressive loading
 			loadAllHistoryProgressive(true).catch((err) => {
-				console.error('[HISTORY] Background progressive refresh failed:', err);
+				console.error('[ACTIVITY-LOGS] Background progressive refresh failed:', err);
 			});
 		} else {
 			loadAllHistoryProgressive(true).then(() => {
 				initialLoadComplete = true;
 			}).catch((err) => {
-				console.error('[HISTORY] Failed progressive load:', err);
+				console.error('[ACTIVITY-LOGS] Failed progressive load:', err);
 				initialLoadComplete = true;
 			});
 		}
 
 		// Set up periodic background refresh (every 5 minutes)
 		const refreshInterval = setInterval(() => {
-			console.log('[HISTORY-AUTO-REFRESH] Refreshing activity logs in background...');
+			console.log('[ACTIVITY-LOGS-AUTO-REFRESH] Refreshing activity logs in background...');
 			loadActivityLogs(true).catch((err) => {
-				console.error('[HISTORY-AUTO-REFRESH] Failed:', err);
+				console.error('[ACTIVITY-LOGS-AUTO-REFRESH] Failed:', err);
 			});
 		}, 5 * 60 * 1000);
 
@@ -133,23 +133,23 @@
 
 	// Set up real-time inventory change subscription
 	onMount(() => {
-		console.log('[HISTORY-SSE] Setting up inventory change subscription');
-		const unsubscribe = inventoryHistoryAPI.subscribeToChanges((event) => {
-			console.log('[HISTORY-SSE] ✓ Inventory change received:', event);
-			console.log('[HISTORY-SSE] Refreshing activity logs...');
+		console.log('[ACTIVITY-LOGS-SSE] Setting up inventory change subscription');
+		const unsubscribe = inventoryActivityLogsAPI.subscribeToChanges((event) => {
+			console.log('[ACTIVITY-LOGS-SSE] ✓ Inventory change received:', event);
+			console.log('[ACTIVITY-LOGS-SSE] Refreshing activity logs...');
 			
 			// Refresh activity logs in background when inventory changes
 			loadActivityLogs(false, true).then(() => {
-				console.log('[HISTORY-SSE] Activity logs refreshed successfully');
+				console.log('[ACTIVITY-LOGS-SSE] Activity logs refreshed successfully');
 			}).catch((err) => {
-				console.error('[HISTORY-SSE] Failed to refresh activity logs:', err);
+				console.error('[ACTIVITY-LOGS-SSE] Failed to refresh activity logs:', err);
 			});
 		});
 		
-		console.log('[HISTORY-SSE] Subscription created');
+		console.log('[ACTIVITY-LOGS-SSE] Subscription created');
 		
 		return () => {
-			console.log('[HISTORY-SSE] Unsubscribing from inventory changes');
+			console.log('[ACTIVITY-LOGS-SSE] Unsubscribing from inventory changes');
 			unsubscribe();
 		};
 	});
@@ -167,7 +167,7 @@
 	async function loadAllHistoryProgressive(forceRefresh = true) {
 		const loadId = ++inFlightLoadId;
 		
-		const activityPromise = inventoryHistoryAPI.getHistory({
+		const activityPromise = inventoryActivityLogsAPI.getActivityLogs({
 			action: filterAction || undefined,
 			entityType: filterEntityType as any || undefined,
 			startDate: filterStartDate || undefined,
@@ -190,7 +190,7 @@
 		// 1. Settle Activity Logs (first)
 		const actRes = results[0];
 		if (actRes.status === 'fulfilled') {
-			activityLogs = actRes.value.history;
+			activityLogs = actRes.value.activityLogs;
 			activityTotal = actRes.value.total;
 			activityLogsLoaded = true;
 		}
@@ -218,7 +218,7 @@
 		} else {
 			try {
 				activityLogsRefreshing = true;
-				const response = await inventoryHistoryAPI.getHistory({
+				const response = await inventoryActivityLogsAPI.getActivityLogs({
 					action: filterAction || undefined,
 					entityType: filterEntityType as any || undefined,
 					startDate: filterStartDate || undefined,
@@ -227,7 +227,7 @@
 					limit: activityLimit,
 					forceRefresh
 				});
-				activityLogs = response.history;
+				activityLogs = response.activityLogs;
 				activityTotal = response.total;
 				activityLogsLoaded = true;
 			} catch (err: any) {
@@ -351,9 +351,9 @@
 
 	// Activity log detail modal
 	let showActivityDetailModal = $state(false);
-	let selectedActivityLog = $state<InventoryHistoryEntry | null>(null);
+	let selectedActivityLog = $state<InventoryActivityLogEntry | null>(null);
 
-	function openActivityDetailModal(log: InventoryHistoryEntry) {
+	function openActivityDetailModal(log: InventoryActivityLogEntry) {
 		selectedActivityLog = log;
 		showActivityDetailModal = true;
 	}
@@ -396,11 +396,6 @@
 			
 			filtered = filtered.filter(log => {
 				const matches = log.userName === currentUserEmail;
-				if (!matches) {
-					console.log('[FILTER] Excluding:', log.userName, '(not matching', currentUserEmail, ')');
-				} else {
-					console.log('[FILTER] ✓ Including:', log.userName);
-				}
 				return matches;
 			});
 			console.log('[FILTER] After My Activities filter:', filtered.length);
@@ -501,7 +496,7 @@
 </script>
 
 <svelte:head>
-	<title>History - CHTM Cooks</title>
+	<title>Activity Logs - CHTM Cooks</title>
 </svelte:head>
 
 {#if activeTabLoading && (activeTab === 'activity-logs' ? activityLogs.length === 0 : requestHistory.length === 0)}
@@ -614,7 +609,7 @@
 <div class="space-y-6">
 	<!-- Header -->
 	<div>
-		<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">History</h1>
+		<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Activity Logs</h1>
 		<p class="mt-1 text-sm text-gray-500">View activity logs and request history</p>
 	</div>
 
@@ -805,20 +800,10 @@
 						<p class="mt-2 text-sm text-gray-500">
 							{#if filterMyActivitiesOnly}
 								You haven't performed any activities yet. Try editing an item in the catalog to see your activities here.
-							{:else if filterAction || filterEntityType || filterStartDate || filterEndDate || activitySearchQuery}
-								No logs match your current filters. Try adjusting your search criteria.
 							{:else}
-								Activity logs will appear here as operations are performed.
+								No logs match your current filters. Try adjusting your search criteria.
 							{/if}
 						</p>
-						{#if filterMyActivitiesOnly}
-							<button
-								onclick={() => filterMyActivitiesOnly = false}
-								class="mt-4 text-sm font-medium text-pink-600 hover:text-pink-700"
-							>
-								Show all activities
-							</button>
-						{/if}
 					</div>
 				{:else}
 					<!-- Mobile: tap-to-open row list -->
@@ -835,7 +820,7 @@
 
 								<!-- Two-line content block -->
 								<div class="min-w-0 flex-1">
-									<!-- Line 1: entity name (full width, no competition) -->
+									<!-- Line 1: entity name -->
 									<p class="truncate text-sm font-semibold text-gray-900 leading-snug">{log.entityName}</p>
 									<!-- Line 2: badge + timestamp -->
 									<div class="mt-1 flex items-center gap-2">
@@ -1058,11 +1043,9 @@
 
 								<!-- Two-line content block -->
 								<div class="min-w-0 flex-1">
-									<!-- Line 1: student name (full width) -->
 									<p class="truncate text-sm font-semibold text-gray-900 leading-snug">
 										{request.student?.fullName || `${request.student?.firstName || ''} ${request.student?.lastName || ''}`.trim() || 'N/A'}
 									</p>
-									<!-- Line 2: status badge + date -->
 									<div class="mt-1 flex items-center gap-2">
 										<span class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none {getRequestStatusColor(request.status)}">
 											{request.status.replace('_', ' ')}
@@ -1151,10 +1134,6 @@
 							onPageChange={(p) => { requestHistoryPage = p; loadRequestHistory(); }}
 							class="mt-4"
 						/>
-					{:else if filteredRequestHistory.length < requestHistory.length}
-						<div class="mt-4 border-t border-gray-200 pt-4 text-center text-xs text-gray-700 sm:text-sm">
-							Showing {filteredRequestHistory.length} of {requestHistory.length} requests (filtered)
-						</div>
 					{/if}
 				{/if}
 			</div>
@@ -1164,27 +1143,22 @@
 </div>
 {/if}
 
-<!-- Activity Log Detail Modal (bottom sheet on mobile, centered dialog on desktop) -->
+<!-- Activity Log Detail Modal -->
 {#if showActivityDetailModal && selectedActivityLog}
 	{@const log = selectedActivityLog}
 	{@const isMyActivity = log.userName === currentUserEmail}
 	<div class="fixed inset-0 z-50 overflow-y-auto">
-		<!-- Backdrop -->
 		<div
 			class="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
 			aria-hidden="true"
 			onclick={closeActivityDetailModal}
 		></div>
-		<!-- Bottom sheet on mobile, centered dialog on desktop -->
 		<div class="flex min-h-full items-end justify-center sm:items-center sm:p-4">
 			<div class="animate-scaleIn relative w-full max-w-lg overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
-
-				<!-- Handle (mobile only) -->
 				<div class="flex justify-center pt-3 sm:hidden">
 					<div class="h-1 w-10 rounded-full bg-gray-300"></div>
 				</div>
 
-				<!-- Header -->
 				<div class="sticky top-0 z-10 border-b border-gray-100 bg-white/95 px-5 py-4 backdrop-blur-sm sm:px-6">
 					<div class="flex items-start justify-between gap-3">
 						<div class="flex min-w-0 flex-1 items-center gap-3">
@@ -1210,11 +1184,8 @@
 					</div>
 				</div>
 
-				<!-- Content -->
 				<div class="max-h-[65vh] overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
 					<div class="space-y-4">
-
-						<!-- Action & Role -->
 						<div class="flex flex-wrap gap-2">
 							<span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold {getActionColor(log.action)}">
 								{log.action.replace(/_/g, ' ').toUpperCase()}
@@ -1230,29 +1201,24 @@
 							{/if}
 						</div>
 
-						<!-- Detail fields -->
 						<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-							<!-- Timestamp -->
 							<div class="rounded-xl border border-gray-200 bg-gray-50 p-3.5">
 								<p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Timestamp</p>
 								<p class="mt-1 text-sm font-semibold text-gray-900">{formatTimestamp(log.timestamp)}</p>
 							</div>
 
-							<!-- Entity -->
 							<div class="rounded-xl border border-gray-200 bg-gray-50 p-3.5">
 								<p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Entity</p>
 								<p class="mt-1 text-sm font-semibold text-gray-900">{log.entityName}</p>
 								<p class="mt-0.5 text-xs capitalize text-gray-500">{log.entityType}</p>
 							</div>
 
-							<!-- Performed by -->
 							<div class="rounded-xl border border-gray-200 bg-gray-50 p-3.5 sm:col-span-2">
 								<p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Performed By</p>
 								<p class="mt-1 break-all text-sm font-semibold text-gray-900">{log.userName || 'N/A'}</p>
 								<p class="mt-0.5 text-xs capitalize text-gray-500">{log.userRole || 'N/A'}</p>
 							</div>
 
-							<!-- Changes -->
 							{#if log.changes && log.changes.length > 0}
 								<div class="rounded-xl border border-gray-200 bg-gray-50 p-3.5 sm:col-span-2">
 									<p class="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">
@@ -1283,8 +1249,7 @@
 					</div>
 				</div>
 
-				<!-- Footer -->
-				<div class="sticky bottom-0 border-t border-gray-100 bg-white/95 px-5 py-4 backdrop-blur-sm sm:px-6">
+				<div class="sticky top-full border-t border-gray-100 bg-white/95 px-5 py-4 backdrop-blur-sm sm:px-6">
 					<button
 						onclick={closeActivityDetailModal}
 						class="w-full rounded-xl bg-gray-100 px-5 py-2.5 text-sm font-bold text-gray-700 transition-all hover:bg-gray-200 active:scale-[0.98]"
@@ -1729,4 +1694,3 @@
 		</div>
 	</div>
 {/if}
-

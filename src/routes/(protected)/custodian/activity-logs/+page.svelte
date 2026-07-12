@@ -4,13 +4,13 @@
 	import { get } from 'svelte/store';
 	import { toastStore } from '$lib/stores/toast';
 	import { confirmStore } from '$lib/stores/confirm';
-	import { historyStore } from '$lib/stores/history';
-	import { inventoryHistoryAPI, archivedItemsAPI, deletedItemsAPI } from '$lib/api/inventoryHistory';
-	import type { InventoryHistoryEntry, DeletedItem } from '$lib/api/inventoryHistory';
+	import { activityLogsStore } from '$lib/stores/activityLogs';
+	import { inventoryActivityLogsAPI, archivedItemsAPI, deletedItemsAPI } from '$lib/api/inventoryActivityLogs';
+	import type { InventoryActivityLogEntry, DeletedItem } from '$lib/api/inventoryActivityLogs';
 	import { borrowRequestsAPI } from '$lib/api/borrowRequests';
 	import { catalogAPI } from '$lib/api/catalog';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
-	import HistorySkeletonLoader from '$lib/components/ui/HistorySkeletonLoader.svelte';
+	import ActivityLogsSkeletonLoader from '$lib/components/ui/ActivityLogsSkeletonLoader.svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import ActionMenu from '$lib/components/ui/ActionMenu.svelte';
 	import { RotateCcw, Trash2 } from 'lucide-svelte';
@@ -20,10 +20,10 @@
 	let activeTab = $state<Tab>('activity-logs');
 	
 	// Get cached data from store
-	const cachedStore = browser ? get(historyStore) : null;
+	const cachedStore = browser ? get(activityLogsStore) : null;
 	const hasCachedData = cachedStore && 
 		cachedStore.activityLogsLoaded && 
-		historyStore.isActivityLogsCacheValid();
+		activityLogsStore.isActivityLogsCacheValid();
 	
 	let initialLoadComplete = $state(hasCachedData);
 	let activityLogsLoading = $state(!hasCachedData);
@@ -38,7 +38,7 @@
 	);
 	
 	// Activity Logs state - from store
-	let activityLogs = $state<InventoryHistoryEntry[]>(hasCachedData ? cachedStore!.activityLogs : []);
+	let activityLogs = $state<InventoryActivityLogEntry[]>(hasCachedData ? cachedStore!.activityLogs : []);
 	let activityTotal = $state(hasCachedData ? cachedStore!.activityTotal : 0);
 	let activityPage = $state(1);
 	let activityLimit = $state(50);
@@ -86,28 +86,28 @@
 
 	// Load data on mount
 	onMount(() => {
-		console.log('[HISTORY] Component mounted');
-		console.log('[HISTORY] Has cached data:', hasCachedData);
-		console.log('[HISTORY] Cache valid:', historyStore.isActivityLogsCacheValid());
+		console.log('[ACTIVITY-LOGS] Component mounted');
+		console.log('[ACTIVITY-LOGS] Has cached data:', hasCachedData);
+		console.log('[ACTIVITY-LOGS] Cache valid:', activityLogsStore.isActivityLogsCacheValid());
 
 		if (hasCachedData) {
-			console.log('[HISTORY] Using cached data from store');
+			console.log('[ACTIVITY-LOGS] Using cached data from store');
 			loadAllHistoryProgressive(true).catch((err) => {
-				console.error('[HISTORY] Background progressive refresh failed:', err);
+				console.error('[ACTIVITY-LOGS] Background progressive refresh failed:', err);
 			});
 		} else {
-			console.log('[HISTORY] No valid cache, loading from API...');
+			console.log('[ACTIVITY-LOGS] No valid cache, loading from API...');
 			loadAllHistoryProgressive(true).then(() => {
 				initialLoadComplete = true;
 			}).catch((err) => {
-				console.error('[HISTORY] Failed progressive load:', err);
+				console.error('[ACTIVITY-LOGS] Failed progressive load:', err);
 				initialLoadComplete = true;
 			});
 		}
 
 		// Subscribe to real-time inventory changes via SSE
-		const unsubscribeSSE = inventoryHistoryAPI.subscribeToChanges(() => {
-			console.log('[HISTORY] SSE event received, scheduling refresh');
+		const unsubscribeSSE = inventoryActivityLogsAPI.subscribeToChanges(() => {
+			console.log('[ACTIVITY-LOGS] SSE event received, scheduling refresh');
 			scheduleRefresh();
 		});
 		liveSyncActive = true;
@@ -132,7 +132,7 @@
 
 		// Cleanup function
 		return () => {
-			console.log('[HISTORY] Component unmounting');
+			console.log('[ACTIVITY-LOGS] Component unmounting');
 			unsubscribeSSE();
 			if (refreshTimer !== null) clearTimeout(refreshTimer);
 			clearInterval(pollInterval);
@@ -157,7 +157,7 @@
 	async function loadAllHistoryProgressive(forceRefresh = true) {
 		const loadId = ++inFlightLoadId;
 
-		const activityPromise = inventoryHistoryAPI.getHistory({
+		const activityPromise = inventoryActivityLogsAPI.getActivityLogs({
 			action: filterAction || undefined,
 			entityType: filterEntityType as any || undefined,
 			startDate: filterStartDate || undefined,
@@ -192,10 +192,10 @@
 		// 1. Settle Activity Logs (first)
 		const actRes = results[0];
 		if (actRes.status === 'fulfilled') {
-			activityLogs = actRes.value.history;
+			activityLogs = actRes.value.activityLogs;
 			activityTotal = actRes.value.total;
 			activityLogsLoaded = true;
-			historyStore.setActivityLogs(actRes.value.history, actRes.value.total);
+			activityLogsStore.setActivityLogs(actRes.value.activityLogs, actRes.value.total);
 		}
 		activityLogsLoading = false;
 
@@ -208,9 +208,9 @@
 			archivedItems = archRes.value.items;
 			archivedTotal = archRes.value.total;
 			archivedLoaded = true;
-			console.log('[HISTORY] Archived items loaded:', archivedTotal, 'items');
+			console.log('[ACTIVITY-LOGS] Archived items loaded:', archivedTotal, 'items');
 		} else {
-			console.error('[HISTORY] Failed to load archived items:', archRes.reason);
+			console.error('[ACTIVITY-LOGS] Failed to load archived items:', archRes.reason);
 		}
 		archivedLoading = false;
 
@@ -234,7 +234,7 @@
 			await loadAllHistoryProgressive(forceRefresh);
 		} else {
 			try {
-				const response = await inventoryHistoryAPI.getHistory({
+				const response = await inventoryActivityLogsAPI.getActivityLogs({
 					action: filterAction || undefined,
 					entityType: filterEntityType as any || undefined,
 					startDate: filterStartDate || undefined,
@@ -243,10 +243,10 @@
 					limit: activityLimit,
 					forceRefresh
 				});
-				activityLogs = response.history;
+				activityLogs = response.activityLogs;
 				activityTotal = response.total;
 				activityLogsLoaded = true;
-				historyStore.setActivityLogs(response.history, response.total);
+				activityLogsStore.setActivityLogs(response.activityLogs, response.total);
 			} catch (err: any) {
 				toastStore.error(err.message || 'Failed to load activity logs');
 			}
@@ -271,7 +271,7 @@
 
 		refreshInFlight = true;
 		try {
-			inventoryHistoryAPI.invalidateCache();
+			inventoryActivityLogsAPI.invalidateCache();
 			
 			if (activeTab === 'activity-logs') {
 				await loadActivityLogs(false, true);
@@ -288,8 +288,6 @@
 			}
 		}
 	}
-
-
 
 	// Load Archived Items
 	async function loadArchivedItems(showLoader = true, forceRefresh = false) {
@@ -553,7 +551,7 @@
 </script>
 
 <svelte:head>
-	<title>History - CHTM Cooks</title>
+	<title>Activity Logs - CHTM Cooks</title>
 </svelte:head>
 
 <style>
@@ -574,12 +572,12 @@
 	activeTab === 'archived' ? archivedItems.length === 0 :
 	deletedItems.length === 0
 )}
-	<HistorySkeletonLoader {activeTab} />
+	<ActivityLogsSkeletonLoader {activeTab} />
 {:else}
 <div class="space-y-6">
 	<!-- Header -->
 	<div>
-		<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Inventory History</h1>
+		<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Inventory Activity Logs</h1>
 		<p class="mt-1 text-sm text-gray-500">View activity logs, archived items, and recently deleted records</p>
 	</div>
 
@@ -821,7 +819,7 @@
 				{/if}
 			</div>
 
-		{:else if activeTab === 'archived'}
+			{:else if activeTab === 'archived'}
 			<!-- Archived Items Tab -->
 			<div>
 				<div class="mb-4 sm:mb-6">

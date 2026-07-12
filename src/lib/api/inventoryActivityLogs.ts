@@ -2,9 +2,9 @@ import { browser } from '$app/environment';
 import { getApiErrorMessage } from './session';
 
 /**
- * Inventory history entry
+ * Inventory activity log entry
  */
-export interface InventoryHistoryEntry {
+export interface InventoryActivityLogEntry {
 	id: string;
 	action: string;
 	entityType: 'item' | 'category';
@@ -75,7 +75,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 const CLIENT_CACHE_TTL_MS = 2 * 60 * 1000;
-const historyCache = new Map<string, { data: any, expiresAt: number }>();
+const activityLogsCache = new Map<string, { data: any, expiresAt: number }>();
 const inFlight = new Map<string, Promise<any>>();
 
 function getFreshCache<T>(cache: Map<string, { data: T, expiresAt: number }>, key: string): T | null {
@@ -95,10 +95,10 @@ function setCache<T>(cache: Map<string, { data: T, expiresAt: number }>, key: st
 }
 
 /**
- * Inventory History API
+ * Inventory Activity Logs API
  */
-export const inventoryHistoryAPI = {
-	peekCachedHistory(params?: {
+export const inventoryActivityLogsAPI = {
+	peekCachedLogs(params?: {
 		action?: string;
 		entityType?: 'item' | 'category';
 		entityId?: string;
@@ -107,20 +107,20 @@ export const inventoryHistoryAPI = {
 		endDate?: string;
 		page?: number;
 		limit?: number;
-	}): { history: InventoryHistoryEntry[]; total: number; page: number; limit: number; pages: number } | null {
+	}): { activityLogs: InventoryActivityLogEntry[]; total: number; page: number; limit: number; pages: number } | null {
 		const key = JSON.stringify(params || {});
-		return getFreshCache(historyCache, key);
+		return getFreshCache(activityLogsCache, key);
 	},
 
 	invalidateCache() {
-		historyCache.clear();
+		activityLogsCache.clear();
 		inFlight.clear();
 	},
 
 	/**
 	 * Get activity logs (audit trail)
 	 */
-	async getHistory(params?: {
+	async getActivityLogs(params?: {
 		action?: string;
 		entityType?: 'item' | 'category';
 		entityId?: string;
@@ -130,7 +130,7 @@ export const inventoryHistoryAPI = {
 		page?: number;
 		limit?: number;
 		forceRefresh?: boolean;
-	}): Promise<{ history: InventoryHistoryEntry[]; total: number; page: number; limit: number; pages: number }> {
+	}): Promise<{ activityLogs: InventoryActivityLogEntry[]; total: number; page: number; limit: number; pages: number }> {
 		const queryParams = new URLSearchParams();
 		if (params?.action) queryParams.set('action', params.action);
 		if (params?.entityType) queryParams.set('entityType', params.entityType);
@@ -143,7 +143,7 @@ export const inventoryHistoryAPI = {
 		if (params?.forceRefresh) queryParams.set('_t', Date.now().toString());
 
 		const query = queryParams.toString();
-		const url = `/api/inventory/history${query ? `?${query}` : ''}`;
+		const url = `/api/inventory/activity-logs${query ? `?${query}` : ''}`;
 
 		const cacheKey = JSON.stringify({
 			action: params?.action,
@@ -157,7 +157,7 @@ export const inventoryHistoryAPI = {
 		});
 
 		if (!params?.forceRefresh) {
-			const cached = getFreshCache<{ history: InventoryHistoryEntry[]; total: number; page: number; limit: number; pages: number }>(historyCache, cacheKey);
+			const cached = getFreshCache<{ activityLogs: InventoryActivityLogEntry[]; total: number; page: number; limit: number; pages: number }>(activityLogsCache, cacheKey);
 			if (cached) return cached;
 			const existing = inFlight.get(cacheKey);
 			if (existing) return existing;
@@ -165,8 +165,8 @@ export const inventoryHistoryAPI = {
 
 		const req = (async () => {
 			const response = await fetch(url, getFetchOptions('GET'));
-			const result = await handleResponse<{ history: InventoryHistoryEntry[]; total: number; page: number; limit: number; pages: number }>(response);
-			setCache(historyCache, cacheKey, result);
+			const result = await handleResponse<{ activityLogs: InventoryActivityLogEntry[]; total: number; page: number; limit: number; pages: number }>(response);
+			setCache(activityLogsCache, cacheKey, result);
 			return result;
 		})();
 
@@ -188,31 +188,31 @@ export const inventoryHistoryAPI = {
 		const source = new EventSource('/api/inventory/stream', { withCredentials: true });
 
 		source.addEventListener('open', () => {
-			console.log('[INVENTORY-HISTORY-STREAM] Connected');
+			console.log('[INVENTORY-ACTIVITY-STREAM] Connected');
 		});
 
 		source.addEventListener('inventory_change', (e: MessageEvent) => {
 			try {
 				const data = JSON.parse(e.data);
-				console.log('[INVENTORY-HISTORY-STREAM] Event received:', data);
+				console.log('[INVENTORY-ACTIVITY-STREAM] Event received:', data);
 				callback(data);
 			} catch (err) {
-				console.error('[INVENTORY-HISTORY-STREAM] Malformed payload', err);
+				console.error('[INVENTORY-ACTIVITY-STREAM] Malformed payload', err);
 			}
 		});
 
 		source.addEventListener('error', (e) => {
 			if (source.readyState === EventSource.CONNECTING) {
-				console.warn('[INVENTORY-HISTORY-STREAM] Connection closed or lost. Attempting to reconnect... (readyState: CONNECTING)');
+				console.warn('[INVENTORY-ACTIVITY-STREAM] Connection closed or lost. Attempting to reconnect... (readyState: CONNECTING)');
 			} else {
-				console.error('[INVENTORY-HISTORY-STREAM] ✗ Permanent error event:', e);
-				console.error('[INVENTORY-HISTORY-STREAM] EventSource readyState:', source.readyState);
+				console.error('[INVENTORY-ACTIVITY-STREAM] ✗ Permanent error event:', e);
+				console.error('[INVENTORY-ACTIVITY-STREAM] EventSource readyState:', source.readyState);
 			}
 		});
 
 		return () => {
 			source.close();
-			console.log('[INVENTORY-HISTORY-STREAM] Disconnected');
+			console.log('[INVENTORY-ACTIVITY-STREAM] Disconnected');
 		};
 	}
 };

@@ -30,7 +30,7 @@
 		QrCode,
 		CornerDownLeft
 	} from 'lucide-svelte';
-	import HistorySkeletonLoader from '$lib/components/ui/HistorySkeletonLoader.svelte';
+	import ActivityLogsSkeletonLoader from '$lib/components/ui/ActivityLogsSkeletonLoader.svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 
@@ -676,7 +676,7 @@
 </svelte:head>
 
 {#if activeLoading && history.length === 0}
-	<HistorySkeletonLoader />
+	<ActivityLogsSkeletonLoader />
 {:else}
 	<div class="space-y-4 sm:space-y-6">
 		<!-- Header -->

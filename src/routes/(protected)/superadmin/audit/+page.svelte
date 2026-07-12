@@ -16,7 +16,7 @@
 		Clock,
 		Activity
 	} from 'lucide-svelte';
-	import { inventoryHistoryAPI, type InventoryHistoryEntry } from '$lib/api/inventoryHistory';
+	import { inventoryActivityLogsAPI, type InventoryActivityLogEntry } from '$lib/api/inventoryActivityLogs';
 	import { borrowRequestsAPI, type BorrowRequestRecord } from '$lib/api/borrowRequests';
 	import { authAuditEventsAPI, type AuthAuditEvent } from '$lib/api/authAuditEvents';
 	import { requestAuditEventsAPI, type RequestAuditEvent } from '$lib/api/requestAuditEvents';
@@ -36,7 +36,7 @@
 	let requestsTabLoading = $state(true);
 	let inFlightLoadId = 0;
 
-	let logs = $state<InventoryHistoryEntry[]>([]);
+	let logs = $state<InventoryActivityLogEntry[]>([]);
 	let requests = $state<BorrowRequestRecord[]>([]);
 	let authEvents = $state<AuthAuditEvent[]>([]);
 	let requestAuditEvents = $state<RequestAuditEvent[]>([]);
@@ -66,7 +66,7 @@
 	// ─── Session grouping types ───────────────────────────────────────────────
 	type ActivityEntry =
 		| { kind: 'auth';     timestamp: Date; data: AuthAuditEvent }
-		| { kind: 'log';     timestamp: Date; data: InventoryHistoryEntry }
+		| { kind: 'log';     timestamp: Date; data: InventoryActivityLogEntry }
 		| { kind: 'request'; timestamp: Date; data: BorrowRequestRecord }
 		| { kind: 'request-audit'; timestamp: Date; data: RequestAuditEvent };
 
@@ -93,9 +93,9 @@
 	}
 
 	function hydrateFromCache(): boolean {
-		const cached = inventoryHistoryAPI.peekCachedHistory({ limit: 200 });
+		const cached = inventoryActivityLogsAPI.peekCachedLogs({ limit: 200 });
 		if (!cached) return false;
-		logs = cached.history;
+		logs = cached.activityLogs;
 		loading = false;
 		allActivityLoading = false;
 		userActionsLoading = false;
@@ -132,7 +132,7 @@
 		const loadId = ++inFlightLoadId;
 
 		const [logsRes, reqsRes, authRes, requestAuditRes] = await Promise.allSettled([
-			inventoryHistoryAPI.getHistory({ limit: 200, forceRefresh }),
+			inventoryActivityLogsAPI.getActivityLogs({ limit: 200, forceRefresh }),
 			borrowRequestsAPI.list({ limit: 500, sortBy: 'createdAt' }, { forceRefresh }),
 			authAuditEventsAPI.getEvents({ limit: 500, forceRefresh }).catch(() => null),
 			requestAuditEventsAPI.getEvents({ limit: 1000, forceRefresh }).catch(() => null)
@@ -140,7 +140,7 @@
 
 		if (loadId !== inFlightLoadId) return;
 
-		if (logsRes.status === 'fulfilled') logs = logsRes.value.history;
+		if (logsRes.status === 'fulfilled') logs = logsRes.value.activityLogs;
 		if (reqsRes.status === 'fulfilled') requests = reqsRes.value.requests;
 		if (authRes.status === 'fulfilled' && authRes.value) authEvents = authRes.value.events;
 		if (requestAuditRes.status === 'fulfilled' && requestAuditRes.value) requestAuditEvents = requestAuditRes.value.events;
@@ -168,11 +168,11 @@
 		} else {
 			try {
 				const [res, authRes, requestAuditRes] = await Promise.allSettled([
-					inventoryHistoryAPI.getHistory({ limit: 200, forceRefresh: true }),
+					inventoryActivityLogsAPI.getActivityLogs({ limit: 200, forceRefresh: true }),
 					authAuditEventsAPI.getEvents({ limit: 500, forceRefresh: true }).catch(() => null),
 					requestAuditEventsAPI.getEvents({ limit: 1000, forceRefresh: true }).catch(() => null)
 				]);
-				if (res.status === 'fulfilled') logs = res.value.history;
+				if (res.status === 'fulfilled') logs = res.value.activityLogs;
 				if (authRes.status === 'fulfilled' && authRes.value) authEvents = authRes.value.events;
 				if (requestAuditRes.status === 'fulfilled' && requestAuditRes.value) requestAuditEvents = requestAuditRes.value.events;
 			} catch (error: any) {

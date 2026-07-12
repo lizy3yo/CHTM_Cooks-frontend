@@ -1,14 +1,14 @@
 import { writable } from 'svelte/store';
-import type { InventoryHistoryEntry, DeletedItem } from '$lib/api/inventoryHistory';
+import type { InventoryActivityLogEntry, DeletedItem } from '$lib/api/inventoryActivityLogs';
 
 /**
- * History Store - Persistent cache for inventory history data
+ * Activity Logs Store - Persistent cache for activity logs data
  * Survives component unmount/remount during navigation
  */
 
-interface HistoryCache {
+interface ActivityLogsCache {
 	// Activity Logs
-	activityLogs: InventoryHistoryEntry[];
+	activityLogs: InventoryActivityLogEntry[];
 	activityTotal: number;
 	activityLogsTimestamp: number;
 	
@@ -36,7 +36,7 @@ interface HistoryCache {
 
 const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 
-const initialState: HistoryCache = {
+const initialState: ActivityLogsCache = {
 	activityLogs: [],
 	activityTotal: 0,
 	activityLogsTimestamp: 0,
@@ -59,14 +59,14 @@ const initialState: HistoryCache = {
 	deletedLoaded: false
 };
 
-function createHistoryStore() {
-	const { subscribe, update, set } = writable<HistoryCache>(initialState);
+function createActivityLogsStore() {
+	const { subscribe, update, set } = writable<ActivityLogsCache>(initialState);
 
 	return {
 		subscribe,
 		
 		// Activity Logs
-		setActivityLogs: (logs: InventoryHistoryEntry[], total: number) => {
+		setActivityLogs: (logs: InventoryActivityLogEntry[], total: number) => {
 			update(state => ({
 				...state,
 				activityLogs: logs,
@@ -197,4 +197,4 @@ function createHistoryStore() {
 	};
 }
 
-export const historyStore = createHistoryStore();
+export const activityLogsStore = createActivityLogsStore();

@@ -290,8 +290,8 @@
 						<a href="/admin/account/settings" onclick={() => profileOpen = false} role="menuitem" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 transition-colors hover:bg-pink-50 hover:text-pink-600">
 							<Settings size={15} class="text-gray-400" /> Settings
 						</a>
-						<a href="/admin/history" onclick={() => profileOpen = false} role="menuitem" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 transition-colors hover:bg-pink-50 hover:text-pink-600">
-							<History size={15} class="text-gray-400" /> History
+						<a href="/admin/activity-logs" onclick={() => profileOpen = false} role="menuitem" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 transition-colors hover:bg-pink-50 hover:text-pink-600">
+							<History size={15} class="text-gray-400" /> Activity Logs
 						</a>
 
 						<div class="my-1 border-t border-gray-100"></div>
