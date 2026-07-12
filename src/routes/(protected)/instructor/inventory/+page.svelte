@@ -4585,20 +4585,16 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 											>Item Name</th
 										>
 										<th
-											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+											class="px-6 py-3 text-center text-xs font-medium tracking-wider text-gray-500 uppercase"
 											>Category</th
 										>
 										<th
-											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+											class="px-6 py-3 text-center text-xs font-medium tracking-wider text-gray-500 uppercase"
 											>Specification</th
 										>
 										<th
-											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
-											>Tools / Equipment</th
-										>
-										<th
-											class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
-											>Stock (Total | Avail | Rel)</th
+											class="px-6 py-3 text-center text-xs font-medium tracking-wider text-gray-500 uppercase"
+											>Total | Avail | Released</th
 										>
 
 										<th
@@ -4659,17 +4655,15 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 													</div>
 												</div>
 											</td>
-											<td class="px-6 py-4 whitespace-nowrap">
+											<td class="px-6 py-4 whitespace-nowrap text-center">
 												<span
 													class="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800"
 													>{item.category}</span
 												>
 											</td>
-											<td class="px-6 py-4 text-sm text-gray-700">{item.specification || '—'}</td>
-											<td class="px-6 py-4 text-sm text-gray-700">{item.toolsOrEquipment || '—'}</td
-											>
-											<td class="px-6 py-4 text-sm whitespace-nowrap" onclick={(e) => e.stopPropagation()}>
-												<div class="flex items-center gap-1.5 text-xs font-medium">
+											<td class="px-6 py-4 text-sm text-gray-700 text-center">{item.specification || '—'}</td>
+											<td class="px-6 py-4 text-sm whitespace-nowrap text-center" onclick={(e) => e.stopPropagation()}>
+												<div class="flex items-center justify-center gap-1.5 text-xs font-medium">
 													<span class="text-sm font-semibold text-gray-900 mr-1" title="Total Stock">
 														{item.currentCount ?? getCurrentCount(item.quantity, item.donations ?? 0)}
 													</span>
