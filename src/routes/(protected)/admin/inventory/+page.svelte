@@ -22,7 +22,7 @@
 	import ExportModal from '$lib/components/custodian/ExportModal.svelte';
 	import ItemBorrowersModal from '$lib/components/ui/ItemBorrowersModal.svelte';
 
-	type Tab = 'all-items' | 'categories';
+	type Tab = 'all-items' | 'required-items' | 'categories';
 
 	let activeTab = $state<Tab>('all-items');
 	let requiredFilter = $state<'all' | 'required' | 'regular'>('all');
@@ -941,6 +941,11 @@
 		activeTab = tab;
 		currentPage = 1;
 		query = '';
+		if (tab === 'required-items') {
+			requiredFilter = 'required';
+		} else if (tab === 'all-items') {
+			requiredFilter = 'all';
+		}
 		// Note: Don't auto-clear category filter - use clearCategoryFilter() explicitly
 	}
 
@@ -1008,6 +1013,57 @@
 			return isActive && matchesCategory && matchesQuery && matchesRequired && matchesStatus;
 		})
 	);
+
+	const allFilteredItemsCount = $derived(
+		items.filter((item) => {
+			const isActive = !item.archived;
+			const q = query.toLowerCase().trim();
+			const matchesCategory =
+				!selectedCategory ||
+				item.category?.toLowerCase()?.trim() === selectedCategory?.name?.toLowerCase()?.trim();
+			const matchesQuery =
+				!q ||
+				(item.name || '').toLowerCase().includes(q) ||
+				(item.specification || '').toLowerCase().includes(q) ||
+				(item.description || '').toLowerCase().includes(q) ||
+				(item.id || '').toLowerCase().includes(q);
+
+			let matchesStatus = true;
+			const itemStatus = getItemStatus(item);
+			if (statusFilter === 'in-stock') {
+				matchesStatus = itemStatus === 'In Stock';
+			} else if (statusFilter === 'out-of-stock') {
+				matchesStatus = itemStatus === 'Out of Stock';
+			}
+			return isActive && matchesCategory && matchesQuery && matchesStatus;
+		}).length
+	);
+
+	const requiredFilteredItemsCount = $derived(
+		items.filter((item) => {
+			const isActive = !item.archived;
+			const q = query.toLowerCase().trim();
+			const matchesCategory =
+				!selectedCategory ||
+				item.category?.toLowerCase()?.trim() === selectedCategory?.name?.toLowerCase()?.trim();
+			const matchesQuery =
+				!q ||
+				(item.name || '').toLowerCase().includes(q) ||
+				(item.specification || '').toLowerCase().includes(q) ||
+				(item.description || '').toLowerCase().includes(q) ||
+				(item.id || '').toLowerCase().includes(q);
+
+			let matchesStatus = true;
+			const itemStatus = getItemStatus(item);
+			if (statusFilter === 'in-stock') {
+				matchesStatus = itemStatus === 'In Stock';
+			} else if (statusFilter === 'out-of-stock') {
+				matchesStatus = itemStatus === 'Out of Stock';
+			}
+			return isActive && matchesCategory && matchesQuery && matchesStatus && item.isrequired === true;
+		}).length
+	);
+
 	const sortedItems = $derived(
 		[...filteredItems].sort((a, b) =>
 			sortOrder === 'az'
@@ -3810,7 +3866,24 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							? 'bg-pink-100 text-pink-600'
 							: 'bg-gray-100 text-gray-600'}"
 					>
-						{filteredItems.length}
+						{allFilteredItemsCount}
+					</span>
+				</button>
+
+				<button
+					onclick={() => switchTab('required-items')}
+					class="flex flex-1 items-center justify-center gap-1 border-b-2 px-1 py-3 text-[11px] font-medium whitespace-nowrap transition-colors sm:text-sm
+					{activeTab === 'required-items'
+						? 'border-pink-500 text-pink-600'
+						: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
+				>
+					Required Items
+					<span
+						class="rounded-full px-1.5 py-0.5 text-[10px] {activeTab === 'required-items'
+							? 'bg-pink-100 text-pink-600'
+							: 'bg-gray-100 text-gray-600'}"
+					>
+						{requiredFilteredItemsCount}
 					</span>
 				</button>
 
@@ -3835,7 +3908,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 
 		<!-- Tab Content -->
 		<div class="rounded-b-lg bg-white shadow">
-			{#if activeTab === 'all-items'}
+			{#if activeTab === 'all-items' || activeTab === 'required-items'}
 				{#if itemsTabLoading}
 					<InventorySkeletonLoader view="all-items" />
 				{:else}
@@ -3934,7 +4007,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							</div>
 
 							<!-- Active Filters Tags Strip -->
-							{#if selectedCategory || requiredFilter !== 'all' || statusFilter !== 'all'}
+							{#if selectedCategory || (requiredFilter !== 'all' && activeTab !== 'required-items') || statusFilter !== 'all'}
 								<div
 									class="border-gray-150 flex flex-wrap items-center gap-2 rounded-lg border bg-gray-50/50 p-2"
 								>
@@ -3969,7 +4042,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 										</span>
 									{/if}
 
-									{#if requiredFilter !== 'all'}
+									{#if requiredFilter !== 'all' && activeTab !== 'required-items'}
 										<span
 											class="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700 ring-1 ring-purple-600/10"
 										>

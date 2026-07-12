@@ -33,7 +33,7 @@
 	import ExportModal from '$lib/components/custodian/ExportModal.svelte';
 	import ItemBorrowersModal from '$lib/components/ui/ItemBorrowersModal.svelte';
 
-	type Tab = 'all-items' | 'categories';
+	type Tab = 'all-items' | 'required-items' | 'categories';
 
 	let activeTab = $state<Tab>('all-items');
 	let selectedIds = $state<string[]>([]);
@@ -949,6 +949,11 @@
 		activeTab = tab;
 		currentPage = 1;
 		query = '';
+		if (tab === 'required-items') {
+			requiredFilter = 'required';
+		} else if (tab === 'all-items') {
+			requiredFilter = 'all';
+		}
 		// Note: Don't auto-clear category filter - use clearCategoryFilter() explicitly
 	}
 
@@ -1016,6 +1021,57 @@
 			return isActive && matchesCategory && matchesQuery && matchesRequired && matchesStatus;
 		})
 	);
+
+	const allFilteredItemsCount = $derived(
+		items.filter((item) => {
+			const isActive = !item.archived;
+			const q = query.toLowerCase().trim();
+			const matchesCategory =
+				!selectedCategory ||
+				item.category?.toLowerCase()?.trim() === selectedCategory?.name?.toLowerCase()?.trim();
+			const matchesQuery =
+				!q ||
+				(item.name || '').toLowerCase().includes(q) ||
+				(item.specification || '').toLowerCase().includes(q) ||
+				(item.description || '').toLowerCase().includes(q) ||
+				(item.id || '').toLowerCase().includes(q);
+
+			let matchesStatus = true;
+			const itemStatus = getItemStatus(item);
+			if (statusFilter === 'in-stock') {
+				matchesStatus = itemStatus === 'In Stock';
+			} else if (statusFilter === 'out-of-stock') {
+				matchesStatus = itemStatus === 'Out of Stock';
+			}
+			return isActive && matchesCategory && matchesQuery && matchesStatus;
+		}).length
+	);
+
+	const requiredFilteredItemsCount = $derived(
+		items.filter((item) => {
+			const isActive = !item.archived;
+			const q = query.toLowerCase().trim();
+			const matchesCategory =
+				!selectedCategory ||
+				item.category?.toLowerCase()?.trim() === selectedCategory?.name?.toLowerCase()?.trim();
+			const matchesQuery =
+				!q ||
+				(item.name || '').toLowerCase().includes(q) ||
+				(item.specification || '').toLowerCase().includes(q) ||
+				(item.description || '').toLowerCase().includes(q) ||
+				(item.id || '').toLowerCase().includes(q);
+
+			let matchesStatus = true;
+			const itemStatus = getItemStatus(item);
+			if (statusFilter === 'in-stock') {
+				matchesStatus = itemStatus === 'In Stock';
+			} else if (statusFilter === 'out-of-stock') {
+				matchesStatus = itemStatus === 'Out of Stock';
+			}
+			return isActive && matchesCategory && matchesQuery && matchesStatus && item.isrequired === true;
+		}).length
+	);
+
 	const sortedItems = $derived(
 		[...filteredItems].sort((a, b) =>
 			sortOrder === 'az' 
@@ -1054,14 +1110,9 @@
 		statusFilter;
 		sortOrder;
 		currentPage = 1;
-		selectedIds = [];
 	});
 
-	// Reset selection when changing page
-	$effect(() => {
-		currentPage;
-		selectedIds = [];
-	});
+
 
 
 	const displayCategories = $derived(
@@ -1537,21 +1588,14 @@
 	}
 
 	const isAllPageSelected = $derived(
-		displayItems.length > 0 && displayItems.every((item) => selectedIds.includes(item.id))
+		sortedItems.length > 0 && sortedItems.every((item) => selectedIds.includes(item.id))
 	);
 
 	function toggleSelectAll() {
 		if (isAllPageSelected) {
-			const pageIds = displayItems.map((item) => item.id);
-			selectedIds = selectedIds.filter((id) => !pageIds.includes(id));
+			selectedIds = [];
 		} else {
-			const newIds = [...selectedIds];
-			displayItems.forEach((item) => {
-				if (!newIds.includes(item.id)) {
-					newIds.push(item.id);
-				}
-			});
-			selectedIds = newIds;
+			selectedIds = sortedItems.map((item) => item.id);
 		}
 	}
 
@@ -1598,6 +1642,95 @@
 		} catch (err) {
 			console.error('Error during bulk deletion:', err);
 			toastStore.error('Failed to delete selected items');
+		} finally {
+			loading = false;
+		}
+	}
+
+	let bulkActionMenuOpen = $state(false);
+	const allSelectedAreRequired = $derived(
+		selectedIds.length > 0 &&
+		selectedIds.every((id) => items.find((item) => item.id === id)?.isrequired === true)
+	);
+
+	async function archiveSelected() {
+		if (selectedIds.length === 0) return;
+		bulkActionMenuOpen = false;
+
+		const confirmed = await confirmStore.warning(
+			`Archive ${selectedIds.length} selected item${selectedIds.length > 1 ? 's' : ''}? They will be moved to the History page and can be restored later.`,
+			'Archive Selected Items',
+			'Archive',
+			'Cancel'
+		);
+
+		if (!confirmed) return;
+
+		try {
+			loading = true;
+
+			await Promise.all(
+				selectedIds.map((id) => inventoryItemsAPI.update(id, { archived: true }))
+			);
+
+			// Optimistic update: mark items as archived in local state
+			items = items.map((item) =>
+				selectedIds.includes(item.id) ? { ...item, archived: true } : item
+			);
+
+			selectedIds = [];
+			toastStore.success('Selected items archived successfully');
+
+			inventoryStore.setItems(items);
+		} catch (err) {
+			console.error('Error during bulk archive:', err);
+			toastStore.error('Failed to archive selected items');
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function markRequiredSelected(markAs: boolean) {
+		if (selectedIds.length === 0) return;
+		bulkActionMenuOpen = false;
+
+		const label = markAs ? 'Mark as Required' : 'Unmark as Required';
+		const confirmed = await confirmStore.confirm({
+			type: markAs ? 'info' : 'warning',
+			title: `${label} (${selectedIds.length} item${selectedIds.length > 1 ? 's' : ''})`,
+			message: markAs
+				? `Mark ${selectedIds.length} selected item${selectedIds.length > 1 ? 's' : ''} as Required? They will always appear on student request forms.`
+				: `Remove ${selectedIds.length} selected item${selectedIds.length > 1 ? 's' : ''} from Required? Students will need to manually add them to their requests.`,
+			confirmText: label,
+			cancelText: 'Cancel'
+		});
+
+		if (!confirmed) return;
+
+		try {
+			loading = true;
+
+			await Promise.all(
+				selectedIds.map((id) => inventoryItemsAPI.update(id, { isrequired: markAs }))
+			);
+
+			// Optimistic update
+			items = items.map((item) =>
+				selectedIds.includes(item.id) ? { ...item, isrequired: markAs } : item
+			);
+
+			selectedIds = [];
+			toastStore.success(
+				markAs
+					? 'Selected items marked as Required'
+					: 'Selected items removed from Required',
+				'Required Status Updated'
+			);
+
+			inventoryStore.setItems(items);
+		} catch (err) {
+			console.error('Error during bulk required update:', err);
+			toastStore.error('Failed to update required status');
 		} finally {
 			loading = false;
 		}
@@ -4038,7 +4171,24 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							? 'bg-pink-100 text-pink-600'
 							: 'bg-gray-100 text-gray-600'}"
 					>
-						{filteredItems.length}
+						{allFilteredItemsCount}
+					</span>
+				</button>
+
+				<button
+					onclick={() => switchTab('required-items')}
+					class="flex flex-1 items-center justify-center gap-1 border-b-2 px-1 py-3 text-[11px] font-medium whitespace-nowrap transition-colors sm:text-sm
+					{activeTab === 'required-items'
+						? 'border-pink-500 text-pink-600'
+						: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
+				>
+					Required Items
+					<span
+						class="rounded-full px-1.5 py-0.5 text-[10px] {activeTab === 'required-items'
+							? 'bg-pink-100 text-pink-600'
+							: 'bg-gray-100 text-gray-600'}"
+					>
+						{requiredFilteredItemsCount}
 					</span>
 				</button>
 
@@ -4063,7 +4213,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 
 		<!-- Tab Content -->
 		<div class="rounded-b-lg bg-white shadow">
-			{#if activeTab === 'all-items'}
+			{#if activeTab === 'all-items' || activeTab === 'required-items'}
 				{#if itemsTabLoading}
 					<InventorySkeletonLoader view="all-items" />
 				{:else}
@@ -4146,7 +4296,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 						</div>
 
 						<!-- Active Filters Tags Strip -->
-						{#if selectedCategory || requiredFilter !== 'all' || statusFilter !== 'all'}
+						{#if selectedCategory || (requiredFilter !== 'all' && activeTab !== 'required-items') || statusFilter !== 'all'}
 							<div class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-150 bg-gray-50/50 p-2">
 								<span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider pl-1">Active Filters:</span>
 
@@ -4161,7 +4311,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 									</span>
 								{/if}
 
-								{#if requiredFilter !== 'all'}
+								{#if requiredFilter !== 'all' && activeTab !== 'required-items'}
 									<span class="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700 ring-1 ring-purple-600/10">
 										Type: {requiredFilter === 'required' ? 'Required Only' : 'Regular Only'}
 										<button onclick={() => requiredFilter = 'all'} class="group rounded-full p-0.5 hover:bg-purple-100" aria-label="Clear required filter">
@@ -4261,16 +4411,65 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 										Clear selection
 									</button>
 								</div>
-								<button
-									onclick={deleteSelected}
-									disabled={loading}
-									class="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-[11px] sm:text-xs font-semibold text-white shadow-xs transition-colors hover:bg-red-700 focus:outline-hidden disabled:opacity-50 cursor-pointer"
-								>
-									<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-									</svg>
-									Delete Selected
-								</button>
+								<div class="relative">
+									<button
+										onclick={() => (bulkActionMenuOpen = !bulkActionMenuOpen)}
+										disabled={loading}
+										class="inline-flex items-center gap-1.5 rounded-lg bg-gray-800 px-3 py-1.5 text-[11px] sm:text-xs font-semibold text-white shadow-xs transition-colors hover:bg-gray-900 focus:outline-hidden disabled:opacity-50 cursor-pointer"
+									>
+										Bulk Actions
+										<svg class="h-3 w-3 transition-transform {bulkActionMenuOpen ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+										</svg>
+									</button>
+
+									{#if bulkActionMenuOpen}
+										<!-- svelte-ignore a11y_no_static_element_interactions -->
+										<div
+											class="absolute right-0 top-full z-50 mt-1.5 w-56 rounded-lg border border-gray-200 bg-white py-1.5 shadow-lg"
+											onmouseleave={() => (bulkActionMenuOpen = false)}
+										>
+											<button
+												onclick={archiveSelected}
+												disabled={loading}
+												class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50 cursor-pointer"
+											>
+												<svg class="h-4 w-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+													<path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12" />
+												</svg>
+												Archive Selected
+											</button>
+											<button
+												onclick={() => markRequiredSelected(!allSelectedAreRequired)}
+												disabled={loading}
+												class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-gray-700 {allSelectedAreRequired ? 'hover:bg-gray-100' : 'hover:bg-purple-50 hover:text-purple-700'} disabled:opacity-50 cursor-pointer"
+											>
+												{#if allSelectedAreRequired}
+													<svg class="h-4 w-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+														<path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+													</svg>
+													Unmark as Required
+												{:else}
+													<svg class="h-4 w-4 text-purple-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+														<path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+													</svg>
+													Mark as Required
+												{/if}
+											</button>
+											<div class="my-1 border-t border-gray-100"></div>
+											<button
+												onclick={() => { bulkActionMenuOpen = false; deleteSelected(); }}
+												disabled={loading}
+												class="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 cursor-pointer"
+											>
+												<svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+													<path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+												</svg>
+												Remove Selected
+											</button>
+										</div>
+									{/if}
+								</div>
 							</div>
 						{/if}
 
@@ -4283,7 +4482,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 									checked={isAllPageSelected}
 									onchange={toggleSelectAll}
 								/>
-								Select All (Page)
+								Select All
 							</label>
 						</div>
 
