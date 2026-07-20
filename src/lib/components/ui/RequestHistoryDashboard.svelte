@@ -2,7 +2,10 @@
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { borrowRequestsAPI, type BorrowRequestRecord, type BorrowRequestStatus } from '$lib/api/borrowRequests';
+	import { usersAPI, type UserResponse } from '$lib/api/users';
 	import { toastStore } from '$lib/stores/toast';
+	import { donationsAPI } from '$lib/api/donations';
+	import { inventoryActivityLogsAPI } from '$lib/api/inventoryActivityLogs';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import { 
@@ -19,7 +22,11 @@
 		XCircle, 
 		AlertTriangle, 
 		ChevronDown,
-		FileText
+		FileText,
+		Sliders,
+		ArrowUpRight,
+		ArrowDownRight,
+		Shield
 	} from 'lucide-svelte';
 
 	// Component Props
@@ -45,10 +52,103 @@
 	let selectedItemId = $state<string | null>(null);
 	let showItemDetail = $state(false);
 
-	// Fetch all requests on mount
+	// Item adjustments audit state
+	export interface ItemAdjustmentRecord {
+		id: string;
+		itemName: string;
+		action: 'add' | 'subtract';
+		quantity: number;
+		reason: string;
+		adjustedBy: string;
+		role: string;
+		timestamp: string;
+	}
+
+	let adjustments = $state<ItemAdjustmentRecord[]>([]);
+	let adjustmentsLoading = $state(false);
+	let adjustmentsLoaded = $state(false);
+
+	async function fetchAdjustments() {
+		if (adjustmentsLoaded) return;
+		adjustmentsLoading = true;
+		try {
+			const [donationsRes, logsRes] = await Promise.allSettled([
+				donationsAPI.getAll({ limit: 500 }),
+				inventoryActivityLogsAPI.getActivityLogs({ limit: 500 })
+			]);
+
+			const records: ItemAdjustmentRecord[] = [];
+
+			if (donationsRes.status === 'fulfilled' && donationsRes.value.donations) {
+				const stockDonations = donationsRes.value.donations.filter(
+					(d) => d.donorName === 'Custodian Stock Adjustment'
+				);
+				for (const d of stockDonations) {
+					records.push({
+						id: d.id || `ADJ-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+						itemName: d.itemName || 'Equipment Item',
+						action: d.quantity >= 0 ? 'add' : 'subtract',
+						quantity: Math.abs(d.quantity),
+						reason: d.notes || d.purpose || 'Stock level adjustment',
+						adjustedBy: 'Lab Custodian',
+						role: 'custodian',
+						timestamp: d.date || d.createdAt
+					});
+				}
+			}
+
+			if (logsRes.status === 'fulfilled' && logsRes.value.activityLogs) {
+				const stockLogs = logsRes.value.activityLogs.filter(
+					(l) =>
+						l.action.includes('adjust') ||
+						l.action.includes('stock') ||
+						l.action.includes('quantity') ||
+						(l.changes && l.changes.some((c) => c.field === 'quantity'))
+				);
+				for (const l of stockLogs) {
+					const qtyChange = l.changes?.find((c) => c.field === 'quantity');
+					const oldQty = qtyChange?.oldValue ?? 0;
+					const newQty = qtyChange?.newValue ?? 0;
+					const diff = newQty - oldQty;
+
+					records.push({
+						id: l.id || `LOG-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+						itemName: l.entityName || 'Equipment Item',
+						action: diff >= 0 ? 'add' : 'subtract',
+						quantity: Math.abs(diff !== 0 ? diff : 1),
+						reason: l.metadata?.reason || l.action || 'Inventory update',
+						adjustedBy: l.userName || 'System User',
+						role: l.userRole || 'custodian',
+						timestamp: l.timestamp ? new Date(l.timestamp).toISOString() : new Date().toISOString()
+					});
+				}
+			}
+
+			records.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+			adjustments = records;
+			adjustmentsLoaded = true;
+		} catch (err) {
+			console.error('Failed to load item adjustment logs:', err);
+		} finally {
+			adjustmentsLoading = false;
+		}
+	}
+
+	let registeredStudents = $state<UserResponse[]>([]);
+
+	async function fetchStudents() {
+		try {
+			const res = await usersAPI.getAll({ role: 'student', limit: 1000 });
+			registeredStudents = res.users || [];
+		} catch (err) {
+			console.error('[REQUEST-HISTORY] Failed to load registered students:', err);
+		}
+	}
+
+	// Fetch all requests, adjustments, and students on mount
 	onMount(async () => {
 		try {
-			await fetchRequests();
+			await Promise.all([fetchRequests(), fetchAdjustments(), fetchStudents()]);
 		} catch (err: any) {
 			console.error('[REQUEST-HISTORY] Failed to load request history:', err);
 		} finally {
@@ -122,18 +222,38 @@
 	const studentDirectory = $derived.by(() => {
 		const directory: Record<string, StudentStats> = {};
 
+		// 1. Populate registered students from database first
+		for (const u of registeredStudents) {
+			const fullName = `${u.firstName} ${u.lastName}`.trim() || 'Student User';
+			directory[u.id] = {
+				studentId: u.id,
+				fullName,
+				email: u.email || '',
+				profilePhotoUrl: u.profilePhotoUrl,
+				yearLevel: u.yearLevel || 'N/A',
+				block: u.block || 'N/A',
+				totalRequests: 0,
+				totalItemsRequested: 0,
+				statusBreakdown: {} as any,
+				requests: [],
+				allItems: {}
+			};
+		}
+
+		// 2. Aggregate request logs metrics
 		for (const req of requests) {
-			const sId = req.studentId;
-			if (!sId || !req.student) continue;
+			const sId = req.studentId || (req.student as any)?.id;
+			if (!sId) continue;
 
 			if (!directory[sId]) {
+				const fullName = req.student?.fullName || 'Student User';
 				directory[sId] = {
 					studentId: sId,
-					fullName: req.student.fullName || 'Unknown Student',
-					email: req.student.email || 'N/A',
-					profilePhotoUrl: req.student.profilePhotoUrl,
-					yearLevel: req.student.yearLevel || 'N/A',
-					block: req.student.block || 'N/A',
+					fullName,
+					email: req.student?.email || '',
+					profilePhotoUrl: req.student?.profilePhotoUrl,
+					yearLevel: req.student?.yearLevel || 'N/A',
+					block: req.student?.block || 'N/A',
 					totalRequests: 0,
 					totalItemsRequested: 0,
 					statusBreakdown: {} as any,
@@ -143,13 +263,16 @@
 			}
 
 			const stats = directory[sId];
+			if (req.student?.fullName) stats.fullName = req.student.fullName;
+			if (req.student?.email) stats.email = req.student.email;
+			if (req.student?.profilePhotoUrl) stats.profilePhotoUrl = req.student.profilePhotoUrl;
+			if (req.student?.yearLevel) stats.yearLevel = req.student.yearLevel;
+			if (req.student?.block) stats.block = req.student.block;
+
 			stats.totalRequests += 1;
 			stats.requests.push(req);
-			
-			// Increment status count
 			stats.statusBreakdown[req.status] = (stats.statusBreakdown[req.status] || 0) + 1;
 
-			// Add items
 			for (const item of req.items) {
 				stats.totalItemsRequested += item.quantity;
 				const itemId = item.itemId;
@@ -165,8 +288,7 @@
 				}
 				const itemStats = stats.allItems[itemId];
 				itemStats.totalQuantity += item.quantity;
-				
-				// Keep track of latest request date
+
 				if (new Date(req.createdAt) > new Date(itemStats.lastRequestedAt)) {
 					itemStats.lastRequestedAt = req.createdAt;
 				}
@@ -299,9 +421,29 @@
 		let result = studentDirectory;
 		if (searchQuery.trim()) {
 			const query = searchQuery.toLowerCase().trim();
-			result = result.filter(s => 
-				s.fullName.toLowerCase().includes(query) ||
-				s.email.toLowerCase().includes(query)
+			result = result.filter(
+				(s) =>
+					s.fullName.toLowerCase().includes(query) ||
+					s.email.toLowerCase().includes(query) ||
+					s.studentId.toLowerCase().includes(query) ||
+					s.yearLevel.toLowerCase().includes(query) ||
+					s.block.toLowerCase().includes(query)
+			);
+		}
+		return result;
+	});
+
+	// Filtered adjustments derived state
+	const filteredAdjustments = $derived.by(() => {
+		let result = adjustments;
+		if (searchQuery.trim()) {
+			const query = searchQuery.toLowerCase().trim();
+			result = result.filter(
+				(a) =>
+					a.itemName.toLowerCase().includes(query) ||
+					a.reason.toLowerCase().includes(query) ||
+					a.adjustedBy.toLowerCase().includes(query) ||
+					a.id.toLowerCase().includes(query)
 			);
 		}
 		return result;
@@ -311,6 +453,7 @@
 	const totalItems = $derived.by(() => {
 		if (activeMainTab === 'requests') return filteredRequests.length;
 		if (activeMainTab === 'items') return filteredRequestedItems.length;
+		if (activeMainTab === 'adjustments') return filteredAdjustments.length;
 		return filteredStudents.length;
 	});
 
@@ -328,8 +471,12 @@
 		filteredStudents.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 	);
 
+	const paginatedAdjustments = $derived(
+		filteredAdjustments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+	);
+
 	// Tabs for main view
-	type MainTab = 'requests' | 'items' | 'students';
+	type MainTab = 'requests' | 'items' | 'students' | 'adjustments';
 	let activeMainTab = $state<MainTab>('requests');
 
 	// Tab inside student detailed view
@@ -768,6 +915,14 @@
 						>
 							Students Directory ({studentDirectory.length})
 						</button>
+						<button
+							onclick={() => { activeMainTab = 'adjustments'; currentPage = 1; void fetchAdjustments(); }}
+							class="border-b-2 pb-4 text-sm font-semibold transition-all {activeMainTab === 'adjustments'
+								? 'border-pink-500 text-pink-600'
+								: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
+						>
+							Item Adjustments ({adjustments.length})
+						</button>
 					</nav>
 				</div>
 
@@ -785,7 +940,9 @@
 								? 'Search by items, students, purpose...' 
 								: activeMainTab === 'items'
 									? 'Search requested items by name or category...'
-									: 'Search student directory by name or email...'}
+									: activeMainTab === 'adjustments'
+										? 'Search adjustment logs by item, reason, user...'
+										: 'Search student directory by name or email...'}
 							class="block w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-500 shadow-xs transition-colors hover:border-gray-400 focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-500/20"
 						/>
 					</div>
@@ -979,7 +1136,7 @@
 								</table>
 							</div>
 						{/if}
-					{:else}
+					{:else if activeMainTab === 'students'}
 						<!-- STUDENTS DIRECTORY VIEW -->
 						{#if paginatedStudents.length === 0}
 							<div class="py-16 text-center">
@@ -1044,6 +1201,72 @@
 													>
 														View Profile <ChevronRight size={14} />
 													</button>
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+							</div>
+						{/if}
+					{:else if activeMainTab === 'adjustments'}
+						<!-- ITEM ADJUSTMENTS AUDIT TRAIL TAB -->
+						{#if paginatedAdjustments.length === 0}
+							<div class="rounded-xl border border-gray-200 bg-white p-12 text-center shadow-xs">
+								<Sliders size={36} class="mx-auto mb-3 text-gray-300" />
+								<h3 class="text-sm font-semibold text-gray-900">No Item Adjustment Logs</h3>
+								<p class="mt-1 text-xs text-gray-500">No stock adjustment activity has been recorded yet.</p>
+							</div>
+						{:else}
+							<div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-xs">
+								<table class="w-full text-left text-sm text-gray-700">
+									<thead class="bg-gray-50 text-xs font-semibold tracking-wider text-gray-500 uppercase border-b border-gray-200">
+										<tr>
+											<th class="px-6 py-3.5">Log ID / Ref</th>
+											<th class="px-6 py-3.5">Equipment / Item</th>
+											<th class="px-6 py-3.5">Adjustment Type</th>
+											<th class="px-6 py-3.5 text-center">Quantity Change</th>
+											<th class="px-6 py-3.5">Reason / Audit Notes</th>
+											<th class="px-6 py-3.5">Adjusted By</th>
+											<th class="px-6 py-3.5 text-right pr-6">Timestamp</th>
+										</tr>
+									</thead>
+									<tbody class="divide-y divide-gray-100">
+										{#each paginatedAdjustments as adj}
+											<tr class="transition-colors hover:bg-gray-50/50">
+												<td class="px-6 py-4 font-mono text-xs font-bold text-pink-600">
+													{adj.id.slice(0, 10).toUpperCase()}
+												</td>
+												<td class="px-6 py-4 font-semibold text-gray-900">
+													<div class="flex items-center gap-2">
+														<Package size={15} class="text-gray-400 shrink-0" />
+														<span>{adj.itemName}</span>
+													</div>
+												</td>
+												<td class="px-6 py-4">
+													{#if adj.action === 'add'}
+														<span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+															<ArrowUpRight size={13} /> Restock / Add Stock
+														</span>
+													{:else}
+														<span class="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+															<ArrowDownRight size={13} /> Deduct / Subtract Stock
+														</span>
+													{/if}
+												</td>
+												<td class="px-6 py-4 text-center font-mono font-bold {adj.action === 'add' ? 'text-emerald-600' : 'text-red-600'}">
+													{adj.action === 'add' ? '+' : '-'}{adj.quantity} {adj.quantity === 1 ? 'unit' : 'units'}
+												</td>
+												<td class="px-6 py-4 text-xs text-gray-600 max-w-xs truncate">
+													{adj.reason || 'Manual stock adjustment'}
+												</td>
+												<td class="px-6 py-4 text-xs font-medium text-gray-900">
+													<span class="inline-flex items-center gap-1">
+														<User size={13} class="text-gray-400" />
+														{adj.adjustedBy}
+													</span>
+												</td>
+												<td class="px-6 py-4 text-xs text-gray-500 whitespace-nowrap text-right pr-6">
+													{formatTimestamp(adj.timestamp)}
 												</td>
 											</tr>
 										{/each}

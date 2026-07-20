@@ -4940,9 +4940,9 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							class="text-md flex items-center gap-2 font-bold text-gray-900"
 						>
 							<Sliders class="h-4 w-4 text-pink-600" />
-							Stock Adjustment
+							Item Adjustment
 						</h2>
-						<p class="mt-0.5 text-xs text-gray-500">Manually add or subtract stock levels</p>
+						<p class="mt-0.5 text-xs text-gray-500">Manually adjust physical item stock levels</p>
 					</div>
 					<button
 						onclick={closeAdjustStock}
@@ -4994,7 +4994,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 								Current Stock: <span class="font-bold text-pink-600"
 									>{adjustingItem.currentCount ??
 										getCurrentCount(adjustingItem.quantity, adjustingItem.donations ?? 0)}</span
-								> items
+								> {(adjustingItem.currentCount ?? getCurrentCount(adjustingItem.quantity, adjustingItem.donations ?? 0)) === 1 ? 'item' : 'items'}
 							</p>
 						</div>
 					</div>
@@ -5014,7 +5014,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 									: 'text-gray-500 hover:text-gray-700'}"
 							>
 								<span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-								Restock / Add
+								Restock / Add Stock
 							</button>
 							<button
 								type="button"
@@ -5025,7 +5025,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 									: 'text-gray-500 hover:text-gray-700'}"
 							>
 								<span class="h-2 w-2 rounded-full bg-red-500"></span>
-								Damage / Subtract
+								Deduct / Subtract Stock
 							</button>
 						</div>
 					</div>
@@ -5101,7 +5101,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 								</svg>
 								Adjusting...
 							{:else}
-								{adjustmentType === 'add' ? 'Add' : 'Subtract'} {adjustmentQuantity} Items
+								{adjustmentType === 'add' ? 'Add' : 'Deduct'} {adjustmentQuantity} {adjustmentQuantity === 1 ? 'Item' : 'Items'}
 							{/if}
 						</button>
 					</div>
