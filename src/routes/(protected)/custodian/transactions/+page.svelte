@@ -922,7 +922,7 @@
 				: 'border-gray-100 bg-white hover:border-pink-200'}"
 		>
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase transition-colors group-hover:text-pink-600"
+				<span class="text-xs font-semibold tracking-wider text-gray-600 uppercase transition-colors group-hover:text-pink-600"
 					>Total Walk-ins</span
 				>
 				<div class="rounded-lg bg-pink-50 p-2 text-pink-600 transition-colors group-hover:bg-pink-100">
@@ -931,7 +931,7 @@
 			</div>
 			<div class="mt-4 flex items-baseline gap-2">
 				<span class="text-3xl font-bold text-gray-900">{walkInStats.total}</span>
-				<span class="text-xs text-gray-500">records logged (click to filter all)</span>
+				<span class="text-xs text-gray-600">records logged (click to filter all)</span>
 			</div>
 		</button>
 
@@ -947,7 +947,7 @@
 				: 'border-gray-100 bg-white hover:border-amber-200'}"
 		>
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase transition-colors group-hover:text-amber-600"
+				<span class="text-xs font-semibold tracking-wider text-gray-600 uppercase transition-colors group-hover:text-amber-600"
 					>Active Walk-in Borrows</span
 				>
 				<div class="rounded-lg bg-amber-50 p-2 text-amber-600 transition-colors group-hover:bg-amber-100">
@@ -956,7 +956,7 @@
 			</div>
 			<div class="mt-4 flex items-baseline gap-2">
 				<span class="text-3xl font-bold text-amber-600">{walkInStats.active}</span>
-				<span class="text-xs text-gray-500">out of lab (click to filter active)</span>
+				<span class="text-xs text-gray-600">out of lab (click to filter active)</span>
 			</div>
 		</button>
 
@@ -971,7 +971,7 @@
 				: 'border-gray-100 bg-white hover:border-indigo-200'}"
 		>
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase transition-colors group-hover:text-indigo-600"
+				<span class="text-xs font-semibold tracking-wider text-gray-600 uppercase transition-colors group-hover:text-indigo-600"
 					>Confidential Admin Orders</span
 				>
 				<div class="rounded-lg bg-indigo-50 p-2 text-indigo-600 transition-colors group-hover:bg-indigo-100">
@@ -982,7 +982,7 @@
 				<span class="text-3xl font-bold text-indigo-700"
 					>{confidentialStats.pending + confidentialStats.active}</span
 				>
-				<span class="text-xs text-gray-500">active pipelines (click to open tab)</span>
+				<span class="text-xs text-gray-600">active pipelines (click to open tab)</span>
 			</div>
 		</button>
 	</div>
