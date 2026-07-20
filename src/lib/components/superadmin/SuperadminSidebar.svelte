@@ -7,12 +7,12 @@
 	import logo from '$lib/assets/CHTM_LOGO.png';
 	import SignOutModal from '$lib/components/ui/SignOutModal.svelte';
 	import { ChevronDown, ChevronRight } from 'lucide-svelte';
-	
+
 	interface NavSubItem {
 		name: string;
 		href: string;
 	}
-	
+
 	interface NavItem {
 		name: string;
 		href?: string;
@@ -20,15 +20,15 @@
 		badge?: number;
 		children?: NavSubItem[];
 	}
-	
+
 	interface NavSection {
 		title?: string;
 		items: NavItem[];
 	}
-	
+
 	let isMobileMenuOpen = $derived($mobileSidebarOpen);
 	let signOutOpen = $state(false);
-	
+
 	// Track expanded sections
 	let expandedSections = $state<Record<string, boolean>>({
 		users: false,
@@ -40,11 +40,11 @@
 		system: false,
 		security: false
 	});
-	
+
 	function toggleCollapse() {
-		sidebarCollapsed.update(val => !val);
+		sidebarCollapsed.update((val) => !val);
 	}
-	
+
 	function toggleSection(key: string) {
 		if ($sidebarCollapsed) {
 			// If sidebar is collapsed, expand it first
@@ -52,7 +52,7 @@
 		}
 		expandedSections[key] = !expandedSections[key];
 	}
-	
+
 	const navSections: NavSection[] = [
 		{
 			items: [
@@ -139,29 +139,29 @@
 			]
 		}
 	];
-	
+
 	function isActive(href: string): boolean {
 		return $page.url.pathname === href || $page.url.pathname.startsWith(href + '/');
 	}
-	
+
 	function isParentActive(item: NavItem): boolean {
 		if (item.href && isActive(item.href)) return true;
 		if (item.children) {
-			return item.children.some(child => isActive(child.href));
+			return item.children.some((child) => isActive(child.href));
 		}
 		return false;
 	}
-	
+
 	function getSectionKey(itemName: string): string {
 		return itemName.toLowerCase().replace(/\s+/g, '');
 	}
-	
+
 	async function handleLogout() {
 		await authStore.logout();
 		toastStore.success('You have been logged out successfully.', 'Logged Out');
 		goto('/auth/login');
 	}
-	
+
 	function closeMobileMenu() {
 		mobileSidebarOpen.set(false);
 	}
@@ -171,7 +171,7 @@
 {#if $mobileSidebarOpen}
 	<button
 		type="button"
-		class="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+		class="bg-opacity-50 fixed inset-0 z-40 bg-black lg:hidden"
 		onclick={closeMobileMenu}
 		onkeydown={(e) => e.key === 'Escape' && closeMobileMenu()}
 		aria-label="Close sidebar"
@@ -187,10 +187,22 @@
 >
 	<div class="flex h-full flex-col overflow-hidden">
 		<!-- Logo -->
-		<div class="flex h-16 items-center justify-between border-b border-gray-200 px-4 overflow-hidden {$sidebarCollapsed ? 'lg:px-3 lg:justify-center' : 'px-6'}">
+		<div
+			class="flex h-16 items-center justify-between overflow-hidden border-b border-gray-200 px-4 {$sidebarCollapsed
+				? 'lg:justify-center lg:px-3'
+				: 'px-6'}"
+		>
 			<div class="flex items-center overflow-hidden">
-				<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-white shadow-md transition-all hover:shadow-lg {$sidebarCollapsed ? 'lg:h-9 lg:w-9' : ''}">
-					<img src={logo} alt="CHTM Logo" class="h-8 w-8 object-contain {$sidebarCollapsed ? 'lg:h-7 lg:w-7' : ''}" />
+				<div
+					class="flex h-10 w-10 items-center justify-center rounded-lg bg-white shadow-md transition-all hover:shadow-lg {$sidebarCollapsed
+						? 'lg:h-9 lg:w-9'
+						: ''}"
+				>
+					<img
+						src={logo}
+						alt="CHTM Logo"
+						class="h-8 w-8 object-contain {$sidebarCollapsed ? 'lg:h-7 lg:w-7' : ''}"
+					/>
 				</div>
 				{#if !$sidebarCollapsed}
 					<div class="ml-3">
@@ -199,54 +211,68 @@
 					</div>
 				{/if}
 			</div>
-			
+
 			<!-- Desktop Collapse Toggle - In Header when expanded -->
 			{#if !$sidebarCollapsed}
 				<button
 					onclick={toggleCollapse}
-					class="hidden lg:flex items-center justify-center h-8 w-8 rounded-lg hover:bg-pink-50 hover:text-pink-600 text-gray-600 transition-all duration-200"
+					class="hidden h-8 w-8 items-center justify-center rounded-lg text-gray-600 transition-all duration-200 hover:bg-pink-50 hover:text-pink-600 lg:flex"
 					aria-label="Collapse sidebar"
 					title="Collapse sidebar"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2.5"
+							d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+						/>
 					</svg>
 				</button>
 			{/if}
 		</div>
-		
+
 		<!-- Desktop Collapse Toggle - Floating on Side when collapsed -->
 		{#if $sidebarCollapsed}
 			<button
 				onclick={toggleCollapse}
-				class="hidden lg:flex shrink-0 items-center justify-center h-8 w-8 rounded-full bg-white border-2 border-gray-200 hover:border-pink-500 hover:bg-pink-50 hover:text-pink-600 text-gray-600 shadow-md hover:shadow-lg transition-all duration-200 absolute top-4 -right-4 z-50"
+				class="absolute top-4 -right-4 z-50 hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-gray-200 bg-white text-gray-600 shadow-md transition-all duration-200 hover:border-pink-500 hover:bg-pink-50 hover:text-pink-600 hover:shadow-lg lg:flex"
 				aria-label="Expand sidebar"
 				title="Expand sidebar"
 			>
 				<svg class="h-4 w-4 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2.5"
+						d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+					/>
 				</svg>
 			</button>
 		{/if}
-		
+
 		<!-- Navigation -->
-		<nav class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 {$sidebarCollapsed ? 'lg:px-2 lg:py-3' : ''}">
+		<nav
+			class="flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 {$sidebarCollapsed
+				? 'lg:px-2 lg:py-3'
+				: ''}"
+		>
 			{#each navSections as section, sectionIndex}
 				<div class="mb-6 {sectionIndex === 0 ? '' : 'mt-6'}">
 					<!-- Section Title -->
 					{#if section.title && !$sidebarCollapsed}
-						<h3 class="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+						<h3 class="mb-2 px-3 text-xs font-semibold tracking-wider text-gray-500 uppercase">
 							{section.title}
 						</h3>
 					{/if}
-					
+
 					<!-- Section Items -->
 					<div class="space-y-1 {$sidebarCollapsed ? 'lg:space-y-2' : ''}">
 						{#each section.items as item}
 							{@const sectionKey = getSectionKey(item.name)}
 							{@const isItemActive = isParentActive(item)}
 							{@const isExpanded = expandedSections[sectionKey]}
-							
+
 							{#if item.children}
 								<!-- Parent Item with Children -->
 								<div>
@@ -254,35 +280,50 @@
 										onclick={() => toggleSection(sectionKey)}
 										class="relative flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 {isItemActive
 											? 'bg-pink-50 text-pink-700 shadow-sm'
-											: 'text-gray-700 hover:bg-pink-50 hover:text-pink-600 hover:shadow-sm'} {$sidebarCollapsed ? 'lg:justify-center lg:px-2 lg:py-3' : ''}"
+											: 'text-gray-700 hover:bg-pink-50 hover:text-pink-600 hover:shadow-sm'} {$sidebarCollapsed
+											? 'lg:justify-center lg:px-2 lg:py-3'
+											: ''}"
 										title={$sidebarCollapsed ? item.name : ''}
 									>
 										{#if isItemActive && $sidebarCollapsed}
-											<div class="absolute left-0 top-1/2 -translate-y-1/2 h-8 w-1 bg-pink-600 rounded-r-full hidden lg:block"></div>
+											<div
+												class="absolute top-1/2 left-0 hidden h-8 w-1 -translate-y-1/2 rounded-r-full bg-pink-600 lg:block"
+											></div>
 										{/if}
 										<div class="flex items-center {$sidebarCollapsed ? 'lg:justify-center' : ''}">
 											<svg
-												class="h-5 w-5 transition-all {isItemActive ? 'text-pink-600 scale-110' : 'text-gray-400'} {$sidebarCollapsed ? 'lg:h-6 lg:w-6' : ''}"
+												class="h-5 w-5 transition-all {isItemActive
+													? 'scale-110 text-pink-600'
+													: 'text-gray-400'} {$sidebarCollapsed ? 'lg:h-6 lg:w-6' : ''}"
 												fill="none"
 												stroke="currentColor"
 												viewBox="0 0 24 24"
 											>
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={item.icon}/>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d={item.icon}
+												/>
 											</svg>
 											{#if !$sidebarCollapsed}
 												<span class="ml-3">{item.name}</span>
 											{/if}
 										</div>
 										{#if !$sidebarCollapsed}
-											<div class="transition-transform duration-200 {isExpanded ? 'rotate-0' : '-rotate-90'}">
+											<div
+												class="transition-transform duration-200 {isExpanded
+													? 'rotate-0'
+													: '-rotate-90'}"
+											>
 												<ChevronDown size={16} class="text-gray-400" />
 											</div>
 										{/if}
 									</button>
-									
+
 									<!-- Children Items -->
 									{#if isExpanded && !$sidebarCollapsed}
-										<div class="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 pl-4">
+										<div class="mt-1 ml-4 space-y-1 border-l-2 border-gray-200 pl-4">
 											{#each item.children as child}
 												{@const isChildActive = isActive(child.href)}
 												<a
@@ -305,27 +346,42 @@
 									onclick={closeMobileMenu}
 									class="relative flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 {isItemActive
 										? 'bg-pink-50 text-pink-700 shadow-sm'
-										: 'text-gray-700 hover:bg-pink-50 hover:text-pink-600 hover:shadow-sm'} {$sidebarCollapsed ? 'lg:justify-center lg:px-2 lg:py-3' : ''}"
+										: 'text-gray-700 hover:bg-pink-50 hover:text-pink-600 hover:shadow-sm'} {$sidebarCollapsed
+										? 'lg:justify-center lg:px-2 lg:py-3'
+										: ''}"
 									title={$sidebarCollapsed ? item.name : ''}
 								>
 									{#if isItemActive && $sidebarCollapsed}
-										<div class="absolute left-0 top-1/2 -translate-y-1/2 h-8 w-1 bg-pink-600 rounded-r-full hidden lg:block"></div>
+										<div
+											class="absolute top-1/2 left-0 hidden h-8 w-1 -translate-y-1/2 rounded-r-full bg-pink-600 lg:block"
+										></div>
 									{/if}
 									<div class="flex items-center {$sidebarCollapsed ? 'lg:justify-center' : ''}">
 										<svg
-											class="h-5 w-5 transition-all {isItemActive ? 'text-pink-600 scale-110' : 'text-gray-400'} {$sidebarCollapsed ? 'lg:h-6 lg:w-6' : ''}"
+											class="h-5 w-5 transition-all {isItemActive
+												? 'scale-110 text-pink-600'
+												: 'text-gray-400'} {$sidebarCollapsed ? 'lg:h-6 lg:w-6' : ''}"
 											fill="none"
 											stroke="currentColor"
 											viewBox="0 0 24 24"
 										>
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={item.icon}/>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d={item.icon}
+											/>
 										</svg>
 										{#if !$sidebarCollapsed}
 											<span class="ml-3">{item.name}</span>
 										{/if}
 									</div>
 									{#if item.badge !== undefined && item.badge > 0}
-										<span class="flex items-center justify-center min-w-5 h-5 px-1.5 text-xs font-semibold text-white bg-red-500 rounded-full {$sidebarCollapsed ? 'lg:absolute lg:top-1 lg:right-1' : ''}">
+										<span
+											class="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white {$sidebarCollapsed
+												? 'lg:absolute lg:top-1 lg:right-1'
+												: ''}"
+										>
 											{item.badge > 99 ? '99+' : item.badge}
 										</span>
 									{/if}
@@ -339,8 +395,4 @@
 	</div>
 </aside>
 
-<SignOutModal
-	open={signOutOpen}
-	onconfirm={handleLogout}
-	oncancel={() => (signOutOpen = false)}
-/>
+<SignOutModal open={signOutOpen} onconfirm={handleLogout} oncancel={() => (signOutOpen = false)} />

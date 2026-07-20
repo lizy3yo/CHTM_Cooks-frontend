@@ -6,7 +6,7 @@
 
 	let settings = $state($userSettingsStore);
 
-	userSettingsStore.subscribe(value => {
+	userSettingsStore.subscribe((value) => {
 		settings = value;
 	});
 
@@ -44,11 +44,13 @@
 	<div class="flex items-start justify-between">
 		<div>
 			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Settings</h1>
-			<p class="mt-1 text-sm text-gray-500">Manage your account preferences and accessibility options</p>
+			<p class="mt-1 text-sm text-gray-500">
+				Manage your account preferences and accessibility options
+			</p>
 		</div>
 		<button
 			onclick={resetSettings}
-			class="flex shrink-0 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 whitespace-nowrap"
+			class="flex shrink-0 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium whitespace-nowrap text-gray-700 transition-colors hover:bg-gray-50"
 		>
 			<RotateCcw size={14} />
 			Reset to Default
@@ -81,12 +83,18 @@
 					</div>
 					<button
 						onclick={() => toggleSetting('darkMode')}
-						class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 {settings.darkMode ? 'bg-pink-600' : 'bg-gray-300'}"
+						class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 focus:outline-none {settings.darkMode
+							? 'bg-pink-600'
+							: 'bg-gray-300'}"
 						role="switch"
 						aria-checked={settings.darkMode}
 						aria-label="Toggle dark mode"
 					>
-						<span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {settings.darkMode ? 'translate-x-6' : 'translate-x-1'}"></span>
+						<span
+							class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {settings.darkMode
+								? 'translate-x-6'
+								: 'translate-x-1'}"
+						></span>
 					</button>
 				</div>
 
@@ -102,25 +110,37 @@
 							<div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
 								<button
 									onclick={() => updateFontSize('small')}
-									class="flex h-10 items-center justify-center rounded-lg border font-medium transition-all {settings.fontSize === 'small' ? 'border-pink-600 bg-pink-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-pink-500'}"
+									class="flex h-10 items-center justify-center rounded-lg border font-medium transition-all {settings.fontSize ===
+									'small'
+										? 'border-pink-600 bg-pink-600 text-white'
+										: 'border-gray-300 bg-white text-gray-700 hover:border-pink-500'}"
 								>
 									<span class="text-xs">Small</span>
 								</button>
 								<button
 									onclick={() => updateFontSize('medium')}
-									class="flex h-10 items-center justify-center rounded-lg border font-medium transition-all {settings.fontSize === 'medium' ? 'border-pink-600 bg-pink-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-pink-500'}"
+									class="flex h-10 items-center justify-center rounded-lg border font-medium transition-all {settings.fontSize ===
+									'medium'
+										? 'border-pink-600 bg-pink-600 text-white'
+										: 'border-gray-300 bg-white text-gray-700 hover:border-pink-500'}"
 								>
 									<span class="text-sm">Medium</span>
 								</button>
 								<button
 									onclick={() => updateFontSize('large')}
-									class="flex h-10 items-center justify-center rounded-lg border font-medium transition-all {settings.fontSize === 'large' ? 'border-pink-600 bg-pink-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-pink-500'}"
+									class="flex h-10 items-center justify-center rounded-lg border font-medium transition-all {settings.fontSize ===
+									'large'
+										? 'border-pink-600 bg-pink-600 text-white'
+										: 'border-gray-300 bg-white text-gray-700 hover:border-pink-500'}"
 								>
 									<span class="text-base">Large</span>
 								</button>
 								<button
 									onclick={() => updateFontSize('extra-large')}
-									class="flex h-10 items-center justify-center rounded-lg border font-medium transition-all {settings.fontSize === 'extra-large' ? 'border-pink-600 bg-pink-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-pink-500'}"
+									class="flex h-10 items-center justify-center rounded-lg border font-medium transition-all {settings.fontSize ===
+									'extra-large'
+										? 'border-pink-600 bg-pink-600 text-white'
+										: 'border-gray-300 bg-white text-gray-700 hover:border-pink-500'}"
 								>
 									<span class="text-lg leading-none">XL</span>
 								</button>
@@ -137,17 +157,25 @@
 						</div>
 						<div>
 							<h3 class="text-sm font-medium text-gray-900">High Contrast</h3>
-							<p class="mt-0.5 text-xs text-gray-500">Increase text contrast for better visibility (WCAG AAA)</p>
+							<p class="mt-0.5 text-xs text-gray-500">
+								Increase text contrast for better visibility (WCAG AAA)
+							</p>
 						</div>
 					</div>
 					<button
 						onclick={() => toggleSetting('highContrast')}
-						class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 {settings.highContrast ? 'bg-pink-600' : 'bg-gray-300'}"
+						class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 focus:outline-none {settings.highContrast
+							? 'bg-pink-600'
+							: 'bg-gray-300'}"
 						role="switch"
 						aria-checked={settings.highContrast}
 						aria-label="Toggle high contrast"
 					>
-						<span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {settings.highContrast ? 'translate-x-6' : 'translate-x-1'}"></span>
+						<span
+							class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {settings.highContrast
+								? 'translate-x-6'
+								: 'translate-x-1'}"
+						></span>
 					</button>
 				</div>
 			</div>

@@ -3,6 +3,7 @@
 	import { usersAPI, type UserResponse } from '$lib/api/users';
 	import { inventoryItemsAPI, type InventoryItem } from '$lib/api/inventory';
 	import { classCodesAPI, type ClassCodeResponse } from '$lib/api/classCodes';
+	import { getBorrowSettings } from '$lib/api/borrowSettings';
 	import { toastStore } from '$lib/stores/toast';
 	import { confirmStore } from '$lib/stores/confirm';
 	import {
@@ -127,6 +128,18 @@
 	let confidentialReturnDate = $state('');
 	let confidentialCart = $state<WalkInItem[]>([]);
 
+	const todayDateStr = new Date().toLocaleDateString('en-CA');
+	let maxAllowedDays = $state(30);
+
+	function addDaysToDateStr(baseDateStr: string, days: number): string {
+		const [year, month, day] = baseDateStr.split('-').map(Number);
+		const d = new Date(year, month - 1, day);
+		d.setDate(d.getDate() + days);
+		return d.toLocaleDateString('en-CA');
+	}
+
+	const maxReturnDateStr = $derived(addDaysToDateStr(todayDateStr, maxAllowedDays));
+
 	// Autocomplete searches
 	const filteredStudents = $derived(
 		studentsList.filter(
@@ -222,6 +235,15 @@
 			if (savedConfidential) {
 				confidentialRequests = JSON.parse(savedConfidential);
 			}
+
+			try {
+				const settings = await getBorrowSettings();
+				maxAllowedDays = settings.allowExtendedBorrowing
+					? settings.maxExtendedDays
+					: settings.maxStandardDays;
+			} catch (policyErr) {
+				console.error('Failed to load borrowing policy settings:', policyErr);
+			}
 		} catch (error) {
 			console.error('Failed to load transaction data sources', error);
 			toastStore.error('Could not load some references. Fallbacks enabled.', 'Warning');
@@ -292,8 +314,8 @@
 			email = selectedStudent.email;
 		}
 
-		if (!selectedClassCode) {
-			toastStore.error('Class Code selection is required.');
+		if (!selectedClassCode && !isCustomBorrower) {
+			toastStore.error('Class Code selection is required for database students.');
 			return;
 		}
 
@@ -304,6 +326,18 @@
 
 		if (!returnDate) {
 			toastStore.error('Please specify a return date.');
+			return;
+		}
+
+		if (returnDate < todayDateStr) {
+			toastStore.error('Return date cannot be in the past. Please select today or a future date.');
+			return;
+		}
+
+		if (returnDate > maxReturnDateStr) {
+			toastStore.error(
+				`Return date exceeds maximum allowed borrowing duration of ${maxAllowedDays} days.`
+			);
 			return;
 		}
 
@@ -333,7 +367,7 @@
 				studentName: name,
 				studentId: sid,
 				email: email,
-				classCode: selectedClassCode,
+				classCode: selectedClassCode || 'N/A (Guest)',
 				purpose: purpose || 'Walk-in checkout',
 				usageLocation,
 				borrowDate: new Date().toISOString(),
@@ -527,6 +561,18 @@
 			return;
 		}
 
+		if (confidentialReturnDate < todayDateStr) {
+			toastStore.error('Return deadline cannot be in the past.');
+			return;
+		}
+
+		if (confidentialReturnDate > maxReturnDateStr) {
+			toastStore.error(
+				`Return deadline exceeds maximum allowed borrowing duration of ${maxAllowedDays} days.`
+			);
+			return;
+		}
+
 		const newRequest: ConfidentialRequest = {
 			id: 'CR-' + Math.random().toString(36).substring(2, 8).toUpperCase(),
 			requesterName: name,
@@ -673,45 +719,71 @@
 
 	<!-- ─── STATS CARDS ─────────────────────────────────────────────────────── -->
 	<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-		<!-- Card 1 -->
-		<div class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+		<!-- Card 1: Total Walk-ins -->
+		<button
+			type="button"
+			onclick={() => {
+				activeTab = 'walk-in';
+				walkInStatusFilter = 'all';
+			}}
+			class="group cursor-pointer rounded-xl border p-5 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-pink-500 {activeTab === 'walk-in' && walkInStatusFilter === 'all'
+				? 'border-pink-500 bg-pink-50/30 ring-2 ring-pink-500/20'
+				: 'border-gray-100 bg-white hover:border-pink-200'}"
+		>
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase"
+				<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase transition-colors group-hover:text-pink-600"
 					>Total Walk-ins</span
 				>
-				<div class="rounded-lg bg-pink-50 p-2 text-pink-600">
+				<div class="rounded-lg bg-pink-50 p-2 text-pink-600 transition-colors group-hover:bg-pink-100">
 					<Users size={16} />
 				</div>
 			</div>
 			<div class="mt-4 flex items-baseline gap-2">
 				<span class="text-3xl font-bold text-gray-900">{walkInStats.total}</span>
-				<span class="text-xs text-gray-500">records logged</span>
+				<span class="text-xs text-gray-500">records logged (click to filter all)</span>
 			</div>
-		</div>
+		</button>
 
-		<!-- Card 2 -->
-		<div class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+		<!-- Card 2: Active Walk-in Borrows -->
+		<button
+			type="button"
+			onclick={() => {
+				activeTab = 'walk-in';
+				walkInStatusFilter = 'borrowed';
+			}}
+			class="group cursor-pointer rounded-xl border p-5 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-amber-500 {activeTab === 'walk-in' && walkInStatusFilter === 'borrowed'
+				? 'border-amber-500 bg-amber-50/30 ring-2 ring-amber-500/20'
+				: 'border-gray-100 bg-white hover:border-amber-200'}"
+		>
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase"
+				<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase transition-colors group-hover:text-amber-600"
 					>Active Walk-in Borrows</span
 				>
-				<div class="rounded-lg bg-amber-50 p-2 text-amber-600">
+				<div class="rounded-lg bg-amber-50 p-2 text-amber-600 transition-colors group-hover:bg-amber-100">
 					<Clock size={16} />
 				</div>
 			</div>
 			<div class="mt-4 flex items-baseline gap-2">
 				<span class="text-3xl font-bold text-amber-600">{walkInStats.active}</span>
-				<span class="text-xs text-gray-500">out of laboratory</span>
+				<span class="text-xs text-gray-500">out of lab (click to filter active)</span>
 			</div>
-		</div>
+		</button>
 
-		<!-- Card 3 -->
-		<div class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+		<!-- Card 3: Confidential Admin Orders -->
+		<button
+			type="button"
+			onclick={() => {
+				activeTab = 'confidential';
+			}}
+			class="group cursor-pointer rounded-xl border p-5 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 {activeTab === 'confidential'
+				? 'border-indigo-500 bg-indigo-50/30 ring-2 ring-indigo-500/20'
+				: 'border-gray-100 bg-white hover:border-indigo-200'}"
+		>
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase"
+				<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase transition-colors group-hover:text-indigo-600"
 					>Confidential Admin Orders</span
 				>
-				<div class="rounded-lg bg-indigo-50 p-2 text-indigo-600">
+				<div class="rounded-lg bg-indigo-50 p-2 text-indigo-600 transition-colors group-hover:bg-indigo-100">
 					<Lock size={15} />
 				</div>
 			</div>
@@ -719,9 +791,9 @@
 				<span class="text-3xl font-bold text-indigo-700"
 					>{confidentialStats.pending + confidentialStats.active}</span
 				>
-				<span class="text-xs text-gray-500">active admin pipelines</span>
+				<span class="text-xs text-gray-500">active pipelines (click to open tab)</span>
 			</div>
-		</div>
+		</button>
 	</div>
 
 	<!-- ─── TABS ────────────────────────────────────────────────────────────── -->
@@ -1168,21 +1240,23 @@
 				</div>
 
 				<!-- Step 2: Context Details -->
-				<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-					<div>
-						<span class="mb-1 block text-xs font-bold tracking-wider text-gray-400 uppercase"
-							>Class / Subject Code</span
-						>
-						<select
-							bind:value={selectedClassCode}
-							class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
-						>
-							<option value="">Select Enrolled Class</option>
-							{#each classCodesList as cc}
-								<option value={cc.code}>{cc.code} - {cc.courseName} ({cc.section})</option>
-							{/each}
-						</select>
-					</div>
+				<div class="grid grid-cols-1 gap-4 {isCustomBorrower ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}">
+					{#if !isCustomBorrower}
+						<div>
+							<span class="mb-1 block text-xs font-bold tracking-wider text-gray-400 uppercase"
+								>Class / Subject Code</span
+							>
+							<select
+								bind:value={selectedClassCode}
+								class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
+							>
+								<option value="">Select Enrolled Class</option>
+								{#each classCodesList as cc}
+									<option value={cc.code}>{cc.code} - {cc.courseName} ({cc.section})</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
 
 					<div>
 						<span class="mb-1 block text-xs font-bold tracking-wider text-gray-400 uppercase"
@@ -1204,6 +1278,8 @@
 						<input
 							type="date"
 							bind:value={returnDate}
+							min={todayDateStr}
+							max={maxReturnDateStr}
 							class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 						/>
 					</div>
@@ -1567,6 +1643,8 @@
 						<input
 							type="date"
 							bind:value={confidentialReturnDate}
+							min={todayDateStr}
+							max={maxReturnDateStr}
 							class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 						/>
 					</div>

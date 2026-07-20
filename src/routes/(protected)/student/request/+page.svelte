@@ -239,7 +239,13 @@
 	async function checkPendingRequest(): Promise<void> {
 		try {
 			const res = await borrowRequestsAPI.list({
-				statuses: ['pending_instructor', 'approved_instructor', 'ready_for_pickup', 'pending_return', 'pending_appeal'],
+				statuses: [
+					'pending_instructor',
+					'approved_instructor',
+					'ready_for_pickup',
+					'pending_return',
+					'pending_appeal'
+				],
 				limit: 1
 			});
 			hasPendingRequest = res.total > 0;
@@ -1472,7 +1478,8 @@
 			// Check if student has no enrollment
 			if (availableClassCodes.length === 0) {
 				hasNoEnrollment = true;
-				errors.classCode = 'You must be enrolled in at least one class to submit equipment requests.';
+				errors.classCode =
+					'You must be enrolled in at least one class to submit equipment requests.';
 				toastStore.error(
 					'You must be enrolled in at least one class to submit equipment requests. Please contact your administrator.',
 					'Enrollment Required'
@@ -1945,7 +1952,9 @@
 								<div class="min-w-0 flex-1">
 									<h3 class="text-sm font-bold text-pink-900">Active Request Pending</h3>
 									<p class="mt-1 text-xs leading-relaxed text-pink-700">
-										You currently have a pending borrow request awaiting action in the system. You cannot select or add items, modify quantities, or submit a new request until your current request is processed or resolved.
+										You currently have a pending borrow request awaiting action in the system. You
+										cannot select or add items, modify quantities, or submit a new request until
+										your current request is processed or resolved.
 									</p>
 								</div>
 							</div>
@@ -2486,7 +2495,9 @@
 																	? Math.min(item.maxQuantityPerRequest, item.available)
 																	: item.available}
 																value={item.requestedQuantity}
-																disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasPendingRequest}
+																disabled={hasNoEnrollment ||
+																	availableClassCodes.length === 0 ||
+																	hasPendingRequest}
 																onchange={(e) =>
 																	updateItemQuantity(
 																		item.id,
@@ -2548,7 +2559,9 @@
 												<!-- Remove Button -->
 												{#if !item.isrequired}
 													<button
-														disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasPendingRequest}
+														disabled={hasNoEnrollment ||
+															availableClassCodes.length === 0 ||
+															hasPendingRequest}
 														onclick={() => removeItemFromCart(item.id)}
 														class="flex h-7 w-7 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition-all hover:border-red-300 hover:bg-red-100 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
 														title="Remove item"
