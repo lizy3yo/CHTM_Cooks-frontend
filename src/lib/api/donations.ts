@@ -39,6 +39,7 @@ export interface CreateDonationNewItemRequest {
 	categoryId?: string;
 	specification?: string;
 	toolsOrEquipment?: string;
+	picture?: string;
 }
 
 /** Donation that adds quantity to an existing inventory item */
@@ -46,6 +47,7 @@ export interface CreateDonationAddToExistingRequest {
 	inventoryAction: 'add_to_existing';
 	donorName: string;
 	quantity: number;
+	unit?: string;
 	purpose: string;
 	date: string;
 	notes?: string;

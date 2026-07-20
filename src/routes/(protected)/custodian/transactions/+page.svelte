@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { usersAPI, type UserResponse } from '$lib/api/users';
-	import { inventoryItemsAPI, type InventoryItem } from '$lib/api/inventory';
+	import { inventoryItemsAPI, inventoryCategoriesAPI, type InventoryItem, type InventoryCategory } from '$lib/api/inventory';
 	import { classCodesAPI, type ClassCodeResponse } from '$lib/api/classCodes';
 	import { getBorrowSettings } from '$lib/api/borrowSettings';
 	import { toastStore } from '$lib/stores/toast';
 	import { confirmStore } from '$lib/stores/confirm';
+	import { donationsAPI, type DonationResponse, type CreateDonationRequest } from '$lib/api/donations';
 	import {
 		Plus,
 		Search,
@@ -24,7 +25,9 @@
 		Sparkles,
 		ChevronRight,
 		X,
-		Info
+		Info,
+		Heart,
+		Upload
 	} from 'lucide-svelte';
 
 	// ─── TYPES FOR STATE MANAGEMENT ──────────────────────────────────────────
@@ -69,7 +72,7 @@
 	}
 
 	// ─── STATE ───────────────────────────────────────────────────────────────
-	let activeTab = $state<'walk-in' | 'confidential'>('walk-in');
+	let activeTab = $state<'walk-in' | 'confidential' | 'donations'>('walk-in');
 	let loading = $state(true);
 
 	// Collections loaded from APIs
@@ -78,20 +81,168 @@
 	let inventoryItems = $state<InventoryItem[]>([]);
 	let classCodesList = $state<ClassCodeResponse[]>([]);
 
-	// Alternative Transactions stored in localStorage
+	// Alternative Transactions stored in localStorage / API
 	let walkIns = $state<WalkInTransaction[]>([]);
 	let confidentialRequests = $state<ConfidentialRequest[]>([]);
+	let donations = $state<DonationResponse[]>([]);
 
 	// Filters
 	let walkInSearchQuery = $state('');
 	let walkInStatusFilter = $state<'all' | 'borrowed' | 'returned' | 'missing'>('all');
 	let confidentialSearchQuery = $state('');
 	let confidentialStatusFilter = $state<'all' | 'preparing' | 'dispatched' | 'resolved'>('all');
+	let donationSearchQuery = $state('');
 
 	// Modals toggles
 	let showWalkInModal = $state(false);
 	let showReturnModal = $state(false);
 	let showConfidentialModal = $state(false);
+	let showDonationModal = $state(false);
+	let donationsLoading = $state(false);
+	let donationsLoaded = $state(false);
+
+	// --- Item Donation Form State ---
+	let donationAction = $state<'new_item' | 'add_to_existing'>('new_item');
+	let donorName = $state('');
+	let donationQuantity = $state(1);
+	let donationUnit = $state('');
+	let donationPurpose = $state('');
+	let donationDate = $state(new Date().toISOString().split('T')[0]);
+	let donationNotes = $state('');
+
+	// Existing item selection for donation
+	let selectedDonationItem = $state<InventoryItem | null>(null);
+	let donationItemSearchQuery = $state('');
+	let showDonationItemDropdown = $state(false);
+
+	// New item creation for donation
+	let newItemName = $state('');
+	let newItemCategory = $state('');
+	let newItemSpecification = $state('');
+	let newItemToolsEquipment = $state('');
+	let newItemPicture = $state('');
+	let uploadingDonationImage = $state(false);
+	let categoriesList = $state<InventoryCategory[]>([]);
+
+	function handleDonationImageUpload(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		uploadingDonationImage = true;
+		try {
+			const reader = new FileReader();
+			reader.onload = (evt) => {
+				newItemPicture = evt.target?.result as string;
+				uploadingDonationImage = false;
+				toastStore.success('Image loaded for item donation preview!');
+			};
+			reader.readAsDataURL(file);
+		} catch (err) {
+			console.error('Failed to read image file:', err);
+			toastStore.error('Failed to load image file.');
+			uploadingDonationImage = false;
+		}
+	}
+
+	let isSubmittingDonation = $state(false);
+
+	async function fetchDonations() {
+		if (donationsLoaded) return;
+		donationsLoading = true;
+		try {
+			const res = await donationsAPI.getAll({ limit: 500 });
+			donations = res.donations || [];
+			donationsLoaded = true;
+		} catch (err) {
+			console.error('Failed to load donations:', err);
+			toastStore.error('Failed to load donation records.');
+		} finally {
+			donationsLoading = false;
+		}
+	}
+
+	async function handleCreateDonation() {
+		if (!donorName.trim()) {
+			toastStore.error('Please enter donor name or organization.');
+			return;
+		}
+		if (donationQuantity <= 0) {
+			toastStore.error('Please enter a valid quantity.');
+			return;
+		}
+
+		isSubmittingDonation = true;
+		try {
+			let payload: CreateDonationRequest;
+			if (donationAction === 'add_to_existing') {
+				if (!selectedDonationItem) {
+					toastStore.error('Please select an existing inventory item.');
+					isSubmittingDonation = false;
+					return;
+				}
+				payload = {
+					inventoryAction: 'add_to_existing',
+					donorName: donorName.trim(),
+					quantity: donationQuantity,
+					unit: donationUnit.trim() || undefined,
+					purpose: donationPurpose.trim() || 'Item donation to CHTM laboratory',
+					date: donationDate,
+					notes: donationNotes.trim() || undefined,
+					inventoryItemId: selectedDonationItem.id
+				};
+			} else {
+				if (!newItemName.trim() || !newItemCategory.trim()) {
+					toastStore.error('Please specify new item name and category.');
+					isSubmittingDonation = false;
+					return;
+				}
+				payload = {
+					inventoryAction: 'new_item',
+					itemName: newItemName.trim(),
+					category: newItemCategory.trim(),
+					specification: newItemSpecification.trim() || undefined,
+					toolsOrEquipment: newItemToolsEquipment.trim() || undefined,
+					picture: newItemPicture.trim() || undefined,
+					donorName: donorName.trim(),
+					quantity: donationQuantity,
+					unit: donationUnit.trim() || undefined,
+					purpose: donationPurpose.trim() || 'Item donation to CHTM laboratory',
+					date: donationDate,
+					notes: donationNotes.trim() || undefined
+				};
+			}
+
+			await donationsAPI.create(payload);
+			toastStore.success(`Donation from "${donorName}" recorded successfully!`);
+
+			// Reset modal form
+			showDonationModal = false;
+			donorName = '';
+			donationQuantity = 1;
+			donationUnit = '';
+			donationPurpose = '';
+			donationNotes = '';
+			selectedDonationItem = null;
+			newItemName = '';
+			newItemCategory = '';
+			newItemSpecification = '';
+			newItemToolsEquipment = '';
+			newItemPicture = '';
+
+			donationsLoaded = false;
+			await fetchDonations();
+
+			// Refresh inventory items
+			const updatedItems = await inventoryItemsAPI.getAll({ includeArchived: false, forceRefresh: true });
+			inventoryItems = updatedItems.items || [];
+		} catch (err: any) {
+			console.error(err);
+			toastStore.error(err.message || 'Failed to record donation.');
+		} finally {
+			isSubmittingDonation = false;
+		}
+	}
 
 	// --- Walk-in Checkout Form State ---
 	let selectedStudent = $state<UserResponse | null>(null);
@@ -184,6 +335,36 @@
 		return { total, pending, active };
 	});
 
+	const filteredDonationInventory = $derived(
+		inventoryItems.filter(
+			(item) =>
+				item.name.toLowerCase().includes(donationItemSearchQuery.toLowerCase()) &&
+				!item.archived
+		)
+	);
+
+	const filteredDonations = $derived.by(() => {
+		let result = donations;
+		if (donationSearchQuery.trim()) {
+			const query = donationSearchQuery.toLowerCase().trim();
+			result = result.filter(
+				(d) =>
+					d.donorName.toLowerCase().includes(query) ||
+					d.itemName.toLowerCase().includes(query) ||
+					(d.purpose && d.purpose.toLowerCase().includes(query)) ||
+					(d.receiptNumber && d.receiptNumber.toLowerCase().includes(query))
+			);
+		}
+		return result;
+	});
+
+	const donationStats = $derived.by(() => {
+		const total = donations.length;
+		const totalUnits = donations.reduce((sum, d) => sum + (d.quantity || 0), 0);
+		const addedToExisting = donations.filter((d) => d.inventoryAction === 'add_to_existing').length;
+		return { total, totalUnits, addedToExisting };
+	});
+
 	// Filtered lists
 	const displayWalkIns = $derived(
 		walkIns.filter((w) => {
@@ -211,12 +392,13 @@
 	onMount(async () => {
 		try {
 			// Load data from APIs
-			const [studentsRes, adminsRes, instructorsRes, inventoryRes, classesRes] = await Promise.all([
+			const [studentsRes, adminsRes, instructorsRes, inventoryRes, classesRes, categoriesRes] = await Promise.all([
 				usersAPI.getAll({ role: 'student', limit: 100 }),
 				usersAPI.getAll({ role: 'superadmin', limit: 50 }),
 				usersAPI.getAll({ role: 'instructor', limit: 50 }),
 				inventoryItemsAPI.getAll({ limit: 100 }),
-				classCodesAPI.getAll({ limit: 50 })
+				classCodesAPI.getAll({ limit: 50 }),
+				inventoryCategoriesAPI.getAll({ includeArchived: false })
 			]);
 
 			studentsList = studentsRes.users || [];
@@ -224,6 +406,7 @@
 			adminList = [...(adminsRes.users || []), ...(instructorsRes.users || [])];
 			inventoryItems = inventoryRes.items || [];
 			classCodesList = classesRes.classCodes || [];
+			categoriesList = categoriesRes.categories || [];
 
 			// Load Alternative Transactions from localStorage
 			const savedWalkIns = localStorage.getItem('chtm_walk_in_transactions');
@@ -705,13 +888,21 @@
 				>
 					<Plus size={16} /> Process Walk-in
 				</button>
-			{:else}
+			{:else if activeTab === 'confidential'}
 				<button
 					type="button"
 					onclick={() => (showConfidentialModal = true)}
 					class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-gray-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gray-800"
 				>
 					<Lock size={15} /> Log Confidential Request
+				</button>
+			{:else}
+				<button
+					type="button"
+					onclick={() => (showDonationModal = true)}
+					class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700"
+				>
+					<Heart size={15} class="fill-white text-white" /> Log Item Donation
 				</button>
 			{/if}
 		</div>
@@ -818,6 +1009,16 @@
 					: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
 			>
 				Confidential Admin Requests
+			</button>
+			<button
+				type="button"
+				onclick={() => { activeTab = 'donations'; void fetchDonations(); }}
+				class="cursor-pointer border-b-2 px-1 py-4 text-sm font-semibold transition-all {activeTab ===
+				'donations'
+					? 'border-red-600 text-red-600'
+					: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
+			>
+				Item Donations ({donations.length})
 			</button>
 		</nav>
 	</div>
@@ -1129,8 +1330,423 @@
 				</table>
 			</div>
 		</div>
+	{:else if activeTab === 'donations'}
+		<!-- ─── TAB CONTENT: ITEM DONATIONS ────────────────────────────────────── -->
+		<div class="space-y-4">
+			<!-- Search Bar -->
+			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div class="relative max-w-md flex-1">
+					<span
+						class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"
+					>
+						<Search size={16} />
+					</span>
+					<input
+						type="text"
+						bind:value={donationSearchQuery}
+						placeholder="Search donor name, item, or purpose..."
+						class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pr-4 pl-10 text-sm text-gray-900 focus:border-red-500 focus:outline-none"
+					/>
+				</div>
+			</div>
+
+			<!-- Main List Table -->
+			<div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-xs">
+				{#if donationsLoading}
+					<div class="flex h-48 items-center justify-center">
+						<div class="flex flex-col items-center gap-2">
+							<div class="h-8 w-8 animate-spin rounded-full border-4 border-red-200 border-t-red-600"></div>
+							<p class="text-xs font-medium text-gray-500">Loading item donations...</p>
+						</div>
+					</div>
+				{:else if filteredDonations.length === 0}
+					<div class="py-16 text-center">
+						<Heart class="mx-auto h-12 w-12 text-red-500 fill-red-100" />
+						<h3 class="mt-4 text-base font-semibold text-gray-900">No donation records found</h3>
+						<p class="mt-1 text-sm text-gray-500">Log a new item donation using the button above.</p>
+					</div>
+				{:else}
+					<table class="w-full min-w-max table-auto text-left text-sm text-gray-700">
+						<thead class="bg-gray-50 text-xs font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-200">
+							<tr>
+								<th class="px-6 py-4">Receipt / Ref</th>
+								<th class="px-6 py-4">Donor Name / Entity</th>
+								<th class="px-6 py-4">Donated Item</th>
+								<th class="px-6 py-4 text-center">Quantity</th>
+								<th class="px-6 py-4">Inventory Action</th>
+								<th class="px-6 py-4">Purpose / Notes</th>
+								<th class="px-6 py-4 text-right pr-6">Date Received</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-gray-100">
+							{#each filteredDonations as d}
+								<tr class="transition-colors hover:bg-gray-50/50">
+									<td class="px-6 py-4 font-mono text-xs font-bold text-red-600">
+										{d.receiptNumber || `DON-${d.id.slice(0, 6).toUpperCase()}`}
+									</td>
+									<td class="px-6 py-4 font-semibold text-gray-900">
+										{d.donorName}
+									</td>
+									<td class="px-6 py-4 font-medium text-gray-900">
+										<div class="flex items-center gap-2">
+											<Package size={15} class="text-gray-400" />
+											{d.itemName}
+										</div>
+									</td>
+									<td class="px-6 py-4 text-center font-bold text-gray-900 tabular-nums">
+										+{d.quantity} {d.quantity === 1 ? 'unit' : 'units'}
+									</td>
+									<td class="px-6 py-4">
+										{#if d.inventoryAction === 'add_to_existing'}
+											<span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+												+ Added to Existing Stock
+											</span>
+										{:else}
+											<span class="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+												New Inventory Item
+											</span>
+										{/if}
+									</td>
+									<td class="px-6 py-4 text-xs text-gray-600 max-w-xs truncate">
+										{d.notes || d.purpose || 'Item donation'}
+									</td>
+									<td class="px-6 py-4 text-xs text-gray-500 whitespace-nowrap text-right pr-6">
+										{new Date(d.date || d.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				{/if}
+			</div>
+		</div>
 	{/if}
 </div>
+
+<!-- ─── MODAL: LOG ITEM DONATION ────────────────────────────────────────── -->
+{#if showDonationModal}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+		<div class="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+			<!-- Modal Header -->
+			<div class="flex items-center justify-between border-b border-gray-100 pb-4">
+				<div class="flex items-center gap-2">
+					<div class="rounded-lg bg-red-50 p-2 text-red-500">
+						<Heart size={20} class="fill-red-500 text-red-500" />
+					</div>
+					<div>
+						<h2 class="text-lg font-bold text-gray-900">Log Item Donation</h2>
+						<p class="text-xs text-gray-500">Receive and register equipment donations to inventory</p>
+					</div>
+				</div>
+				<button
+					type="button"
+					onclick={() => (showDonationModal = false)}
+					class="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+				>
+					<X size={18} />
+				</button>
+			</div>
+
+			<!-- Action Selector Tabs -->
+			<div class="mt-4">
+				<div class="grid grid-cols-2 gap-2 rounded-xl border border-gray-200 bg-gray-100 p-1">
+					<button
+						type="button"
+						onclick={() => (donationAction = 'new_item')}
+						class="flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-all {donationAction === 'new_item'
+							? 'border border-gray-200/50 bg-white text-red-600 shadow-xs'
+							: 'text-gray-500 hover:text-gray-700'}"
+					>
+						<Plus size={14} /> New Inventory Item
+					</button>
+					<button
+						type="button"
+						onclick={() => (donationAction = 'add_to_existing')}
+						class="flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-all {donationAction === 'add_to_existing'
+							? 'border border-gray-200/50 bg-white text-red-600 shadow-xs'
+							: 'text-gray-500 hover:text-gray-700'}"
+					>
+						<Package size={14} /> Add to Existing Item
+					</button>
+				</div>
+				<p class="mt-1.5 text-[11px] text-gray-400">
+					{#if donationAction === 'new_item'}
+						Creates a new item in the inventory and records the donation.
+					{:else}
+						Adds quantity to an existing item in the inventory and records the donation.
+					{/if}
+				</p>
+			</div>
+
+			<!-- Modal Body Form -->
+			<form onsubmit={(e) => { e.preventDefault(); handleCreateDonation(); }} class="mt-4 space-y-4 border-t border-gray-100 pt-4">
+				<!-- Donor Name -->
+				<div>
+					<label for="donorName" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+						Donor Name *
+					</label>
+					<input
+						id="donorName"
+						type="text"
+						required
+						bind:value={donorName}
+						placeholder="Individual or organization name"
+						class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+					/>
+				</div>
+
+				{#if donationAction === 'new_item'}
+					<!-- Item Name -->
+					<div>
+						<label for="newItemName" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+							Item Name *
+						</label>
+						<input
+							id="newItemName"
+							type="text"
+							required
+							bind:value={newItemName}
+							placeholder="e.g. Cooking Pot, Ladle Set"
+							class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+						/>
+					</div>
+
+					<!-- Category Select -->
+					<div>
+						<label for="newItemCategory" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+							Category *
+						</label>
+						<select
+							id="newItemCategory"
+							required
+							bind:value={newItemCategory}
+							class="mt-1 block w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+						>
+							<option value="">Select category</option>
+							{#each categoriesList as cat}
+								<option value={cat.name}>{cat.name}</option>
+							{/each}
+							<option value="Kitchen Equipment">Kitchen Equipment</option>
+							<option value="Kitchen Appliances">Kitchen Appliances</option>
+							<option value="Utensils">Utensils</option>
+							<option value="Bakeware">Bakeware</option>
+							<option value="Cookware">Cookware</option>
+							<option value="Glassware">Glassware</option>
+							<option value="Tableware">Tableware</option>
+							<option value="General">General</option>
+						</select>
+					</div>
+
+					<!-- Specification & Tools/Equipment -->
+					<div class="grid grid-cols-2 gap-3">
+						<div>
+							<label for="newItemSpecification" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+								Specification <span class="text-gray-400 font-normal text-[11px]">(optional)</span>
+							</label>
+							<input
+								id="newItemSpecification"
+								type="text"
+								bind:value={newItemSpecification}
+								placeholder="e.g. Stainless steel, 5L"
+								class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+							/>
+						</div>
+						<div>
+							<label for="newItemToolsEquipment" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+								Tools / Equipment <span class="text-gray-400 font-normal text-[11px]">(optional)</span>
+							</label>
+							<input
+								id="newItemToolsEquipment"
+								type="text"
+								bind:value={newItemToolsEquipment}
+								placeholder="e.g. Kitchen Equipment"
+								class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+							/>
+						</div>
+					</div>
+
+					<!-- Item Image File Upload -->
+					<div>
+						<label for="donationImageFile" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+							Item Image / Photo <span class="text-gray-400 font-normal text-[11px]">(optional)</span>
+						</label>
+						{#if newItemPicture}
+							<div class="relative flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 p-3">
+								<div class="flex items-center gap-3">
+									<img src={newItemPicture} alt="Donated item preview" class="h-12 w-12 rounded-lg object-cover border border-gray-200" />
+									<div>
+										<p class="text-xs font-semibold text-gray-900">Photo attached</p>
+										<p class="text-[11px] text-gray-500">Ready to save with item donation</p>
+									</div>
+								</div>
+								<button
+									type="button"
+									onclick={() => (newItemPicture = '')}
+									class="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors"
+								>
+									Remove Photo
+								</button>
+							</div>
+						{:else}
+							<label class="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50/50 p-4 text-center transition-colors hover:bg-red-50/20 hover:border-red-400">
+								<Upload size={22} class="text-gray-400 mb-1" />
+								<span class="text-xs font-semibold text-gray-700">Click to upload photo</span>
+								<span class="text-[11px] text-gray-400 mt-0.5">PNG, JPG, WEBP up to 5MB</span>
+								<input id="donationImageFile" type="file" accept="image/*" class="hidden" onchange={handleDonationImageUpload} />
+							</label>
+						{/if}
+					</div>
+				{:else}
+					<!-- Select Existing Inventory Item -->
+					<div class="relative">
+						<label for="existingItemSelect" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+							Select Inventory Item *
+						</label>
+						{#if selectedDonationItem}
+							<div class="mt-1 flex items-center justify-between rounded-xl border border-red-200 bg-red-50/50 p-3">
+								<div class="flex items-center gap-2">
+									<Package size={16} class="text-red-600" />
+									<div>
+										<p class="text-sm font-bold text-gray-900">{selectedDonationItem.name}</p>
+										<p class="text-xs text-gray-500">Current Stock: {selectedDonationItem.quantity}</p>
+									</div>
+								</div>
+								<button
+									type="button"
+									onclick={() => (selectedDonationItem = null)}
+									class="text-xs font-semibold text-red-600 hover:underline"
+								>
+									Change
+								</button>
+							</div>
+						{:else}
+							<input
+								id="existingItemSelect"
+								type="text"
+								bind:value={donationItemSearchQuery}
+								onfocus={() => (showDonationItemDropdown = true)}
+								placeholder="Search equipment item name..."
+								class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+							/>
+							{#if showDonationItemDropdown && filteredDonationInventory.length > 0}
+								<div class="absolute left-0 right-0 z-20 mt-1 max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+									{#each filteredDonationInventory.slice(0, 10) as item}
+										<button
+											type="button"
+											onclick={() => {
+												selectedDonationItem = item;
+												showDonationItemDropdown = false;
+											}}
+											class="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-red-50/50"
+										>
+											<span class="font-semibold text-gray-900">{item.name}</span>
+											<span class="text-xs text-gray-500">Stock: {item.quantity}</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
+						{/if}
+					</div>
+				{/if}
+
+				<!-- Quantity & Unit -->
+				<div class="grid grid-cols-2 gap-3">
+					<div>
+						<label for="donationQuantity" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+							Quantity *
+						</label>
+						<input
+							id="donationQuantity"
+							type="number"
+							min="1"
+							required
+							bind:value={donationQuantity}
+							class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+						/>
+					</div>
+					<div>
+						<label for="donationUnit" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+							Unit <span class="text-gray-400 font-normal text-[11px]">(optional)</span>
+						</label>
+						<input
+							id="donationUnit"
+							type="text"
+							bind:value={donationUnit}
+							placeholder="pcs, kg, sets"
+							class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+						/>
+					</div>
+				</div>
+
+				<!-- Purpose & Date Received -->
+				<div class="grid grid-cols-2 gap-3">
+					<div>
+						<label for="donationPurpose" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+							Purpose *
+						</label>
+						<input
+							id="donationPurpose"
+							type="text"
+							required
+							bind:value={donationPurpose}
+							placeholder="Intended use of the donated item"
+							class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+						/>
+					</div>
+					<div>
+						<label for="donationDate" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+							Date Received *
+						</label>
+						<input
+							id="donationDate"
+							type="date"
+							required
+							bind:value={donationDate}
+							class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+						/>
+					</div>
+				</div>
+
+				<!-- Notes (optional) -->
+				<div>
+					<label for="donationNotes" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+						Notes <span class="text-gray-400 font-normal text-[11px]">(optional)</span>
+					</label>
+					<input
+						id="donationNotes"
+						type="text"
+						bind:value={donationNotes}
+						placeholder="Additional notes"
+						class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+					/>
+				</div>
+
+				<!-- Modal Footer -->
+				<div class="flex items-center justify-end gap-3 border-t border-gray-100 pt-4">
+					<button
+						type="button"
+						onclick={() => (showDonationModal = false)}
+						class="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+						disabled={isSubmittingDonation}
+					>
+						Cancel
+					</button>
+					<button
+						type="submit"
+						class="flex items-center gap-1.5 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-red-700"
+						disabled={isSubmittingDonation}
+					>
+						{#if isSubmittingDonation}
+							Logging...
+						{:else}
+							Log Donation
+						{/if}
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}
 
 <!-- ─── MODAL: WALK-IN BORROW FORM ──────────────────────────────────────── -->
 {#if showWalkInModal}
