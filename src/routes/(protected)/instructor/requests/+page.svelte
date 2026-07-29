@@ -155,14 +155,51 @@
 	let actionInFlightById = $state<Record<string, boolean>>({});
 	let bulkActionInFlight = $state(false);
 
-	const rejectReasons = [
-		'Item not suitable for purpose',
-		'Student inexperienced with equipment',
-		'Duration too long',
-		'Item reserved for lab session',
-		'Better alternative available',
-		'Other (specify)'
+	// Standardized decline reasons, each paired with a professional template
+	// message that is shown to the student. Selecting a reason pre-fills the
+	// message; the instructor can still edit it before confirming.
+	const rejectReasons: { label: string; template: string }[] = [
+		{
+			label: 'Item not suitable for purpose',
+			template:
+				'After reviewing your request, the requested item is not suitable for the stated purpose. Please consult your instructor to identify equipment better matched to your activity before resubmitting.'
+		},
+		{
+			label: 'Student inexperienced with equipment',
+			template:
+				'This equipment requires prior training or supervised experience to operate safely. Please complete the required orientation or arrange supervised use, then resubmit your request.'
+		},
+		{
+			label: 'Duration too long',
+			template:
+				'The requested borrowing period exceeds the allowable duration for this item. Please resubmit your request with a shorter timeframe so the equipment remains available to other students.'
+		},
+		{
+			label: 'Item reserved for lab session',
+			template:
+				'This item is reserved for a scheduled laboratory session during your requested period. Please choose an alternative date or item and resubmit your request.'
+		},
+		{
+			label: 'Better alternative available',
+			template:
+				'A more appropriate item is available for your intended use. Please review the available alternatives and submit a new request for the recommended equipment.'
+		},
+		{
+			label: 'Other (specify)',
+			template: ''
+		}
 	];
+
+	// Pre-fill the message with the selected reason's template, unless the
+	// instructor has already written a custom message we should not overwrite.
+	function applyRejectTemplate(): void {
+		const isTemplateText =
+			rejectDetails.trim() === '' ||
+			rejectReasons.some((r) => r.template !== '' && r.template === rejectDetails);
+		if (!isTemplateText) return;
+		const match = rejectReasons.find((r) => r.label === rejectReason);
+		rejectDetails = match ? match.template : '';
+	}
 
 	function isCancelledRequest(status: BorrowRequestStatus, rejectionReason?: string): boolean {
 		return (
@@ -1187,7 +1224,7 @@
 <div class="space-y-6">
 	<!-- Header -->
 	<div>
-		<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Student Requests</h1>
+		<h1 data-tour="instructor-requests-header" class="text-2xl font-bold text-gray-900 sm:text-3xl">Student Requests</h1>
 		<p class="mt-1 text-sm text-gray-500">Review and approve equipment borrow requests</p>
 	</div>
 
@@ -1569,6 +1606,7 @@
 										? 'bg-pink-50/30 ring-2 ring-pink-400'
 										: ''}"
 									data-request-id={request.rawId}
+									data-tour="instructor-request-row"
 									onclick={() => openDetailModal(request)}
 									role="button"
 									tabindex="0"
@@ -1743,6 +1781,7 @@
 									<!-- svelte-ignore a11y_click_events_have_key_events -->
 									<!-- svelte-ignore a11y_no_static_element_interactions -->
 									<div
+										data-tour="instructor-request-row"
 										class="grid cursor-pointer gap-3 p-4 transition-colors md:grid-cols-[auto_32px_0.6fr_1fr_2.4fr_0.8fr_120px] md:items-start md:gap-4 {highlightedRequestId ===
 										request.rawId
 											? 'bg-pink-50/50 ring-1 ring-pink-300 ring-inset'
@@ -1985,23 +2024,24 @@
 						<select
 							id="reject-reason"
 							bind:value={rejectReason}
+							onchange={applyRejectTemplate}
 							class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
 						>
 							<option value="">Select a reason…</option>
 							{#each rejectReasons as reason}
-								<option value={reason}>{reason}</option>
+								<option value={reason.label}>{reason.label}</option>
 							{/each}
 						</select>
 					</div>
 					<div>
 						<label for="reject-details" class="mb-1.5 block text-sm font-medium text-gray-700"
-							>Additional Notes <span class="text-gray-400">(optional)</span></label
+							>Message to Student <span class="text-gray-400">(editable)</span></label
 						>
 						<textarea
 							id="reject-details"
 							bind:value={rejectDetails}
-							rows="3"
-							placeholder="Add any additional context…"
+							rows="4"
+							placeholder="Select a reason above to load a template message, or write your own…"
 							class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
 						></textarea>
 					</div>

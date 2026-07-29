@@ -708,7 +708,7 @@
 
 <div class="space-y-6">
 	<div>
-		<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">My Borrowed Items</h1>
+		<h1 data-tour="student-borrowed-header" class="text-2xl font-bold text-gray-900 sm:text-3xl">My Borrowed Items</h1>
 		<p class="mt-1 text-sm text-gray-500">Track your currently borrowed equipment</p>
 	</div>
 

@@ -5,6 +5,7 @@
 	import StudentBottomNav from '$lib/components/student/StudentBottomNav.svelte';
 	import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
 	import ConfirmDialogContainer from '$lib/components/ui/ConfirmDialogContainer.svelte';
+	import OnboardingController from '$lib/components/onboarding/OnboardingController.svelte';
 	import { sidebarCollapsed } from '$lib/stores/student';
 	import { requestCartStore } from '$lib/stores/requestCart';
 	import { authStore } from '$lib/stores/auth';
@@ -42,3 +43,4 @@
 <StudentBottomNav />
 <ToastContainer />
 <ConfirmDialogContainer />
+<OnboardingController role="student" />

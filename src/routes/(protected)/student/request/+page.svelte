@@ -12,6 +12,7 @@
 	import { classCodesAPI, type ClassCodeResponse } from '$lib/api/classCodes';
 	import { statisticsAPI } from '$lib/api/statistics';
 	import { requestCartStore, requestCartItems } from '$lib/stores/requestCart';
+	import { practiceMode } from '$lib/stores/onboarding';
 	import { toastStore } from '$lib/stores/toast';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import SelectedItemsSkeletonLoader from '$lib/components/ui/SelectedItemsSkeletonLoader.svelte';
@@ -456,7 +457,9 @@
 				stepErrors.pendingRequest = 'You already have a pending borrow request awaiting action.';
 		} else if (currentStep === 2) {
 			if (!borrowDate) stepErrors.borrowDate = 'Borrow date is required';
-			else if (borrowDate < today) stepErrors.borrowDate = 'Borrow date cannot be in the past';
+			else if (borrowDate < minimumBorrowDate)
+				stepErrors.borrowDate =
+					'Same-day requests are not allowed — choose a date from tomorrow onward';
 			else if (borrowDate > maximumBorrowDate)
 				stepErrors.borrowDate = 'Borrow date must be within the next 2 days';
 			if (!borrowTime) stepErrors.borrowTime = 'Borrow time is required';
@@ -543,6 +546,9 @@
 	}
 
 	const today = formatDateForInput(new Date());
+	// Students cannot request equipment for the same day — the earliest allowed
+	// borrow date is tomorrow.
+	const minimumBorrowDate = addDaysToDateInput(today, 1);
 	const maximumBorrowDate = addDaysToDateInput(today, 2);
 
 	let showDatePicker = $state(false);
@@ -592,7 +598,7 @@
 
 	function isDateDisabled(dateObj: Date): boolean {
 		const dateStr = formatDateForInput(dateObj);
-		return dateStr < today || dateStr > maximumBorrowDate;
+		return dateStr < minimumBorrowDate || dateStr > maximumBorrowDate;
 	}
 
 	function isDateToday(dateObj: Date): boolean {
@@ -614,11 +620,9 @@
 		showDatePicker = false;
 	}
 
-	function handleTodayDate() {
-		const todayObj = new Date();
-		if (!isDateDisabled(todayObj)) {
-			borrowDate = formatDateForInput(todayObj);
-		}
+	function handleEarliestDate() {
+		// Same-day requests aren't allowed, so jump to the earliest selectable date.
+		borrowDate = minimumBorrowDate;
 		showDatePicker = false;
 	}
 
@@ -1263,8 +1267,8 @@
 
 		if (!borrowDate) {
 			errors.borrowDate = 'Borrow date is required';
-		} else if (borrowDate < today) {
-			errors.borrowDate = 'Borrow date cannot be in the past';
+		} else if (borrowDate < minimumBorrowDate) {
+			errors.borrowDate = 'Same-day requests are not allowed — choose a date from tomorrow onward';
 		} else if (borrowDate > maximumBorrowDate) {
 			errors.borrowDate = 'Borrow date must be within the next 2 days';
 		}
@@ -1337,6 +1341,15 @@
 			toastStore.error(
 				'Class code is required. Please select a class from your enrolled classes.',
 				'Validation Error'
+			);
+			return;
+		}
+
+		// Practice run during the guided tour — do NOT create a real request.
+		if (get(practiceMode)) {
+			toastStore.success(
+				"Nice — that's exactly how you submit a request. This was a practice run during the tour, so nothing was actually sent.",
+				'Practice mode'
 			);
 			return;
 		}
@@ -1814,7 +1827,7 @@
 	<!-- Page Header -->
 	<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Request Equipment</h1>
+			<h1 data-tour="student-request-header" class="text-2xl font-bold text-gray-900 sm:text-3xl">Request Equipment</h1>
 			<p class="mt-1 text-sm text-gray-500">
 				Search, select, and submit your equipment borrow request
 			</p>
@@ -1838,7 +1851,7 @@
 	</div>
 
 	<!-- Step Progress Indicator -->
-	<div class="rounded-lg bg-white p-4 shadow sm:p-6">
+	<div data-tour="student-request-stepper" class="rounded-lg bg-white p-4 shadow sm:p-6">
 		<!-- Progress Bar -->
 		<div class="relative mb-6">
 			<div class="h-2 overflow-hidden rounded-full bg-gray-200">
@@ -1906,7 +1919,7 @@
 		<div class="w-full space-y-4">
 			<!-- Selected Items -->
 			{#if currentStep === 1}
-				<div class="animate-fadeIn rounded-lg bg-white p-4 shadow sm:p-6">
+				<div data-tour="request-items-section" class="animate-fadeIn rounded-lg bg-white p-4 shadow sm:p-6">
 					{#if hasNoEnrollment || availableClassCodes.length === 0}
 						<div class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4">
 							<div class="flex gap-3">
@@ -1963,7 +1976,7 @@
 
 					<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<div>
-							<h2 class="text-base font-semibold text-gray-900 sm:text-lg">Selected Items</h2>
+							<h2 data-tour="student-request-items" class="text-base font-semibold text-gray-900 sm:text-lg">Selected Items</h2>
 							<p class="mt-0.5 text-xs text-gray-500">
 								{selectedItems.length}
 								{selectedItems.length === 1 ? 'item' : 'items'} selected
@@ -2647,7 +2660,7 @@
 				<div class="animate-fadeIn grid grid-cols-1 gap-6 lg:grid-cols-2">
 					<!-- Borrow Period -->
 					<div class="rounded-lg bg-white p-4 shadow sm:p-6">
-						<h2 class="mb-3 text-base font-semibold text-gray-900 sm:text-lg">Borrow Period</h2>
+						<h2 data-tour="student-request-period" class="mb-3 text-base font-semibold text-gray-900 sm:text-lg">Borrow Period</h2>
 						<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 							<!-- Borrow Date -->
 							<div>
@@ -2709,6 +2722,7 @@
 										></div>
 
 										<div
+											data-tour="borrow-date-calendar"
 											class="absolute left-0 z-30 mt-1 w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
 										>
 											<!-- Header -->
@@ -2813,10 +2827,10 @@
 												</button>
 												<button
 													type="button"
-													onclick={handleTodayDate}
+													onclick={handleEarliestDate}
 													class="text-[10px] font-bold text-pink-600 transition-colors hover:text-pink-700"
 												>
-													Today
+													Earliest
 												</button>
 											</div>
 										</div>
@@ -2826,7 +2840,7 @@
 									<p class="mt-1 text-xs text-red-600">{errors.borrowDate}</p>
 								{:else}
 									<p class="mt-1 text-xs text-gray-500">
-										You can request equipment for today up to 2 days ahead only.
+										Same-day requests aren't allowed — pick a date 1 to 2 days ahead.
 									</p>
 								{/if}
 							</div>
@@ -2898,7 +2912,7 @@
 											aria-hidden="true"
 										></div>
 										<div
-											class="absolute top-full left-0 z-20 mt-1 rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
+											data-tour="time-dropdown" class="absolute top-full left-0 z-20 mt-1 rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
 										>
 											<p
 												class="mb-2 text-center text-[10px] font-semibold tracking-wide text-gray-400 uppercase"
@@ -3039,7 +3053,7 @@
 											aria-hidden="true"
 										></div>
 										<div
-											class="absolute top-full left-0 z-20 mt-1 rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
+											data-tour="time-dropdown" class="absolute top-full left-0 z-20 mt-1 rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
 										>
 											<p
 												class="mb-2 text-center text-[10px] font-semibold tracking-wide text-gray-400 uppercase"
@@ -3149,7 +3163,7 @@
 							: ''}"
 					>
 						<div class="mb-3 flex items-center justify-between gap-4">
-							<h2 class="text-base font-semibold text-gray-900 sm:text-lg">Class Code</h2>
+							<h2 data-tour="student-request-classcode" class="text-base font-semibold text-gray-900 sm:text-lg">Class Code</h2>
 							{#if availableClassCodes.length > 0}
 								<div class="class-dropdown-container relative shrink-0">
 									<button
@@ -3443,10 +3457,10 @@
 
 			<!-- Step 4: Review & Submit -->
 			{#if currentStep === 4}
-				<div class="animate-fadeIn flex h-full flex-col rounded-lg bg-white p-4 shadow sm:p-6">
+				<div data-tour="review-items" class="animate-fadeIn flex h-full flex-col rounded-lg bg-white p-4 shadow sm:p-6">
 					<div class="mb-4 flex items-center justify-between">
 						<div>
-							<h2 class="text-base font-semibold text-gray-900 sm:text-lg">Selected Items</h2>
+							<h2 data-tour="student-request-items" class="text-base font-semibold text-gray-900 sm:text-lg">Selected Items</h2>
 							<p class="mt-0.5 text-xs text-gray-500">
 								{selectedItems.length}
 								{selectedItems.length === 1 ? 'item' : 'items'} — read-only preview
@@ -3546,9 +3560,9 @@
 				</div>
 
 				<!-- Class Code — read-only summary -->
-				<div class="rounded-lg bg-white p-4 shadow sm:p-6">
+				<div data-tour="review-classcode" class="rounded-lg bg-white p-4 shadow sm:p-6">
 					<div class="mb-3 flex items-center justify-between">
-						<h2 class="text-base font-semibold text-gray-900 sm:text-lg">Class Code</h2>
+						<h2 data-tour="student-request-classcode" class="text-base font-semibold text-gray-900 sm:text-lg">Class Code</h2>
 						<button
 							type="button"
 							onclick={() => goToStep(2)}
@@ -3598,9 +3612,9 @@
 				</div>
 
 				<!-- Purpose & Usage and Summary 1:1 Side-by-Side Grid with Equal Heights -->
-				<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+				<div data-tour="review-details" class="grid grid-cols-1 gap-6 md:grid-cols-2">
 					<!-- Purpose & Usage — read-only summary -->
-					<div class="flex h-full flex-col justify-between rounded-lg bg-white p-4 shadow sm:p-6">
+					<div data-tour="review-purpose" class="flex h-full flex-col justify-between rounded-lg bg-white p-4 shadow sm:p-6">
 						<div>
 							<div class="mb-3 flex items-center justify-between">
 								<h2 class="text-base font-semibold text-gray-900 sm:text-lg">Purpose & Usage</h2>
@@ -3648,7 +3662,7 @@
 					</div>
 
 					<!-- Summary -->
-					<div class="flex h-full flex-col justify-between rounded-lg bg-white p-4 shadow sm:p-6">
+					<div data-tour="review-summary" class="flex h-full flex-col justify-between rounded-lg bg-white p-4 shadow sm:p-6">
 						<div>
 							<h2 class="mb-3 text-base font-semibold text-gray-900 sm:text-lg">Summary</h2>
 							<div class="space-y-2 text-sm">
@@ -3720,7 +3734,7 @@
 
 				{#if notes}
 					<!-- Additional Notes — read-only summary (only shown if filled) -->
-					<div class="rounded-lg bg-white p-4 shadow sm:p-6">
+					<div data-tour="review-notes" class="rounded-lg bg-white p-4 shadow sm:p-6">
 						<div class="mb-3 flex items-center justify-between">
 							<h2 class="text-base font-semibold text-gray-900 sm:text-lg">Additional Notes</h2>
 							<button
@@ -3744,7 +3758,7 @@
 				{/if}
 
 				<!-- Terms & Conditions -->
-				<div class="rounded-lg bg-white p-4 shadow sm:p-6">
+				<div data-tour="review-terms" class="rounded-lg bg-white p-4 shadow sm:p-6">
 					<h2 class="mb-3 text-base font-semibold text-gray-900 sm:text-lg">Terms & Conditions</h2>
 					<ul class="space-y-2 text-sm text-gray-600">
 						{#each ['I am responsible for any damage', 'I will return equipment on time', 'Late returns may incur penalties', 'Educational use only'] as term}
@@ -3770,6 +3784,7 @@
 						<label class="flex cursor-pointer items-start gap-3">
 							<input
 								type="checkbox"
+								data-tour="terms-checkbox"
 								bind:checked={acknowledgeTerms}
 								class="mt-1 h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
 							/>
@@ -3825,6 +3840,7 @@
 		{#if currentStep < totalSteps}
 			<button
 				type="button"
+				data-tour="student-request-continue"
 				disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasPendingRequest}
 				onclick={handleStepNext}
 				class="inline-flex items-center gap-2 rounded-lg bg-pink-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-pink-600"
@@ -3856,6 +3872,7 @@
 					Reset Form
 				</button>
 				<button
+					data-tour="student-request-submit"
 					onclick={handleSubmit}
 					disabled={isSubmitting ||
 						hasNoEnrollment ||

@@ -488,7 +488,7 @@
 	<!-- ── Header ─────────────────────────────────────────────────────────── -->
 	<div class="flex items-start justify-between gap-3">
 		<div class="min-w-0">
-			<h1 class="text-xl font-bold text-gray-900 sm:text-2xl lg:text-3xl">
+			<h1 data-tour="student-dash-header" class="text-xl font-bold text-gray-900 sm:text-2xl lg:text-3xl">
 				{greeting}, {$user?.firstName}
 			</h1>
 			<p class="mt-0.5 text-xs text-gray-500 sm:text-sm">
@@ -522,7 +522,7 @@
 	{:else if performanceStats}
 			{@const trust = trustTierConfig(performanceStats.trustScore.tier)}
 			{@const score = performanceStats.trustScore.score}
-			<div class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-gray-100 sm:p-4">
+			<div data-tour="student-dash-trust" class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-gray-100 sm:p-4">
 				<div class="flex items-center gap-3 sm:gap-4">
 					<!-- Gauge -->
 					<div class="flex shrink-0 flex-col items-center gap-1">
@@ -680,7 +680,7 @@
 			</div>
 		{:else}
 			<!-- ── KPI cards ───────────────────────────────────────────────────── -->
-			<div class="grid grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-3">
+			<div data-tour="student-dash-stats" class="grid grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-3">
 				<button
 					onclick={() => goto('/student/borrowed')}
 					class="rounded-xl border border-violet-200 bg-violet-50 p-3 shadow-sm hover:shadow-md hover:border-violet-300/60 hover:bg-violet-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-violet-500/20 sm:p-4"

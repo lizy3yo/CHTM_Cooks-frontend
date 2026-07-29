@@ -631,7 +631,7 @@
 	>
 		{#snippet footerAction()}
 			{#if selectedItemRequestEntry}
-				<div class="flex min-w-0 flex-1 items-center justify-center gap-2 sm:flex-none">
+				<div data-tour="student-catalog-actions" class="flex min-w-0 flex-1 items-center justify-center gap-2 sm:flex-none">
 					{#if !selectedItem?.isrequired}
 						<button
 							type="button"
@@ -722,6 +722,7 @@
 			{:else}
 				<button
 					type="button"
+					data-tour="student-catalog-actions"
 					onclick={() => selectedItem && requestItem(selectedItem)}
 					disabled={availableQuantityForItem(selectedItem!) === 0 || hasNoEnrollment || hasPendingRequest}
 					class="min-w-0 flex-1 rounded-lg bg-pink-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
@@ -737,7 +738,7 @@
 	<!-- Page Header -->
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Equipment Catalog</h1>
+			<h1 data-tour="student-catalog-header" class="text-2xl font-bold text-gray-900 sm:text-3xl">Equipment Catalog</h1>
 			<p class="mt-1 text-sm text-gray-500">Browse and request available cooking equipment</p>
 		</div>
 		<div class="flex items-center gap-2">
@@ -819,6 +820,7 @@
 			<input
 				type="text"
 				id="search"
+				data-tour="student-catalog-search"
 				value={searchQuery}
 				onchange={(e) => handleSearch((e.target as HTMLInputElement).value)}
 				oninput={(e) => handleSearch((e.target as HTMLInputElement).value)}
@@ -1024,6 +1026,7 @@
 					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div
+						data-tour="student-catalog-item"
 						class="group flex cursor-pointer flex-col overflow-hidden rounded-lg bg-white shadow-sm transition-all hover:shadow-md"
 						onclick={() => openDetailsModal(item)}
 						role="button"

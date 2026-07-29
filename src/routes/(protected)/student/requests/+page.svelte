@@ -1051,7 +1051,7 @@
 <div class="space-y-6">
 	<!-- Page Header -->
 	<div>
-		<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">My Requests</h1>
+		<h1 data-tour="student-requests-header" class="text-2xl font-bold text-gray-900 sm:text-3xl">My Requests</h1>
 		<p class="mt-1 text-sm text-gray-500">Track your equipment borrow requests</p>
 	</div>
 

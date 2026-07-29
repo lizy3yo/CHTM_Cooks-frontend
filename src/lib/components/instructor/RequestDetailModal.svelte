@@ -45,7 +45,7 @@ let {
 							</svg>
 						</div>
 						<div class="min-w-0 flex-1">
-							<h2 class="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Request Details</h2>
+							<h2 data-tour="instructor-request-detail" class="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Request Details</h2>
 							<p class="mt-0.5 font-mono text-xs sm:text-sm font-semibold text-pink-600">{request.id}</p>
 							<div class="mt-2 inline-flex items-center gap-2 rounded-full px-2.5 py-1 sm:px-3 sm:py-1.5 {getStatusColor(request.status, request.rawStatus, request.rejectionReason)} shadow-sm ring-1 ring-black/5">
 								<span class="h-1.5 w-1.5 rounded-full bg-current"></span>

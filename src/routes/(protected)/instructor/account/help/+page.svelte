@@ -2,6 +2,7 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { toastStore } from '$lib/stores/toast';
 	import { user } from '$lib/stores/auth';
+	import { requestTour, resetOnboarding } from '$lib/stores/onboarding';
 	import {
 		MessageCircle,
 		HelpCircle,
@@ -399,11 +400,34 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<div class="border-b border-gray-200 pb-5">
-		<h1 class="text-3xl font-bold text-gray-900">Help & Support</h1>
-		<p class="mt-2 text-sm text-gray-600">
-			Find answers to common questions or contact the support team directly.
-		</p>
+	<div class="flex flex-col gap-4 border-b border-gray-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
+		<div>
+			<h1 class="text-3xl font-bold text-gray-900">Help & Support</h1>
+			<p class="mt-2 text-sm text-gray-600">
+				Find answers to common questions or contact the support team directly.
+			</p>
+		</div>
+		<div class="flex shrink-0 items-center gap-2">
+			<button
+				onclick={() => requestTour('instructor')}
+				class="inline-flex items-center gap-2 rounded-lg border border-pink-200 bg-pink-50 px-4 py-2 text-sm font-semibold text-pink-700 transition-colors hover:bg-pink-100"
+			>
+				<HelpCircle size={16} />Take the guided tour
+			</button>
+			<button
+				onclick={() => {
+					if (!$user?.id) return;
+					resetOnboarding('instructor', $user.id);
+					toastStore.success(
+						'The welcome tour will show again next time you open your dashboard.',
+						'Tour reset'
+					);
+				}}
+				class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+			>
+				Reset tour
+			</button>
+		</div>
 	</div>
 
 	<div class="border-b border-gray-200">

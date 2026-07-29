@@ -5,6 +5,7 @@
 	import CustodianBottomNav from '$lib/components/custodian/CustodianBottomNav.svelte';
 	import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
 	import ConfirmDialogContainer from '$lib/components/ui/ConfirmDialogContainer.svelte';
+	import OnboardingController from '$lib/components/onboarding/OnboardingController.svelte';
 	import { sidebarCollapsed } from '$lib/stores/custodian';
 	import { authStore } from '$lib/stores/auth';
 	import type { Snippet } from 'svelte';
@@ -37,3 +38,4 @@
 <CustodianBottomNav />
 <ToastContainer />
 <ConfirmDialogContainer />
+<OnboardingController role="custodian" />

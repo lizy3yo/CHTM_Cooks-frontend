@@ -3421,7 +3421,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 	<!-- Header -->
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 		<div class="min-w-0">
-			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Inventory Management</h1>
+			<h1 data-tour="instructor-inventory-header" class="text-2xl font-bold text-gray-900 sm:text-3xl">Inventory Management</h1>
 			<p class="mt-1 text-sm text-gray-500">Manage kitchen laboratory inventory and stock levels</p>
 		</div>
 

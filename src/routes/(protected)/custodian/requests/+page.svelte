@@ -1097,7 +1097,7 @@
 	<div class="space-y-6">
 		<!-- Header -->
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Requests & Borrowed Items</h1>
+			<h1 data-tour="custodian-requests-header" class="text-2xl font-bold text-gray-900 sm:text-3xl">Requests & Borrowed Items</h1>
 			<p class="mt-1 text-sm text-gray-500">Prepare, distribute, and receive borrowed equipment</p>
 		</div>
 
@@ -1426,6 +1426,7 @@
 										<!-- svelte-ignore a11y_click_events_have_key_events -->
 										<!-- svelte-ignore a11y_no_static_element_interactions -->
 										<div
+											data-tour="custodian-request-row"
 											class="cursor-pointer overflow-hidden rounded-xl border-l-4 bg-white shadow-sm ring-1 ring-gray-200 transition-all hover:shadow-md {getCardBorderColor(
 												request.status,
 												request.rawStatus,
@@ -1688,7 +1689,7 @@
 											<!-- svelte-ignore a11y_click_events_have_key_events -->
 											<!-- svelte-ignore a11y_no_static_element_interactions -->
 											<div
-												class="grid cursor-pointer gap-3 p-4 transition-colors md:grid-cols-[32px_0.6fr_1fr_2.4fr_0.8fr_120px] md:items-start md:gap-4 {highlightedRequestId ===
+												data-tour="custodian-request-row" class="grid cursor-pointer gap-3 p-4 transition-colors md:grid-cols-[32px_0.6fr_1fr_2.4fr_0.8fr_120px] md:items-start md:gap-4 {highlightedRequestId ===
 												request.rawId
 													? 'bg-pink-50/50 ring-1 ring-pink-300 ring-inset'
 													: 'hover:bg-gray-50'}"
@@ -1951,7 +1952,7 @@
 								</svg>
 							</div>
 							<div class="min-w-0 flex-1">
-								<h2 class="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
+								<h2 data-tour="custodian-request-detail" class="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
 									Request Details
 								</h2>
 								<p class="mt-0.5 font-mono text-xs font-semibold text-pink-600 sm:text-sm">

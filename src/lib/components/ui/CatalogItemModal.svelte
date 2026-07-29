@@ -138,6 +138,7 @@
 							{/if}
 							<button
 								type="button"
+								data-tour="catalog-modal-close"
 								onclick={onClose}
 								class="rounded-lg sm:rounded-xl p-1.5 sm:p-2 text-gray-400 transition-all hover:bg-gray-100 hover:text-gray-600 active:scale-95"
 								aria-label="Close modal"

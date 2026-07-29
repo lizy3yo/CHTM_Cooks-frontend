@@ -872,7 +872,7 @@
 	<!-- ─── HEADER ──────────────────────────────────────────────────────────── -->
 	<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Alternative Transactions</h1>
+			<h1 data-tour="custodian-transactions-header" class="text-2xl font-bold text-gray-900 sm:text-3xl">Alternative Transactions</h1>
 			<p class="mt-1 text-sm text-gray-500">
 				Dedicated workflows for desk walk-ins and confidential admin operations.
 			</p>

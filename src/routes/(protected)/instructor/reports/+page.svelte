@@ -614,7 +614,7 @@
 	<!-- Header -->
 	<div class="flex items-start justify-between gap-4">
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Reports & Analytics</h1>
+			<h1 data-tour="instructor-reports-header" class="text-2xl font-bold text-gray-900 sm:text-3xl">Reports & Analytics</h1>
 			<p class="mt-1 text-sm text-gray-500">
 				Professional borrowing, loss/damage, and inventory analytics
 			</p>
