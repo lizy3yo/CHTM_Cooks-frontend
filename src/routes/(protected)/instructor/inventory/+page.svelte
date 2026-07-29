@@ -3767,9 +3767,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 													</div>
 													<p
 														class="text-[8px] leading-tight font-bold tracking-tight text-gray-500 uppercase sm:text-[9px] lg:text-xs"
-													>
-														Released
-													</p>
+													>Active Borrowers</p>
 												</div>
 												<p class="text-lg font-bold text-blue-600 sm:text-xl lg:text-2xl flex items-center gap-1.5">
 													{selectedItem.released ?? 0}
@@ -4679,7 +4677,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 														type="button"
 														onclick={() => openBorrowersModal(item)}
 														class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 ring-1 ring-blue-600/10 hover:bg-blue-100 transition-colors"
-														title="Released (Click to view active borrowers)"
+														title="Active Borrowers"
 													>
 														{item.released ?? 0}
 													</button>
