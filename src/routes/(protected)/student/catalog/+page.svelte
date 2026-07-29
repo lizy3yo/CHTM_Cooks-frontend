@@ -13,6 +13,7 @@
 	import { toastStore } from '$lib/stores/toast';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import CatalogItemModal from '$lib/components/ui/CatalogItemModal.svelte';
+	import { formatSpecification } from '$lib/utils/specification';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import { ClipboardList, Package, PackageOpen, ShoppingCart } from 'lucide-svelte';
 
@@ -1084,7 +1085,7 @@
 									title={item.specification}
 									aria-label="Specification"
 								>
-									<span class="font-semibold text-gray-500">Specification:</span> {item.specification}
+									<span class="font-semibold text-gray-500">Specification:</span> {formatSpecification(item.specification)}
 								</p>
 							{/if}
 
@@ -1245,7 +1246,7 @@
 								title={item.specification || getCategoryName(item.categoryId)}
 							>
 								{#if item.specification}
-									<span class="font-semibold text-gray-500">Specification:</span> {item.specification}
+									<span class="font-semibold text-gray-500">Specification:</span> {formatSpecification(item.specification)}
 								{:else}
 									{getCategoryName(item.categoryId)}
 								{/if}

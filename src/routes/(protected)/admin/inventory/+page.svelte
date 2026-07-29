@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { formatSpecification } from "$lib/utils/specification";
 	import { page } from '$app/stores';
 	import { goto, afterNavigate } from '$app/navigation';
 	import { onMount } from 'svelte';
@@ -4175,7 +4176,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 													{truncateName(item.name)}
 												</p>
 												<p class="truncate text-xs text-gray-500">
-													{item.specification || item.category}
+													{formatSpecification(item.specification) || item.category}
 												</p>
 												<div class="mt-1 flex flex-wrap items-center gap-1">
 													{#if item.isrequired}
@@ -4304,7 +4305,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 														>{item.category}</span
 													>
 												</td>
-												<td class="px-6 py-4 text-sm text-gray-700 text-center">{item.specification || '—'}</td>
+												<td class="px-6 py-4 text-sm text-gray-700 text-center">{formatSpecification(item.specification) || '—'}</td>
 												<td
 													class="px-6 py-4 text-sm whitespace-nowrap text-center"
 													onclick={(e) => e.stopPropagation()}
