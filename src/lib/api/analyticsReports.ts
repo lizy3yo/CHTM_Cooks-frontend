@@ -267,12 +267,38 @@ export interface StudentRiskEntry {
 	trustScore?: number;
 }
 
+export interface WalkInSummary {
+	total: number;
+	out: number;
+	returned: number;
+	issues: number;
+	itemsOut: number;
+	uniquePeople: number;
+}
+
+export interface WalkInReportTransaction {
+	id: string;
+	studentName: string;
+	studentId: string;
+	email: string;
+	classCode: string;
+	purpose: string;
+	usageLocation: string;
+	borrowDate: string;
+	returnDate: string;
+	status: 'borrowed' | 'returned' | 'missing';
+	returnedAt?: string | null;
+	notes?: string | null;
+	items: { name: string; quantity: number; category: string }[];
+}
+
 export interface AnalyticsReport {
 	meta: {
 		period: AnalyticsPeriod;
 		from: string;
 		to: string;
 		generatedAt: string;
+		filtersLabel?: string;
 	};
 	borrowRequests: {
 		requestsOverTime: RequestsOverTimePoint[];
@@ -315,6 +341,10 @@ export interface AnalyticsReport {
 		overdueStudents: StudentRiskEntry[];
 		trustScores: StudentRiskEntry[];
 	};
+	walkIns: {
+		summary: WalkInSummary;
+		transactions: WalkInReportTransaction[];
+	};
 }
 
 interface CacheEntry {
@@ -323,7 +353,7 @@ interface CacheEntry {
 }
 
 const CLIENT_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours - aligned with server cache and session timeout
-const CLIENT_CACHE_VERSION = 'v10';
+const CLIENT_CACHE_VERSION = 'v11';
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<AnalyticsReport>>();
 
@@ -537,6 +567,17 @@ function normalizeAnalyticsReport(raw: AnalyticsReport): AnalyticsReport {
 			donationTotals: replacement.donationTotals ?? [],
 			obligationsByCategory: replacement.obligationsByCategory ?? [],
 			avgResolutionDays: replacement.avgResolutionDays ?? 0
+		},
+		walkIns: {
+			summary: raw.walkIns?.summary ?? {
+				total: 0,
+				out: 0,
+				returned: 0,
+				issues: 0,
+				itemsOut: 0,
+				uniquePeople: 0
+			},
+			transactions: raw.walkIns?.transactions ?? []
 		}
 	};
 }

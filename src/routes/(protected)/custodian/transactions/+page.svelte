@@ -7,6 +7,7 @@
 	import { toastStore } from '$lib/stores/toast';
 	import { confirmStore } from '$lib/stores/confirm';
 	import { donationsAPI, type DonationResponse, type CreateDonationRequest } from '$lib/api/donations';
+	import { walkInTransactionsAPI, type WalkInTransactionRecord } from '$lib/api/walkInTransactions';
 	import {
 		Plus,
 		Search,
@@ -27,7 +28,8 @@
 		X,
 		Info,
 		Heart,
-		Upload
+		Upload,
+		Download
 	} from 'lucide-svelte';
 
 	// ─── TYPES FOR STATE MANAGEMENT ──────────────────────────────────────────
@@ -39,21 +41,8 @@
 		selectedQty: number;
 	}
 
-	interface WalkInTransaction {
-		id: string;
-		studentName: string;
-		studentId: string;
-		email: string;
-		classCode: string;
-		purpose: string;
-		usageLocation: 'school' | 'outdoor';
-		borrowDate: string;
-		returnDate: string;
-		items: { itemId: string; name: string; quantity: number; category: string }[];
-		status: 'borrowed' | 'returned' | 'missing';
-		returnedAt?: string;
-		notes?: string;
-	}
+	// Walk-in transactions are persisted server-side (see walkInTransactionsAPI).
+	type WalkInTransaction = WalkInTransactionRecord;
 
 	interface ConfidentialRequest {
 		id: string;
@@ -89,6 +78,7 @@
 	// Filters
 	let walkInSearchQuery = $state('');
 	let walkInStatusFilter = $state<'all' | 'borrowed' | 'returned' | 'missing'>('all');
+	let walkInPersonFilter = $state<string>(''); // '' = all people, otherwise a studentId
 	let confidentialSearchQuery = $state('');
 	let confidentialStatusFilter = $state<'all' | 'preparing' | 'dispatched' | 'resolved'>('all');
 	let donationSearchQuery = $state('');
@@ -373,9 +363,56 @@
 				w.studentId.toLowerCase().includes(walkInSearchQuery.toLowerCase()) ||
 				w.items.some((i) => i.name.toLowerCase().includes(walkInSearchQuery.toLowerCase()));
 			const matchesStatus = walkInStatusFilter === 'all' || w.status === walkInStatusFilter;
-			return matchesSearch && matchesStatus;
+			const matchesPerson = walkInPersonFilter === '' || w.studentId === walkInPersonFilter;
+			return matchesSearch && matchesStatus && matchesPerson;
 		})
 	);
+
+	// Unique people appearing in the walk-in transactions (for the Person filter).
+	const walkInPeople = $derived.by(() => {
+		const map = new Map<string, string>();
+		for (const w of walkIns) if (w.studentId) map.set(w.studentId, w.studentName);
+		return [...map.entries()]
+			.map(([id, name]) => ({ id, name }))
+			.sort((a, b) => a.name.localeCompare(b.name));
+	});
+
+	// Export the currently-filtered walk-in transactions (respects person, status,
+	// and search) to a CSV the custodian can open in Excel.
+	function exportWalkIns() {
+		const rows = displayWalkIns;
+		if (rows.length === 0) {
+			toastStore.error('No walk-in transactions match the current filters.');
+			return;
+		}
+		const headers = [
+			'Transaction ID', 'Student Name', 'Student ID', 'Email', 'Class Code',
+			'Purpose', 'Usage Location', 'Borrow Date', 'Return Date', 'Status', 'Items', 'Notes'
+		];
+		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+		const lines = [headers.map(esc).join(',')];
+		for (const w of rows) {
+			const items = w.items.map((i) => `${i.name} x${i.quantity}`).join('; ');
+			lines.push(
+				[w.id, w.studentName, w.studentId, w.email, w.classCode, w.purpose,
+				 w.usageLocation, w.borrowDate, w.returnDate, w.status, items, w.notes ?? '']
+					.map(esc)
+					.join(',')
+			);
+		}
+		const csv = '﻿' + lines.join('\r\n'); // BOM so Excel reads UTF-8 correctly
+		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+		const who = walkInPersonFilter
+			? (walkInPeople.find((p) => p.id === walkInPersonFilter)?.name ?? 'person').replace(/\s+/g, '-')
+			: 'all-people';
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `walk-in-transactions-${who}.csv`;
+		a.click();
+		URL.revokeObjectURL(url);
+		toastStore.success(`Exported ${rows.length} walk-in transaction${rows.length === 1 ? '' : 's'}.`);
+	}
 
 	const displayConfidentialRequests = $derived(
 		confidentialRequests.filter((c) => {
@@ -408,10 +445,12 @@
 			classCodesList = classesRes.classCodes || [];
 			categoriesList = categoriesRes.categories || [];
 
-			// Load Alternative Transactions from localStorage
-			const savedWalkIns = localStorage.getItem('chtm_walk_in_transactions');
-			if (savedWalkIns) {
-				walkIns = JSON.parse(savedWalkIns);
+			// Load walk-in transactions from the backend (shared across all staff).
+			try {
+				const walkInRes = await walkInTransactionsAPI.list({ limit: 500 });
+				walkIns = walkInRes.walkIns || [];
+			} catch (walkInErr) {
+				console.error('Failed to load walk-in transactions:', walkInErr);
 			}
 
 			const savedConfidential = localStorage.getItem('chtm_confidential_requests');
@@ -434,10 +473,6 @@
 			loading = false;
 		}
 	});
-
-	function saveWalkIns() {
-		localStorage.setItem('chtm_walk_in_transactions', JSON.stringify(walkIns));
-	}
 
 	function saveConfidential() {
 		localStorage.setItem('chtm_confidential_requests', JSON.stringify(confidentialRequests));
@@ -544,28 +579,25 @@
 				});
 			}
 
-			// Record transaction
-			const newTx: WalkInTransaction = {
-				id: 'W-' + Math.random().toString(36).substring(2, 8).toUpperCase(),
+			// Persist the transaction to the backend (shared across all staff roles).
+			const created = await walkInTransactionsAPI.create({
 				studentName: name,
 				studentId: sid,
+				studentUserId: isCustomBorrower ? null : selectedStudent?.id,
 				email: email,
 				classCode: selectedClassCode || 'N/A (Guest)',
 				purpose: purpose || 'Walk-in checkout',
 				usageLocation,
-				borrowDate: new Date().toISOString(),
 				returnDate: new Date(returnDate).toISOString(),
 				items: walkInCart.map((i) => ({
 					itemId: i.id,
 					name: i.name,
 					quantity: i.selectedQty,
 					category: i.category
-				})),
-				status: 'borrowed'
-			};
+				}))
+			});
 
-			walkIns = [newTx, ...walkIns];
-			saveWalkIns();
+			walkIns = [created, ...walkIns];
 
 			// Refresh local inventory cache
 			const freshInv = await inventoryItemsAPI.getAll({ limit: 100 });
@@ -640,24 +672,20 @@
 				}
 			}
 
-			// Update transaction status
-			const updatedStatus = missingOrDamagedDetected ? 'missing' : 'returned';
-			walkIns = walkIns.map((w) => {
-				if (w.id === selectedWalkIn?.id) {
-					return {
-						...w,
-						status: updatedStatus,
-						returnedAt: new Date().toISOString(),
-						notes: Object.values(returnInspection)
-							.map((v) => v.notes)
-							.filter(Boolean)
-							.join('; ')
-					};
-				}
-				return w;
+			// Persist the return / inspection outcome to the backend.
+			const updated = await walkInTransactionsAPI.markReturned(selectedWalkIn.id, {
+				status: missingOrDamagedDetected ? 'missing' : 'returned',
+				notes: Object.values(returnInspection)
+					.map((v) => v.notes)
+					.filter(Boolean)
+					.join('; '),
+				items: selectedWalkIn.items.map((i) => ({
+					itemId: i.itemId,
+					inspectionStatus: returnInspection[i.itemId]?.status ?? 'good'
+				}))
 			});
 
-			saveWalkIns();
+			walkIns = walkIns.map((w) => (w.id === updated.id ? updated : w));
 
 			// Refresh local inventory cache
 			const freshInv = await inventoryItemsAPI.getAll({ limit: 100 });
@@ -1043,11 +1071,21 @@
 					/>
 				</div>
 
-				<!-- Status Filter -->
-				<div class="flex items-center gap-2">
-					<span class="text-xs font-semibold text-gray-400 uppercase">Filter:</span>
+				<!-- Person Filter + Status Filter + Export -->
+				<div class="flex flex-wrap items-center gap-2">
+					<select
+						bind:value={walkInPersonFilter}
+						aria-label="Filter by person"
+						class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
+					>
+						<option value="">All People</option>
+						{#each walkInPeople as person}
+							<option value={person.id}>{person.name}</option>
+						{/each}
+					</select>
 					<select
 						bind:value={walkInStatusFilter}
+						aria-label="Filter by status"
 						class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 					>
 						<option value="all">All Transactions</option>
@@ -1055,6 +1093,14 @@
 						<option value="returned">Returned (Cleared)</option>
 						<option value="missing">Issues (Missing/Damaged)</option>
 					</select>
+					<button
+						type="button"
+						onclick={exportWalkIns}
+						class="inline-flex items-center gap-2 rounded-lg bg-pink-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
+					>
+						<Download size={15} />
+						Export
+					</button>
 				</div>
 			</div>
 

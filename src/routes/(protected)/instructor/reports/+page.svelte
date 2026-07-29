@@ -11,7 +11,14 @@
 	} from '$lib/api/analyticsReports';
 	import { classCodesAPI, type ClassCodeResponse } from '$lib/api/classCodes';
 	import { usersAPI, type UserResponse } from '$lib/api/users';
+	import AnalyticsExportModal, {
+		type AnalyticsExportConfig,
+		type ExportSection
+	} from '$lib/components/reports/AnalyticsExportModal.svelte';
+	import { get } from 'svelte/store';
 	import { toastStore } from '$lib/stores/toast';
+	import { downloadAnalyticsExcel } from '$lib/utils/analyticsExcel';
+	import { user } from '$lib/stores/auth';
 	import ReportsSkeletonLoader from '$lib/components/ui/ReportsSkeletonLoader.svelte';
 	import {
 		TrendingUp,
@@ -25,8 +32,12 @@
 	} from 'lucide-svelte';
 
 	import ProcessedTransactionsTab from '$lib/components/reports/ProcessedTransactionsTab.svelte';
+	import BorrowingDetailModal from '$lib/components/reports/BorrowingDetailModal.svelte';
+	import StudentRiskDetailModal from '$lib/components/reports/StudentRiskDetailModal.svelte';
+	import StockAdjustmentDetailModal from '$lib/components/reports/StockAdjustmentDetailModal.svelte';
+	import WalkInTransactionsTab from '$lib/components/reports/WalkInTransactionsTab.svelte';
 
-	type Tab = 'overview' | 'borrowing' | 'loss-damage' | 'inventory' | 'students' | 'processed';
+	type Tab = 'overview' | 'borrowing' | 'inventory' | 'students' | 'processed' | 'walk-in';
 	type DatePreset = 'today' | 'last7' | 'mtd' | 'custom';
 
 	const initialTo = todayISO();
@@ -36,7 +47,12 @@
 		: null;
 
 	let report = $state<AnalyticsReport | null>(initialReport);
+	let borrowDetail = $state<{ kind: 'item' | 'borrower'; subject: any } | null>(null);
+	let adjDetail = $state<any | null>(null);
+	let studentDetail = $state<any | null>(null);
 	let summaryReport = $state<Partial<AnalyticsReport> | null>(null);
+	// Walk-in transactions come from the shared analytics payload (all staff roles see them).
+	const walkInSource = $derived(report?.walkIns ?? summaryReport?.walkIns ?? null);
 	let loading = $state(!initialReport);
 	let overviewLoading = $state(!initialReport);
 	let borrowingLoading = $state(!initialReport);
@@ -67,6 +83,21 @@
 	let selectedInstructorId = $state<string>('');
 	let selectedStudentId = $state<string>('');
 	let selectedCustodianId = $state<string>('');
+
+	// Export scope — defaults to the page filters when the modal opens, but can
+	// be changed to a single class / student (or "All") just for the export.
+	let exportClassCodeId = $state<string>('');
+	let exportStudentId = $state<string>('');
+	let exportInstructorId = $state<string>('');
+	let exportCustodianId = $state<string>('');
+
+	function openExportModal() {
+		exportClassCodeId = selectedClassCodeId;
+		exportStudentId = selectedStudentId;
+		exportInstructorId = selectedInstructorId;
+		exportCustodianId = selectedCustodianId;
+		showExportModal = true;
+	}
 
 	const numberFmt = new Intl.NumberFormat();
 
@@ -551,55 +582,70 @@
 
 	let exporting = $state(false);
 
-	async function exportXLSX() {
+	const EXPORT_SECTIONS: ExportSection[] = [
+		{ id: 'overview', label: 'Overview', description: 'Totals, top items, status count, overdue list' },
+		{ id: 'borrowing', label: 'Borrowing Analytics', description: 'Time charts, borrower metrics, individual transactions' },
+		{ id: 'inventory', label: 'Inventory', description: 'EOM Variance, damage rates, alert logs, required counts' },
+		{ id: 'students', label: 'Student Risk', description: 'Trust scores, risk tiers, repeat offender profiles' },
+		{ id: 'walk-in', label: 'Walk-in Transactions', description: 'Desk walk-in checkouts to students and guests' }
+	];
+
+	const classOptions = $derived(
+		classCodes.map((c) => ({ id: c.id, label: `${c.courseCode} - ${c.section} (${c.code})` }))
+	);
+	const studentOptions = $derived(students.map((s) => ({ id: s.id, label: `${s.firstName} ${s.lastName}` })));
+	const instructorOptions = $derived(instructors.map((i) => ({ id: i.id, label: `${i.firstName} ${i.lastName}` })));
+	const custodianOptions = $derived(custodians.map((c) => ({ id: c.id, label: `${c.firstName} ${c.lastName}` })));
+	// Walk-in borrowers (registered students or guests) seen in the loaded data.
+	const walkInPeopleOptions = $derived(
+		Array.from(
+			new Map(
+				(walkInSource?.transactions ?? []).map((w) => [
+					w.studentName,
+					{ id: w.studentName, label: w.studentId ? `${w.studentName} · ${w.studentId}` : w.studentName }
+				])
+			).values()
+		)
+	);
+
+	async function handleGenerate(cfg: AnalyticsExportConfig) {
 		if (!report || exporting) return;
 		exporting = true;
 		try {
 			const params = new URLSearchParams();
-
-			if (exportTimeframeMode === 'current') {
+			if (cfg.timeframeMode === 'current') {
 				params.set('period', period);
 				if (customFrom) params.set('from', customFrom);
 				if (customTo) params.set('to', customTo);
 			} else {
 				params.set('period', 'month');
-				if (exportCustomFrom) params.set('from', exportCustomFrom);
-				if (exportCustomTo) params.set('to', exportCustomTo);
+				if (cfg.customFrom) params.set('from', cfg.customFrom);
+				if (cfg.customTo) params.set('to', cfg.customTo);
 			}
+			for (const id of cfg.classIds) params.append('class_code_id[]', id);
+			for (const id of cfg.instructorIds) params.append('instructor_id[]', id);
+			for (const id of cfg.studentIds) params.append('student_id[]', id);
+			for (const id of cfg.custodianIds) params.append('custodian_id[]', id);
+			for (const p of cfg.walkInPersons) params.append('walk_in_person[]', p);
+			for (const key of cfg.sections) params.append('sections[]', key);
 
-			if (selectedClassCodeId) params.set('class_code_id', selectedClassCodeId);
-			if (selectedInstructorId) params.set('instructor_id', selectedInstructorId);
-			if (selectedStudentId) params.set('student_id', selectedStudentId);
-			if (selectedCustodianId) params.set('custodian_id', selectedCustodianId);
-
-			const selectedKeys = Object.entries(exportSections)
-				.filter(([_, enabled]) => enabled)
-				.map(([key]) => key);
-
-			if (selectedKeys.length > 0) {
-				for (const key of selectedKeys) {
-					params.append('sections', key);
-				}
-			} else {
-				toastStore.error('Please select at least one data section to export.');
-				exporting = false;
-				return;
-			}
-
-			const res = await fetch(`/api/reports/analytics/export?${params.toString()}`);
+			const res = await fetch(`/api/reports/analytics?${params.toString()}`, { credentials: 'include' });
 			if (!res.ok) throw new Error('Export failed');
+			const data = (await res.json()) as AnalyticsReport;
 
-			const blob = await res.blob();
-			const url = URL.createObjectURL(blob);
-			const link = document.createElement('a');
-			link.href = url;
-			const disposition = res.headers.get('Content-Disposition') ?? '';
-			const match = disposition.match(/filename="([^"]+)"/);
-			link.download = match?.[1] ?? 'chtm-cooks-analytics.xlsx';
-			document.body.appendChild(link);
-			link.click();
-			document.body.removeChild(link);
-			URL.revokeObjectURL(url);
+			const rangeLabel =
+				cfg.timeframeMode === 'custom' && cfg.customFrom && cfg.customTo
+					? `${cfg.customFrom} – ${cfg.customTo}`
+					: formatRangeLabel();
+			const u = get(user);
+			await downloadAnalyticsExcel({
+				report: data,
+				rangeLabel,
+				filtersLabel: data?.meta?.filtersLabel ?? 'All',
+				userName: u ? `${u.firstName} ${u.lastName}`.trim().toUpperCase() : '',
+				sections: cfg.sections,
+				fileName: `chtm-cooks-analytics-${new Date().toISOString().slice(0, 10)}.xlsx`
+			});
 			toastStore.success('Report exported as Excel file');
 			showExportModal = false;
 		} catch {
@@ -608,6 +654,7 @@
 			exporting = false;
 		}
 	}
+
 </script>
 
 <div class="space-y-6">
@@ -616,12 +663,12 @@
 		<div>
 			<h1 data-tour="instructor-reports-header" class="text-2xl font-bold text-gray-900 sm:text-3xl">Reports & Analytics</h1>
 			<p class="mt-1 text-sm text-gray-500">
-				Professional borrowing, loss/damage, and inventory analytics
+				Professional borrowing and inventory analytics
 			</p>
 		</div>
 		<button
 			onclick={() => {
-				if (report) showExportModal = true;
+				if (report) openExportModal();
 			}}
 			disabled={!report || exporting}
 			class="flex shrink-0 items-center gap-2 rounded-lg bg-pink-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -671,7 +718,7 @@
 		{/if}
 
 		<div class="border-t border-gray-100 pt-4">
-			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 				<div>
 					<label for="filter-class" class="block text-xs font-semibold uppercase tracking-wider text-gray-500">Class / Section</label>
 					<select id="filter-class" bind:value={selectedClassCodeId} class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500">
@@ -715,7 +762,7 @@
 	<div class="rounded-xl border border-gray-200 bg-white shadow-sm">
 		<div class="border-b border-gray-200 px-4">
 			<nav class="flex gap-4 overflow-x-auto" aria-label="Report tabs">
-				{#each [{ id: 'overview', label: 'Overview', icon: BarChart3 }, { id: 'borrowing', label: 'Borrowing Analytics', icon: Package }, { id: 'loss-damage', label: 'Loss & Damage', icon: AlertTriangle }, { id: 'inventory', label: 'Inventory', icon: Package }, { id: 'students', label: 'Student Risk', icon: Users }, { id: 'processed', label: 'Processed Transactions', icon: FileText }] as tab}
+				{#each [{ id: 'overview', label: 'Overview', icon: BarChart3 }, { id: 'borrowing', label: 'Borrowing Analytics', icon: Package }, { id: 'inventory', label: 'Inventory', icon: Package }, { id: 'students', label: 'Student Risk', icon: Users }, { id: 'processed', label: 'Processed Transactions', icon: FileText }, { id: 'walk-in', label: 'Walk-in Transactions', icon: Users }] as tab}
 					<button
 						onclick={() => (activeTab = tab.id as Tab)}
 						class="flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition {activeTab ===
@@ -730,7 +777,7 @@
 			</nav>
 		</div>
 
-		{#if (activeTab === 'overview' && overviewLoading) || (activeTab === 'borrowing' && borrowingLoading) || (activeTab === 'loss-damage' && lossDamageLoading) || (activeTab === 'inventory' && inventoryLoading) || (activeTab === 'students' && studentRiskLoading)}
+		{#if (activeTab === 'overview' && overviewLoading) || (activeTab === 'borrowing' && borrowingLoading) || (activeTab === 'inventory' && inventoryLoading) || (activeTab === 'students' && studentRiskLoading)}
 			<div class="p-6">
 				<ReportsSkeletonLoader view={activeTab} />
 			</div>
@@ -744,6 +791,8 @@
 			<div class="p-6">
 				<ProcessedTransactionsTab />
 			</div>
+		{:else if activeTab === 'walk-in'}
+			<WalkInTransactionsTab data={walkInSource} />
 		{:else if (activeTab === 'overview' && summaryReport) || report}
 			<div class="space-y-6 p-6">
 				{#if activeTab === 'overview'}
@@ -801,24 +850,6 @@
 								</div>
 								<div class="rounded-full bg-rose-100 p-3">
 									<AlertTriangle size={20} class="text-rose-600" />
-								</div>
-							</div>
-						</div>
-						<div
-							class="rounded-xl border border-gray-200 bg-linear-to-br from-amber-50 to-white p-5"
-						>
-							<div class="flex items-start justify-between">
-								<div>
-									<p class="text-sm font-semibold text-gray-700">Loss/Damage (MTD)</p>
-									<p class="mt-2 text-3xl font-bold text-amber-600">
-										{numberFmt.format(lossAndDamageSummary.mtdTotal)}
-									</p>
-									<p class="mt-1 text-xs text-gray-600">
-										{lossAndDamageSummary.mtdMissing} missing, {lossAndDamageSummary.mtdDamaged} damaged
-									</p>
-								</div>
-								<div class="rounded-full bg-amber-100 p-3">
-									<AlertTriangle size={20} class="text-amber-600" />
 								</div>
 							</div>
 						</div>
@@ -929,45 +960,7 @@
 						</div>
 					</div>
 
-					<div class="grid gap-4 lg:grid-cols-2">
-						<div class="rounded-xl border border-gray-200 bg-white p-5">
-							<div class="flex items-center justify-between">
-								<h3 class="text-lg font-semibold text-gray-900">Loss vs Damage</h3>
-								<p class="text-xs text-gray-500">Selected range</p>
-							</div>
-							<div class="mt-4 grid gap-4 sm:grid-cols-[160px_1fr] sm:items-center">
-								<div
-									class="mx-auto h-40 w-40 rounded-full"
-									style={`background: ${lossDamageDonutStyle}`}
-								>
-									<div
-										class="mx-auto mt-8 flex h-24 w-24 items-center justify-center rounded-full bg-white text-center"
-									>
-										<div>
-											<p class="text-xl font-bold text-gray-900">
-												{numberFmt.format(lossDamageTotal)}
-											</p>
-											<p class="text-[11px] tracking-wide text-gray-500 uppercase">Incidents</p>
-										</div>
-									</div>
-								</div>
-								<div class="space-y-2">
-									<div class="rounded-lg bg-rose-50 px-3 py-2">
-										<p class="text-sm font-semibold text-rose-700">
-											Missing: {numberFmt.format(lossAndDamageSummary.periodMissing)}
-										</p>
-									</div>
-									<div class="rounded-lg bg-amber-50 px-3 py-2">
-										<p class="text-sm font-semibold text-amber-700">
-											Damaged: {numberFmt.format(lossAndDamageSummary.periodDamaged)}
-										</p>
-									</div>
-									<p class="text-xs text-gray-500">
-										This chart complements the detailed Loss & Damage tab.
-									</p>
-								</div>
-							</div>
-						</div>
+					<div class="grid gap-4">
 
 						<div class="rounded-xl border border-gray-200 bg-white p-5">
 							<div class="flex items-center justify-between">
@@ -1089,7 +1082,7 @@
 									{:else}
 										<div class="max-h-80 space-y-2 overflow-y-auto">
 											{#each report.borrowRequests.itemsBorrowed as item}
-												<div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+												<button type="button" onclick={() => (borrowDetail = { kind: 'item', subject: item })} class="w-full cursor-pointer rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition hover:border-pink-300 hover:bg-pink-50/40">
 													<div class="flex items-center justify-between">
 														<div class="min-w-0 flex-1">
 															<p class="truncate text-sm font-medium text-gray-900">{item.name}</p>
@@ -1100,7 +1093,7 @@
 															<p class="text-xs text-gray-500">{item.borrowCount} req</p>
 														</div>
 													</div>
-												</div>
+												</button>
 											{/each}
 										</div>
 									{/if}
@@ -1133,7 +1126,7 @@
 									{:else}
 										<div class="max-h-80 space-y-2 overflow-y-auto">
 											{#each report.borrowRequests.borrowers as borrower}
-												<div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+												<button type="button" onclick={() => (borrowDetail = { kind: 'borrower', subject: borrower })} class="w-full cursor-pointer rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition hover:border-pink-300 hover:bg-pink-50/40">
 													<p class="text-sm font-medium text-gray-900">{borrower.studentName}</p>
 													<p class="text-xs text-gray-600">{borrower.studentEmail}</p>
 													<div class="mt-1 flex items-center gap-3 text-xs text-gray-500">
@@ -1141,163 +1134,11 @@
 														<span>•</span>
 														<span>{borrower.totalItems} items</span>
 													</div>
-												</div>
+												</button>
 											{/each}
 										</div>
 									{/if}
 								</div>
-							</div>
-						</div>
-					</div>
-				{/if}
-
-				{#if activeTab === 'loss-damage'}
-					<div class="space-y-6">
-						<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-							<div
-								class="rounded-xl border border-gray-200 bg-linear-to-br from-rose-50 to-white p-5"
-							>
-								<p class="text-sm font-semibold text-gray-700">Missing</p>
-								<p class="mt-2 text-3xl font-bold text-rose-700">
-									{lossAndDamageSummary.periodMissing}
-								</p>
-								<p class="mt-2 text-xs text-gray-500">Items marked missing in selected range</p>
-							</div>
-							<div
-								class="rounded-xl border border-gray-200 bg-linear-to-br from-amber-50 to-white p-5"
-							>
-								<p class="text-sm font-semibold text-gray-700">Damaged</p>
-								<p class="mt-2 text-3xl font-bold text-amber-700">
-									{lossAndDamageSummary.periodDamaged}
-								</p>
-								<p class="mt-2 text-xs text-gray-500">Items marked damaged in selected range</p>
-							</div>
-							<div
-								class="rounded-xl border border-gray-200 bg-linear-to-br from-gray-50 to-white p-5"
-							>
-								<p class="text-sm font-semibold text-gray-700">Total Incidents</p>
-								<p class="mt-2 text-3xl font-bold text-gray-900">
-									{lossAndDamageSummary.periodTotal}
-								</p>
-								<p class="mt-2 text-xs text-gray-500">
-									Missing + Damaged combined in selected range
-								</p>
-							</div>
-						</div>
-
-						<div class="rounded-xl border border-gray-200 bg-white p-5">
-							<div class="mb-4 flex items-center justify-between">
-								<h3 class="text-lg font-semibold text-gray-900">Loss & Damage Tracking</h3>
-								<p class="text-sm text-gray-600">
-									{report.lossAndDamage.tracking.length} incidents
-								</p>
-							</div>
-							<div class="overflow-x-auto">
-								<table class="min-w-full divide-y divide-gray-200">
-									<thead class="bg-gray-50">
-										<tr>
-											<th
-												class="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-600 uppercase"
-												>Type</th
-											>
-											<th
-												class="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-600 uppercase"
-												>Item</th
-											>
-											<th
-												class="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-600 uppercase"
-												>Student</th
-											>
-											<th
-												class="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-600 uppercase"
-												>Status</th
-											>
-											<th
-												class="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-600 uppercase"
-												>Incident Date</th
-											>
-											<th
-												class="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-600 uppercase"
-												>Days to Resolve</th
-											>
-											<th
-												class="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-600 uppercase"
-												>Request Status</th
-											>
-										</tr>
-									</thead>
-									<tbody class="divide-y divide-gray-200 bg-white">
-										{#if report.lossAndDamage.tracking.length === 0}
-											<tr>
-												<td colspan="7" class="px-4 py-6">
-													<div
-														class="flex min-h-80 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-6 py-10 text-center"
-													>
-														<div class="max-w-sm">
-															<div
-																class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-gray-100"
-															>
-																<FileText size={32} class="text-pink-600" />
-															</div>
-															<h4 class="mt-6 text-base font-semibold text-gray-900">
-																No loss or damage incidents
-															</h4>
-															<p class="mt-2 text-sm leading-6 text-gray-600">
-																Items reported as missing or damaged will appear here in the
-																selected period.
-															</p>
-														</div>
-													</div>
-												</td>
-											</tr>
-										{:else}
-											{#each enrichedLossDamageTracking as item}
-												<tr class="hover:bg-gray-50">
-													<td class="px-4 py-3">
-														<span
-															class="inline-flex rounded-full px-2 py-1 text-xs font-medium {item.type ===
-															'missing'
-																? 'bg-rose-100 text-rose-700'
-																: 'bg-amber-100 text-amber-700'}"
-														>
-															{item.type}
-														</span>
-													</td>
-													<td class="px-4 py-3">
-														<p class="text-sm font-medium text-gray-900">{item.itemName}</p>
-														<p class="text-xs text-gray-600">{item.itemCategory}</p>
-													</td>
-													<td class="px-4 py-3 text-sm text-gray-900">{item.studentName}</td>
-													<td class="px-4 py-3">
-														<span
-															class="inline-flex rounded-full px-2 py-1 text-xs font-medium {item.status ===
-															'pending'
-																? 'bg-yellow-100 text-yellow-700'
-																: 'bg-green-100 text-green-700'}"
-														>
-															{item.status}
-														</span>
-													</td>
-													<td class="px-4 py-3 text-sm text-gray-700"
-														>{new Date(item.incidentDate).toLocaleDateString()}</td
-													>
-													<td
-														class="px-4 py-3 text-sm font-medium {(item.daysToResolve !== undefined && item.daysToResolve !== null)
-															? 'text-gray-900'
-															: 'text-gray-400'}"
-													>
-														{(item.daysToResolve !== undefined && item.daysToResolve !== null)
-															? (item.daysToResolve === 1 ? '1 day' : `${item.daysToResolve} days`)
-															: 'Pending'}
-													</td>
-													<td class="px-4 py-3 text-sm text-gray-700"
-														>{item.requestStatus || 'N/A'}</td
-													>
-												</tr>
-											{/each}
-										{/if}
-									</tbody>
-								</table>
 							</div>
 						</div>
 					</div>
@@ -1400,7 +1241,7 @@
 									{:else}
 										<div class="max-h-104 space-y-2 overflow-y-auto pr-1">
 											{#each filteredInventoryVarianceRows as item}
-												<div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+												<button type="button" onclick={() => (borrowDetail = { kind: 'item', subject: item })} class="w-full cursor-pointer rounded-lg border border-gray-200 bg-gray-50 p-4 text-left transition hover:border-pink-300 hover:bg-pink-50/40">
 													<div class="flex items-start justify-between gap-4">
 														<div class="min-w-0 flex-1">
 															<p class="truncate text-sm font-semibold text-gray-900">
@@ -1434,7 +1275,7 @@
 															</span>
 														</div>
 													</div>
-												</div>
+												</button>
 											{/each}
 										</div>
 									{/if}
@@ -1478,7 +1319,7 @@
 												{@const driver = report.inventory.varianceDrivers.find(
 													(row) => row.id === item._id
 												)}
-												<div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+												<button type="button" onclick={() => (borrowDetail = { kind: 'item', subject: item })} class="w-full cursor-pointer rounded-lg border border-gray-200 bg-gray-50 p-4 text-left transition hover:border-pink-300 hover:bg-pink-50/40">
 													<div class="flex items-start justify-between gap-4">
 														<div class="min-w-0 flex-1">
 															<p class="truncate text-sm font-semibold text-gray-900">
@@ -1509,7 +1350,7 @@
 															</p>
 														</div>
 													</div>
-												</div>
+												</button>
 											{/each}
 										</div>
 									{/if}
@@ -1592,7 +1433,7 @@
 											</tr>
 										{:else}
 											{#each report.inventory.stockAdjustments as adj}
-												<tr class="hover:bg-gray-50">
+												<tr class="cursor-pointer hover:bg-pink-50/40" onclick={() => (adjDetail = adj)}>
 													<td class="px-4 py-3 text-sm font-semibold text-gray-900"
 														>{adj.itemName}</td
 													>
@@ -1734,7 +1575,7 @@
 								{:else}
 									<div class="max-h-120 space-y-2 overflow-y-auto pr-1">
 										{#each studentTrustScores as student}
-											<div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+											<button type="button" onclick={() => (studentDetail = student)} class="w-full cursor-pointer rounded-lg border border-gray-200 bg-gray-50 p-4 text-left transition hover:border-pink-300 hover:bg-pink-50/40">
 												<div class="flex items-start justify-between gap-4">
 													<div class="min-w-0 flex-1">
 														<div class="flex flex-wrap items-center gap-2">
@@ -1779,7 +1620,7 @@
 														style={`width: ${Math.max(0, Math.min(100, student.trustScore ?? 0))}%`}
 													></div>
 												</div>
-											</div>
+											</button>
 										{/each}
 									</div>
 								{/if}
@@ -1792,229 +1633,39 @@
 		{/if}
 	</div>
 
-	{#if showExportModal}
-		<div
-			class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 p-4 backdrop-blur-sm"
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby="export-modal-title"
-		>
-			<div
-				class="w-full max-w-lg rounded-2xl border border-gray-100 bg-white p-6 shadow-xl transition-all"
-			>
-				<!-- Modal Header -->
-				<div class="flex items-center justify-between border-b border-gray-100 pb-4">
-					<div>
-						<h3 id="export-modal-title" class="text-lg font-bold text-gray-900">
-							Export Analytics Report
-						</h3>
-						<p class="text-xs text-gray-500">
-							Configure range and sections for your spreadsheet export
-						</p>
-					</div>
-					<button
-						type="button"
-						onclick={() => (showExportModal = false)}
-						class="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-						aria-label="Close export settings modal"
-					>
-						<X size={18} />
-					</button>
-				</div>
-
-				<!-- Modal Content -->
-				<div class="mt-4 space-y-5">
-					<!-- Timeframe Picker Section -->
-					<div class="space-y-2">
-						<span class="block text-sm font-semibold text-gray-700">Export Timeframe</span>
-						<div class="grid grid-cols-2 gap-3">
-							<button
-								type="button"
-								onclick={() => (exportTimeframeMode = 'current')}
-								class="flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition {exportTimeframeMode ===
-								'current'
-									? 'border-pink-600 bg-pink-50/40 text-pink-700 ring-1 ring-pink-600'
-									: 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}"
-							>
-								<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
-									>Current View</span
-								>
-								<span class="text-sm font-medium text-gray-800">{formatRangeLabel()}</span>
-							</button>
-							<button
-								type="button"
-								onclick={() => (exportTimeframeMode = 'custom')}
-								class="flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition {exportTimeframeMode ===
-								'custom'
-									? 'border-pink-600 bg-pink-50/40 text-pink-700 ring-1 ring-pink-600'
-									: 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}"
-							>
-								<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
-									>Custom Range</span
-								>
-								<span class="text-sm font-medium text-gray-800">Select specific dates</span>
-							</button>
-						</div>
-
-						{#if exportTimeframeMode === 'custom'}
-							<div
-								class="mt-3 grid grid-cols-2 gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3"
-							>
-								<div>
-									<label for="export-from" class="text-gray-650 block text-xs font-medium"
-										>Start Date</label
-									>
-									<input
-										id="export-from"
-										type="date"
-										bind:value={exportCustomFrom}
-										class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-pink-500 focus:outline-none"
-									/>
-								</div>
-								<div>
-									<label for="export-to" class="text-gray-650 block text-xs font-medium"
-										>End Date</label
-									>
-									<input
-										id="export-to"
-										type="date"
-										bind:value={exportCustomTo}
-										class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-pink-500 focus:outline-none"
-									/>
-								</div>
-							</div>
-						{/if}
-					</div>
-
-					<!-- Section Selector -->
-					<div class="space-y-2">
-						<div class="flex items-center justify-between">
-							<span class="text-sm font-semibold text-gray-700">Include Data Sections</span>
-							<div class="flex gap-2">
-								<button
-									type="button"
-									onclick={() => toggleAllSections(true)}
-									class="text-xs font-semibold text-pink-600 transition hover:text-pink-700"
-								>
-									Select All
-								</button>
-								<span class="text-xs text-gray-300">|</span>
-								<button
-									type="button"
-									onclick={() => toggleAllSections(false)}
-									class="text-xs font-semibold text-pink-600 transition hover:text-pink-700"
-								>
-									Clear All
-								</button>
-							</div>
-						</div>
-
-						<div
-							class="max-h-48 space-y-2 overflow-y-auto rounded-xl border border-gray-200 bg-white p-3.5"
-						>
-							<label
-								class="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 transition hover:bg-gray-50"
-							>
-								<input
-									type="checkbox"
-									bind:checked={exportSections.overview}
-									class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-								/>
-								<div class="flex flex-col">
-									<span class="text-sm font-semibold text-gray-800">Overview</span>
-									<span class="text-xs text-gray-500"
-										>Totals, top items, status count, overdue list</span
-									>
-								</div>
-							</label>
-
-							<label
-								class="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 transition hover:bg-gray-50"
-							>
-								<input
-									type="checkbox"
-									bind:checked={exportSections.borrowing}
-									class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-								/>
-								<div class="flex flex-col">
-									<span class="text-sm font-semibold text-gray-800">Borrowing Analytics</span>
-									<span class="text-xs text-gray-500"
-										>Time charts, borrower metrics, individual transactions</span
-									>
-								</div>
-							</label>
-
-							<label
-								class="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 transition hover:bg-gray-50"
-							>
-								<input
-									type="checkbox"
-									bind:checked={exportSections['loss-damage']}
-									class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-								/>
-								<div class="flex flex-col">
-									<span class="text-sm font-semibold text-gray-800">Loss & Damage</span>
-									<span class="text-xs text-gray-500"
-										>Missing/damaged logs, replacements, cost breakdown</span
-									>
-								</div>
-							</label>
-
-							<label
-								class="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 transition hover:bg-gray-50"
-							>
-								<input
-									type="checkbox"
-									bind:checked={exportSections.inventory}
-									class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-								/>
-								<div class="flex flex-col">
-									<span class="text-sm font-semibold text-gray-800">Inventory</span>
-									<span class="text-xs text-gray-500"
-										>EOM Variance, damage rates, alert logs, required counts</span
-									>
-								</div>
-							</label>
-
-							<label
-								class="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 transition hover:bg-gray-50"
-							>
-								<input
-									type="checkbox"
-									bind:checked={exportSections.students}
-									class="h-4.5 w-4.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-								/>
-								<div class="flex flex-col">
-									<span class="text-sm font-semibold text-gray-800">Student Risk</span>
-									<span class="text-xs text-gray-500"
-										>Trust scores, risk tiers, repeat offender profiles</span
-									>
-								</div>
-							</label>
-						</div>
-					</div>
-				</div>
-
-				<!-- Footer Buttons -->
-				<div class="mt-6 flex items-center justify-end gap-3 border-t border-gray-100 pt-4">
-					<button
-						type="button"
-						onclick={() => (showExportModal = false)}
-						class="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-					>
-						Cancel
-					</button>
-					<button
-						type="button"
-						onclick={exportXLSX}
-						disabled={exporting || !Object.values(exportSections).some(Boolean)}
-						class="flex items-center gap-2 rounded-xl bg-pink-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-50"
-					>
-						<Download size={15} />
-						{exporting ? 'Generating Report…' : 'Generate Excel'}
-					</button>
-				</div>
-			</div>
-		</div>
-	{/if}
+	<BorrowingDetailModal
+		open={!!borrowDetail}
+		kind={borrowDetail?.kind}
+		subject={borrowDetail?.subject ?? null}
+		entries={report?.borrowRequests?.itemEntries ?? []}
+		onClose={() => (borrowDetail = null)}
+	/>
+	<StudentRiskDetailModal
+		open={!!studentDetail}
+		student={studentDetail}
+		entries={report?.borrowRequests?.itemEntries ?? []}
+		onClose={() => (studentDetail = null)}
+	/>
+	<StockAdjustmentDetailModal
+		open={!!adjDetail}
+		adj={adjDetail}
+		onClose={() => (adjDetail = null)}
+	/>
+	<AnalyticsExportModal
+		open={showExportModal}
+		onClose={() => (showExportModal = false)}
+		{exporting}
+		currentRangeLabel={formatRangeLabel()}
+		classes={classOptions}
+		students={studentOptions}
+		instructors={instructorOptions}
+		custodians={custodianOptions}
+		walkInPeople={walkInPeopleOptions}
+		defaultClassId={selectedClassCodeId}
+		defaultStudentId={selectedStudentId}
+		defaultInstructorId={selectedInstructorId}
+		defaultCustodianId={selectedCustodianId}
+		sections={EXPORT_SECTIONS}
+		onGenerate={handleGenerate}
+	/>
 </div>
