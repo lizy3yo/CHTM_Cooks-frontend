@@ -37,6 +37,8 @@
 	} from 'lucide-svelte';
 
 	import ProcessedTransactionsTab from '$lib/components/reports/ProcessedTransactionsTab.svelte';
+	import StockAdjustmentsTable from '$lib/components/reports/StockAdjustmentsTable.svelte';
+	import DonorContributionsTable from '$lib/components/reports/DonorContributionsTable.svelte';
 	import BorrowingDetailModal from '$lib/components/reports/BorrowingDetailModal.svelte';
 	import StudentRiskDetailModal from '$lib/components/reports/StudentRiskDetailModal.svelte';
 	import StockAdjustmentDetailModal from '$lib/components/reports/StockAdjustmentDetailModal.svelte';
@@ -2239,136 +2241,9 @@
 								</div>
 							</div>
 
-							<div class="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-								<div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-									<div>
-										<h3 class="text-lg font-semibold text-gray-900">Stock Adjustment Activity</h3>
-										<p class="mt-1 text-sm text-gray-600">Inventory modifications</p>
-									</div>
-									<div class="flex gap-3 text-xs">
-										<span class="rounded-lg bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700"
-											>Restocked: {numberFmt.format(
-												inventorySummary.stockAdjustmentsAdded ?? 0
-											)}</span
-										>
-										<span class="rounded-lg bg-rose-50 px-2.5 py-1 font-medium text-rose-700"
-											>Loss/Damage: -{numberFmt.format(
-												inventorySummary.stockAdjustmentsDeducted ?? 0
-											)}</span
-										>
-									</div>
-								</div>
-
-								<div class="overflow-x-auto">
-									<table class="min-w-full divide-y divide-gray-200">
-										<thead class="bg-gray-50">
-											<tr>
-												<th
-													class="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-600 uppercase"
-													>Item</th
-												>
-												<th
-													class="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-600 uppercase"
-													>Type</th
-												>
-												<th
-													class="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-600 uppercase"
-													>Quantity</th
-												>
-												<th
-													class="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-600 uppercase"
-													>Reason / Notes</th
-												>
-												<th
-													class="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-600 uppercase"
-													>Date</th
-												>
-											</tr>
-										</thead>
-										<tbody class="divide-y divide-gray-200 bg-white">
-											{#if !report.inventory.stockAdjustments || report.inventory.stockAdjustments.length === 0}
-												<tr>
-													<td colspan="5" class="px-4 py-12 text-center text-sm text-gray-500">
-														<div class="flex flex-col items-center justify-center">
-															<div class="mb-2 rounded-full bg-gray-100 p-3 text-gray-400">
-																<svg
-																	class="h-6 w-6"
-																	fill="none"
-																	viewBox="0 0 24 24"
-																	stroke="currentColor"
-																>
-																	<path
-																		stroke-linecap="round"
-																		stroke-linejoin="round"
-																		stroke-width="2"
-																		d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
-																	/>
-																</svg>
-															</div>
-															<p class="font-medium text-gray-900">No stock adjustments logged</p>
-															<p class="mt-1 text-xs text-gray-600">
-																Manual inventory adjustments will appear here in the selected
-																period.
-															</p>
-														</div>
-													</td>
-												</tr>
-											{:else}
-												{#each report.inventory.stockAdjustments as adj}
-													<tr class="cursor-pointer hover:bg-pink-50/40" onclick={() => (adjDetail = adj)}>
-														<td class="px-4 py-3 text-sm font-semibold text-gray-900"
-															>{adj.itemName}</td
-														>
-														<td class="px-4 py-3 text-sm">
-															<span
-																class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {adj.quantity >
-																0
-																	? 'bg-emerald-100 text-emerald-800'
-																	: 'bg-rose-100 text-rose-800'}"
-															>
-																{adj.quantity > 0 ? 'Restock' : 'Loss/Damage'}
-															</span>
-														</td>
-														<td
-															class="px-4 py-3 text-sm font-bold {adj.quantity > 0
-																? 'text-emerald-700'
-																: 'text-rose-700'}"
-														>
-															{adj.quantity > 0 ? '+' : ''}{adj.quantity}
-														</td>
-														<td class="px-4 py-3 text-sm text-gray-600">
-															{#if adj.purpose && !['Manual Stock Restock', 'Manual Stock Damage/Loss', 'Restock', 'Damage/Loss'].includes(adj.purpose)}
-																<div class="font-medium text-gray-800">
-																	{adj.purpose}
-																</div>
-																{#if adj.notes}
-																	<div class="mt-0.5 text-xs text-gray-500">{adj.notes}</div>
-																{/if}
-															{:else}
-																<div class="text-gray-800">
-																	{#if adj.notes}
-																		{adj.notes}
-																	{:else}
-																		<span class="text-gray-400 italic">No notes provided</span>
-																	{/if}
-																</div>
-															{/if}
-														</td>
-														<td class="px-4 py-3 text-sm text-gray-500">
-															{new Date(adj.createdAt || adj.date).toLocaleDateString(undefined, {
-																month: 'short',
-																day: 'numeric',
-																year: 'numeric',
-																hour: '2-digit',
-																minute: '2-digit'
-															})}
-														</td>
-													</tr>
-												{/each}
-											{/if}
-										</tbody>
-									</table>
-								</div>
+							<div class="mt-6 space-y-6">
+								<StockAdjustmentsTable adjustments={report.inventory.stockAdjustments} />
+								<DonorContributionsTable donations={report.inventory.donationRecords} />
 							</div>
 						</div>
 					{/if}

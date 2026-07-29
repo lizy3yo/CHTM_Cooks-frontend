@@ -200,6 +200,20 @@ export interface StockAdjustmentEntry {
 	date: string;
 }
 
+export interface DonationRecord {
+	id: string;
+	receiptNumber: string;
+	donorName: string;
+	itemName: string;
+	quantity: number;
+	unit?: string | null;
+	purpose?: string | null;
+	notes?: string | null;
+	inventoryAction: 'new_item' | 'add_to_existing';
+	date?: string | null;
+	createdAt: string;
+}
+
 export interface ReplacementSummary {
 	totalItemsPending: number; // Total items awaiting replacement
 	totalItemsReplaced: number; // Total items already replaced
@@ -326,6 +340,7 @@ export interface AnalyticsReport {
 		varianceDrivers: InventoryVarianceDriver[];
 		stockAlerts: StockAlert[];
 		stockAdjustments: StockAdjustmentEntry[];
+		donationRecords: DonationRecord[];
 	};
 	replacement: {
 		summary: ReplacementSummary;
@@ -353,7 +368,7 @@ interface CacheEntry {
 }
 
 const CLIENT_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours - aligned with server cache and session timeout
-const CLIENT_CACHE_VERSION = 'v11';
+const CLIENT_CACHE_VERSION = 'v12';
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<AnalyticsReport>>();
 
@@ -546,7 +561,8 @@ function normalizeAnalyticsReport(raw: AnalyticsReport): AnalyticsReport {
 			eomVariance: inventory.eomVariance ?? [],
 			varianceDrivers: inventory.varianceDrivers ?? [],
 			stockAlerts: inventory.stockAlerts ?? [],
-			stockAdjustments: inventory.stockAdjustments ?? []
+			stockAdjustments: inventory.stockAdjustments ?? [],
+			donationRecords: inventory.donationRecords ?? []
 		},
 		replacement: {
 			...replacement,
@@ -665,12 +681,23 @@ export async function fetchAnalytics(opts: FetchAnalyticsOptions = {}): Promise<
 
 // ── SSE subscription ──────────────────────────────────────────────────────────
 
+/** How often to poll the change signature (ms). */
+const SIGNATURE_POLL_MS = 5000;
+
+/**
+ * Last signature seen in this browser session. Module-level (not per-component)
+ * so a change made on another page — e.g. adjusting stock in Inventory — is
+ * detected the moment a reports page mounts, instead of serving the stale cache.
+ */
+let knownSignature: string | null = null;
+
 export function subscribeToAnalyticsChanges(onRefresh: () => void): () => void {
 	if (!browser) return () => {};
 
 	let es: EventSource | null = null;
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+	let pollTimer: ReturnType<typeof setInterval> | null = null;
 	let stopped = false;
 
 	const scheduleRefresh = () => {
@@ -698,12 +725,48 @@ export function subscribeToAnalyticsChanges(onRefresh: () => void): () => void {
 		});
 	}
 
+	/**
+	 * Polling fallback. The SSE loop is skipped on single-worker PHP dev servers
+	 * (it would block every other request), so this cheap signature check is what
+	 * actually delivers near-real-time updates in development — and it also covers
+	 * proxies that silently drop long-lived SSE connections in production.
+	 */
+	async function checkSignature() {
+		if (stopped || document.hidden) return;
+		try {
+			const res = await fetch('/api/reports/analytics/signature', { credentials: 'include' });
+			if (!res.ok) return;
+			const { signature } = (await res.json()) as { signature?: string };
+			if (!signature) return;
+			if (knownSignature === null) {
+				knownSignature = signature;
+				return;
+			}
+			if (signature !== knownSignature) {
+				knownSignature = signature;
+				scheduleRefresh();
+			}
+		} catch {
+			// Network hiccup — try again on the next tick.
+		}
+	}
+
+	// Re-check as soon as the tab regains focus so a background change shows immediately.
+	const onVisible = () => {
+		if (!document.hidden) void checkSignature();
+	};
+
 	connect();
+	void checkSignature();
+	pollTimer = setInterval(() => void checkSignature(), SIGNATURE_POLL_MS);
+	document.addEventListener('visibilitychange', onVisible);
 
 	return () => {
 		stopped = true;
 		if (reconnectTimer) clearTimeout(reconnectTimer);
 		if (refreshTimer) clearTimeout(refreshTimer);
+		if (pollTimer) clearInterval(pollTimer);
+		document.removeEventListener('visibilitychange', onVisible);
 		es?.close();
 	};
 }

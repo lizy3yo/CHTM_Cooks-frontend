@@ -117,7 +117,7 @@
 									</span>
 								{/if}
 								<span class="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
-									Qty: {currentCount}
+									{hideInventoryFields ? 'Available' : 'Qty'}: {currentCount}
 								</span>
 							</div>
 						</div>
@@ -230,7 +230,7 @@
 										<p class="text-sm text-gray-700">{item.specification || 'No specification provided'}</p>
 									</div>
 									<div>
-										<p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Quantity</p>
+										<p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">{hideInventoryFields ? 'Available' : 'Quantity'}</p>
 										<p class="text-sm font-semibold text-gray-900">{currentCount}</p>
 									</div>
 								</div>

@@ -242,6 +242,18 @@ export async function downloadAnalyticsExcel(opts: AnalyticsExcelOptions): Promi
 			const aRows = inv.stockAdjustments.map((a) => [a.itemName, a.quantity > 0 ? 'Restock' : 'Loss/Damage', a.quantity, a.purpose ?? '', a.notes ?? '', fmtDate(a.createdAt ?? a.date)]);
 			buildSheet(wb, { name: 'Stock Adjustments', band: 'STOCK ADJUSTMENTS', header: ['Item', 'Type', 'Qty', 'Reason', 'Notes', 'Date'], rows: aRows, widths: [26, 16, 8, 22, 24, 18] }, logoIds, meta);
 		}
+		if (inv.donationRecords?.length) {
+			const dRows = inv.donationRecords.map((d) => [
+				d.donorName,
+				d.itemName,
+				d.quantity,
+				d.unit ?? '',
+				d.purpose ?? '',
+				d.receiptNumber ?? '',
+				fmtDate(d.date ?? d.createdAt)
+			]);
+			buildSheet(wb, { name: 'Donor Contributions', band: 'DONOR CONTRIBUTIONS', header: ['Donor', 'Item', 'Qty', 'Unit', 'Purpose', 'Receipt', 'Date'], rows: dRows, widths: [24, 26, 8, 12, 24, 18, 18] }, logoIds, meta);
+		}
 	}
 
 	if (want('students')) {

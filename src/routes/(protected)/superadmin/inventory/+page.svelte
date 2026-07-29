@@ -36,6 +36,8 @@
 	import ActionMenu from '$lib/components/ui/ActionMenu.svelte';
 	import ExportModal from '$lib/components/custodian/ExportModal.svelte';
 	import ItemBorrowersModal from '$lib/components/ui/ItemBorrowersModal.svelte';
+	import ReleasedItemsModal from '$lib/components/ui/ReleasedItemsModal.svelte';
+	import InventoryStockModal from '$lib/components/ui/InventoryStockModal.svelte';
 	import {
 		fetchAnalytics,
 		peekCachedAnalytics,
@@ -51,6 +53,9 @@
 	let statusFilter = $state('all');
 	let showAddItemModal = $state(false);
 	let showBorrowersModal = $state(false);
+	let showReleasedModal = $state(false);
+	let showStockModal = $state(false);
+	let stockModalMode = $state<'total' | 'available' | 'flow'>('total');
 	let selectedBorrowersItem = $state<InventoryItem | null>(null);
 
 	function openBorrowersModal(item: InventoryItem) {
@@ -4110,7 +4115,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 		{:else}
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
 				<!-- Card 1: Total Lab Stock -->
-				<div class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200">
+				<button type="button" onclick={() => { stockModalMode = 'total'; showStockModal = true; }} class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200 w-full text-left cursor-pointer hover:shadow-md active:scale-[0.99]">
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Total Lab Stock</p>
@@ -4124,10 +4129,10 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							<Package size={24} class="hidden text-blue-600 sm:block" />
 						</div>
 					</div>
-				</div>
+				</button>
 
 				<!-- Card 2: Physical Available -->
-				<div class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200">
+				<button type="button" onclick={() => { stockModalMode = 'available'; showStockModal = true; }} class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200 w-full text-left cursor-pointer hover:shadow-md active:scale-[0.99]">
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Physical Available</p>
@@ -4145,10 +4150,10 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							</svg>
 						</div>
 					</div>
-				</div>
+				</button>
 
 				<!-- Card 3: Out / Released -->
-				<div class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200">
+				<button type="button" onclick={() => (showReleasedModal = true)} class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200 w-full text-left cursor-pointer hover:border-blue-300 hover:shadow-md active:scale-[0.99]">
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Released / Out</p>
@@ -4166,10 +4171,10 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							</svg>
 						</div>
 					</div>
-				</div>
+				</button>
 
 				<!-- Card 4: Flow Balance -->
-				<div class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200">
+				<button type="button" onclick={() => { stockModalMode = 'flow'; showStockModal = true; }} class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200 w-full text-left cursor-pointer hover:shadow-md active:scale-[0.99]">
 					<div class="flex flex-col justify-between h-full">
 						<div class="flex items-center justify-between gap-2 mb-2">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Stock Flow Balance</p>
@@ -4195,7 +4200,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							</div>
 						</div>
 					</div>
-				</div>
+				</button>
 			</div>
 		{/if}
 
@@ -7070,6 +7075,14 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 			</div>
 		</div>
 	</div>
+{/if}
+
+{#if showStockModal}
+	<InventoryStockModal {items} mode={stockModalMode} onClose={() => (showStockModal = false)} />
+{/if}
+
+{#if showReleasedModal}
+	<ReleasedItemsModal onClose={() => (showReleasedModal = false)} />
 {/if}
 
 {#if showBorrowersModal && selectedBorrowersItem}
