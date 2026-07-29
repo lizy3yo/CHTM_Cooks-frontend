@@ -98,8 +98,10 @@
 
 	// Split features for the left/right staggered wings while preserving original indices
 	const indexedSmart = smartFeatures.map((f, idx) => ({ feature: f, idx }));
-	const leftFeatures = indexedSmart.filter(item => item.idx % 2 === 0);
-	const rightFeatures = indexedSmart.filter(item => item.idx % 2 === 1);
+	// Both feature cards stacked vertically in the left wing; right wing stays
+	// empty so the centre mockup remains centred.
+	const leftFeatures = indexedSmart;
+	const rightFeatures = indexedSmart.filter(() => false);
 
 	function nextStep() {
 		activeStep = (activeStep + 1) % totalSteps;
@@ -2536,25 +2538,31 @@
 		justify-content: center;
 	}
 
+	/* Coverflow: every card is absolutely centred, then shifted/scaled/faded by its
+	   distance (--offset / --abs-offset) from the active one. The active card stays
+	   perfectly centred; neighbours fan out smoothly on both sides and distant
+	   cards fade away instead of spilling off the edge. */
 	.carousel-slide-stacked {
-		position: relative;
-		height: 380px;
-		width: 290px;
-		transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		height: 470px;
+		width: 380px;
+		margin: 0;
+		transform-origin: center center;
+		transform: translate(-50%, -50%) translateX(calc(var(--offset) * 255px))
+			scale(calc(1 - var(--abs-offset) * 0.18));
+		opacity: calc(1.15 - var(--abs-offset) * 0.42);
+		transition:
+			transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+			opacity 0.55s ease;
 		cursor: pointer;
-		margin-left: -130px; /* Compress them heavily to overlap deeply */
-		flex-shrink: 0;
-	}
-
-	.carousel-slide-stacked:first-child {
-		margin-left: 0;
+		will-change: transform, opacity;
+		backface-visibility: hidden;
 	}
 
 	.carousel-slide-stacked.active {
-		height: 480px;
-		width: 390px;
-		margin-left: -30px;
-		margin-right: 30px;
+		opacity: 1;
 		cursor: default;
 	}
 
@@ -2696,7 +2704,9 @@
 		justify-content: space-between;
 		padding: 0 2rem;
 		pointer-events: none;
-		z-index: 10;
+		/* Above the cards (max z-index 20) so the arrows always receive the click
+		   instead of an overlapping card, which would jump to that card and skip. */
+		z-index: 40;
 	}
 
 	.nav-btn {
@@ -2765,16 +2775,14 @@
 		}
 
 		.carousel-slide-stacked {
-			width: 220px;
-			height: 320px;
-			margin-left: -90px;
+			width: 300px;
+			height: 380px;
+			transform: translate(-50%, -50%) translateX(calc(var(--offset) * 190px))
+				scale(calc(1 - var(--abs-offset) * 0.18));
 		}
 
 		.carousel-slide-stacked.active {
-			width: 320px;
-			height: 420px;
-			margin-left: -20px;
-			margin-right: 20px;
+			opacity: 1;
 		}
 
 		.flow-card {
