@@ -16,8 +16,11 @@
 import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
 
-/** Bump when the tour content changes enough to warrant showing it again. */
-export const ONBOARDING_VERSION = 1;
+/**
+ * Bump when the tour content changes enough to warrant showing it again.
+ * v2 — the tour is now presented page by page, so everyone sees it once more.
+ */
+export const ONBOARDING_VERSION = 2;
 
 export type OnboardingRole = 'student' | 'instructor' | 'custodian';
 
@@ -25,9 +28,22 @@ function storageKey(role: OnboardingRole, userId: string): string {
 	return `chtm.onboarding.v${ONBOARDING_VERSION}.${role}.${userId}`;
 }
 
-/** True once the given user has completed or skipped the tour on this device. */
-export function hasCompletedOnboarding(role: OnboardingRole, userId: string): boolean {
+/**
+ * True once the given user has completed or skipped the tour.
+ *
+ * The account-level value (`onboardingCompletedAt`, returned by the auth
+ * endpoints) is the source of truth: it follows the user across devices and is
+ * empty for every newly created or imported account, so those users always get
+ * the tour on their first login. The device flag is only a fallback for when
+ * that value isn't available (older session payload, offline).
+ */
+export function hasCompletedOnboarding(
+	role: OnboardingRole,
+	userId: string,
+	serverCompletedAt?: string | null
+): boolean {
 	if (!browser || !userId) return true; // fail safe: never nag when we can't tell
+	if (serverCompletedAt !== undefined) return serverCompletedAt !== null;
 	try {
 		return localStorage.getItem(storageKey(role, userId)) === '1';
 	} catch {
@@ -36,7 +52,11 @@ export function hasCompletedOnboarding(role: OnboardingRole, userId: string): bo
 	}
 }
 
-/** Persist that the user has finished (or skipped) the tour. */
+/**
+ * Persist that the user has finished (or skipped) the tour — on their account
+ * (so it sticks on every device) and on this device (so the current session
+ * settles immediately even if the request is slow or fails).
+ */
 export function markOnboardingComplete(role: OnboardingRole, userId: string): void {
 	if (!browser || !userId) return;
 	try {
@@ -44,6 +64,14 @@ export function markOnboardingComplete(role: OnboardingRole, userId: string): vo
 	} catch {
 		// Best-effort; if storage is unavailable the tour simply shows again.
 	}
+	void fetch('/api/auth/onboarding/complete', {
+		method: 'POST',
+		credentials: 'include',
+		headers: { 'Content-Type': 'application/json' }
+	}).catch(() => {
+		// Offline / transient failure: the device flag still suppresses the tour
+		// here, and the next completion attempt will sync the account.
+	});
 }
 
 /**
@@ -59,6 +87,13 @@ export function resetOnboarding(role: OnboardingRole, userId: string): void {
 	} catch {
 		/* ignore */
 	}
+	// Clear it on the account too, so the reset holds on every device.
+	void fetch('/api/auth/onboarding/complete', {
+		method: 'DELETE',
+		credentials: 'include'
+	}).catch(() => {
+		/* device flag is already cleared; account sync is best-effort */
+	});
 	resetNonce += 1;
 	tourReset.set({ role, nonce: resetNonce });
 }

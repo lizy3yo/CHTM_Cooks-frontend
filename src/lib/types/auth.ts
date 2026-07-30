@@ -14,6 +14,12 @@ export interface UserResponse {
 	yearLevel?: string;
 	block?: string;
 	agreedToTerms?: boolean;
+	/**
+	 * When the user finished (or skipped) the guided tour. Null/absent means the
+	 * account has never been through it — true for every newly created or
+	 * imported user — so the first-run tour greets them on their next login.
+	 */
+	onboardingCompletedAt?: string | null;
 }
 
 export interface AuthResponse {
