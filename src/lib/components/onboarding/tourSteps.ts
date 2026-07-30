@@ -525,3 +525,61 @@ export const tourSteps: Record<OnboardingRole, TourStep[]> = {
 	instructor,
 	custodian
 };
+
+// ── Page-by-page chaptering ──────────────────────────────────────────────────
+// The tour is presented one page at a time: consecutive steps that live on the
+// same route form a chapter, so the user always knows which page they're on,
+// how far through it they are, and which page comes next.
+
+/** Friendly page names shown in the tour header. */
+const PAGE_LABELS: Record<string, string> = {
+	'/student/dashboard': 'Dashboard',
+	'/student/catalog': 'Equipment Catalog',
+	'/student/request': 'New Request',
+	'/student/requests': 'My Requests',
+	'/student/borrowed': 'Borrowed Items',
+	'/instructor/dashboard': 'Dashboard',
+	'/instructor/requests': 'Request Approvals',
+	'/instructor/inventory': 'Inventory',
+	'/instructor/reports': 'Reports & Analytics',
+	'/custodian/dashboard': 'Dashboard',
+	'/custodian/requests': 'Requests',
+	'/custodian/inventory': 'Inventory',
+	'/custodian/transactions': 'Alternative Transactions'
+};
+
+export function pageLabelFor(route: string | undefined): string {
+	if (!route) return 'Getting Started';
+	return PAGE_LABELS[route] ?? route.split('/').filter(Boolean).pop()?.replace(/-/g, ' ') ?? 'Page';
+}
+
+export interface TourChapter {
+	/** Route every step in this chapter belongs to. */
+	route: string;
+	/** Friendly page name. */
+	label: string;
+	/** Index of this chapter's first step in the flat step array. */
+	startIndex: number;
+	/** Number of steps on this page. */
+	count: number;
+}
+
+/**
+ * Group a role's steps into per-page chapters. Steps without their own `route`
+ * (nav-link steps that spotlight a sidebar link) belong to the page they are
+ * displayed on, i.e. they carry forward the previous step's route.
+ */
+export function buildChapters(steps: TourStep[]): TourChapter[] {
+	const chapters: TourChapter[] = [];
+	let currentRoute = '';
+	steps.forEach((step, i) => {
+		if (step.route) currentRoute = step.route;
+		const last = chapters[chapters.length - 1];
+		if (last && last.route === currentRoute) {
+			last.count += 1;
+		} else {
+			chapters.push({ route: currentRoute, label: pageLabelFor(currentRoute), startIndex: i, count: 1 });
+		}
+	});
+	return chapters;
+}

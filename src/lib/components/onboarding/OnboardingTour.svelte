@@ -3,7 +3,7 @@
 	import { get } from 'svelte/store';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import type { TourStep } from './tourSteps';
+	import { buildChapters, type TourStep } from './tourSteps';
 
 	interface Props {
 		steps: TourStep[];
@@ -41,6 +41,21 @@
 	const current = $derived(steps[index]);
 	const isFirst = $derived(index === 0);
 	const isLast = $derived(index === steps.length - 1);
+
+	// ── Page-by-page progress ────────────────────────────────────────────────
+	// The tour is presented one page at a time. Progress is reported per page
+	// ("Step 2 of 4 on this page") with a segmented bar — one segment per page —
+	// so a long tour never turns into an intimidating wall of dots.
+	const chapters = $derived(buildChapters(steps));
+	const chapterIndex = $derived(
+		Math.max(0, chapters.findIndex((c) => index >= c.startIndex && index < c.startIndex + c.count))
+	);
+	const chapter = $derived(chapters[chapterIndex]);
+	const stepInChapter = $derived(chapter ? index - chapter.startIndex + 1 : 1);
+	/** The next chapter, when the current step is the last one on this page. */
+	const nextChapter = $derived(
+		chapter && index === chapter.startIndex + chapter.count - 1 ? chapters[chapterIndex + 1] : undefined
+	);
 
 	/**
 	 * Among all elements matching the selector (the same link exists in both the
@@ -457,8 +472,8 @@
 		style="top: {cardPos.top}px; left: {cardPos.left}px;"
 	>
 		<div class="mb-2 flex items-center justify-between">
-			<span class="text-xs font-semibold uppercase tracking-wider text-pink-600">
-				Step {index + 1} of {steps.length}
+			<span class="min-w-0 truncate pr-2 text-xs font-semibold uppercase tracking-wider text-pink-600">
+				Page {chapterIndex + 1} of {chapters.length} · {chapter?.label}
 			</span>
 			<button
 				onclick={skip}
@@ -483,15 +498,21 @@
 			</p>
 		{/if}
 
-		<!-- Progress dots -->
-		<div class="mt-4 flex items-center gap-1.5">
-			{#each steps as _, i}
-				<span
-					class="h-1.5 rounded-full transition-all duration-300 {i === index
-						? 'w-5 bg-pink-600'
-						: 'w-1.5 bg-gray-300'}"
-				></span>
-			{/each}
+		<!-- Page progress: one segment per page; the current page fills as you go -->
+		<div class="mt-4">
+			<div class="flex items-center gap-1">
+				{#each chapters as c, i}
+					<div class="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-200" title={c.label}>
+						<div
+							class="h-full rounded-full bg-pink-600 transition-all duration-300 ease-out"
+							style="width: {i < chapterIndex ? 100 : i === chapterIndex ? (stepInChapter / c.count) * 100 : 0}%"
+						></div>
+					</div>
+				{/each}
+			</div>
+			<p class="mt-1.5 text-[11px] font-medium text-gray-400">
+				Step {stepInChapter} of {chapter?.count} on this page
+			</p>
 		</div>
 
 		<!-- Controls -->
@@ -520,7 +541,7 @@
 					onclick={next}
 					class="rounded-lg bg-pink-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
 				>
-					{isLast ? 'Done' : 'Next'}
+					{isLast ? 'Done' : nextChapter ? `Next: ${nextChapter.label}` : 'Next'}
 				</button>
 			</div>
 		</div>
