@@ -10,7 +10,8 @@
 		tourReset,
 		type OnboardingRole
 	} from '$lib/stores/onboarding';
-	import { tourSteps, studentUnenrolled } from './tourSteps';
+	import { tourSteps, studentUnenrolled, studentPending } from './tourSteps';
+	import { borrowRequestsAPI } from '$lib/api/borrowRequests';
 	import OnboardingTour from './OnboardingTour.svelte';
 
 	interface Props {
@@ -21,30 +22,55 @@
 
 	let open = $state(false);
 
-	// ── Enrollment-aware variant (students only) ─────────────────────────────
-	// A student with no active class-code enrollment cannot submit a borrow
-	// request — the whole request wizard is gated — so the standard hands-on tour
-	// would lead them into a dead end. Such students get a dedicated variant that
-	// orients them and explains how to get enrolled instead. `null` = not yet
-	// known. Only ever read behind a `role === 'student'` guard, so for other
-	// roles it simply stays `null` and never affects the tour.
-	let studentEnrolled = $state<boolean | null>(null);
+	// ── Situation-aware variant (students only) ──────────────────────────────
+	// The standard student tour is hands-on: it walks the user through building a
+	// real borrow request. Two account states make that impossible, so each gets a
+	// dedicated variant that orients the student and explains the blocker instead:
+	//   • 'unenrolled' — no active class-code enrollment, so requesting is gated.
+	//   • 'pending'    — an active borrow request already exists, so the system
+	//                    locks starting or changing another until it's resolved.
+	//   • 'student'    — clear to borrow; the full hands-on tour.
+	// `null` = not yet resolved. Only ever read behind a `role === 'student'`
+	// guard, so for other roles it stays `null` and never affects the tour.
+	type StudentVariant = 'student' | 'unenrolled' | 'pending';
+	let studentVariant = $state<StudentVariant | null>(null);
 
 	$effect(() => {
 		if (role !== 'student') return;
 		const id = userId;
-		if (!id || studentEnrolled !== null) return;
+		if (!id || studentVariant !== null) return;
 		let cancelled = false;
 		void (async () => {
 			try {
 				const res = await fetch('/api/class-codes/my-classes', { credentials: 'include' });
 				if (!res.ok) throw new Error('lookup failed');
 				const data = await res.json();
-				if (!cancelled) studentEnrolled = (data.classCodes?.length ?? 0) > 0;
+				const enrolled = (data.classCodes?.length ?? 0) > 0;
+				if (!enrolled) {
+					if (!cancelled) studentVariant = 'unenrolled';
+					return;
+				}
+				// Enrolled: an active pending request blocks starting a new one, so
+				// the hands-on request walkthrough would hit disabled controls.
+				try {
+					const pending = await borrowRequestsAPI.list({
+						statuses: [
+							'pending_instructor',
+							'approved_instructor',
+							'ready_for_pickup',
+							'pending_return',
+							'pending_appeal'
+						],
+						limit: 1
+					});
+					if (!cancelled) studentVariant = pending.total > 0 ? 'pending' : 'student';
+				} catch {
+					if (!cancelled) studentVariant = 'student';
+				}
 			} catch {
-				// If we can't tell, assume enrolled — never wrongly greet a real
-				// borrower with the "you're not enrolled yet" tour.
-				if (!cancelled) studentEnrolled = true;
+				// If we can't tell, fall back to the standard tour — never wrongly
+				// greet a real borrower with a "you're blocked" walkthrough.
+				if (!cancelled) studentVariant = 'student';
 			}
 		})();
 		return () => {
@@ -53,7 +79,13 @@
 	});
 
 	const steps = $derived(
-		role === 'student' && studentEnrolled === false ? studentUnenrolled : tourSteps[role]
+		role !== 'student'
+			? tourSteps[role]
+			: studentVariant === 'unenrolled'
+				? studentUnenrolled
+				: studentVariant === 'pending'
+					? studentPending
+					: tourSteps.student
 	);
 
 	const userId = $derived($user?.id ?? null);
@@ -81,13 +113,13 @@
 	$effect(() => {
 		const id = userId;
 		const path = $page.url.pathname;
-		const enrolled = studentEnrolled; // dependency: re-run once enrollment resolves
+		const variant = studentVariant; // dependency: re-run once the variant resolves
 		if (autoChecked || !id) return;
 		if (!path.startsWith(`/${role}`)) return;
-		// For students, hold until enrollment is known so the correct variant
-		// (standard vs. unenrolled) starts — don't consume the once-per-session
-		// guard while we're still undecided.
-		if (role === 'student' && enrolled === null) return;
+		// For students, hold until the situation is known so the correct variant
+		// (standard / unenrolled / pending) starts — don't consume the once-per-
+		// session guard while we're still undecided.
+		if (role === 'student' && variant === null) return;
 
 		autoChecked = true;
 		if (hasCompletedOnboarding(role, id, serverCompletedAt)) return;

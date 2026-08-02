@@ -907,7 +907,7 @@
 	{/if}
 
 	{#if hasPendingRequest}
-		<div class="rounded-xl border border-pink-200 bg-pink-50 p-4 shadow-sm animate-fadeIn">
+		<div class="rounded-xl border border-pink-200 bg-pink-50 p-4 shadow-sm animate-fadeIn" data-tour="student-catalog-pending">
 			<div class="flex gap-3">
 				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-600 text-white shadow-sm">
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

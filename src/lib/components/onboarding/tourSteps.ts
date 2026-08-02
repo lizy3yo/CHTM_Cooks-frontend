@@ -485,6 +485,114 @@ export const studentUnenrolled: TourStep[] = [
 	}
 ];
 
+/**
+ * Student tour shown to an enrolled account that already has an ACTIVE pending
+ * borrow request.
+ *
+ * While a request is awaiting action the system locks requesting entirely — the
+ * student can't select or add items, change quantities, or submit a new request
+ * (to prevent duplicate/overlapping requests). The standard hands-on tour builds
+ * a brand-new request, so it would walk straight into disabled controls. This
+ * variant instead explains the locked state and points the student at tracking
+ * their in-flight request. The engine picks this set when a pending request is
+ * detected (see OnboardingController).
+ */
+export const studentPending: TourStep[] = [
+	{
+		route: '/student/dashboard',
+		title: 'Welcome back 👋',
+		body: "Let's take a quick tour. Right now you have a borrow request in progress — while it's being processed you can't start or change another one, so this walkthrough focuses on finding your way around and tracking that request. You can skip anytime."
+	},
+
+	// ── Dashboard ─────────────────────────────────────────────────────────────
+	{
+		route: '/student/dashboard',
+		target: '[data-tour="student-dash-header"]',
+		placement: 'bottom',
+		title: 'Your Dashboard',
+		body: 'This is your home base — a snapshot of your borrowing at a glance every time you sign in, including anything currently in progress.'
+	},
+	{
+		route: '/student/dashboard',
+		target: '[data-tour="student-dash-stats"]',
+		placement: 'bottom',
+		title: 'Your borrowing at a glance',
+		body: 'These cards summarise how many items you hold, requests still pending action, and anything overdue. Tap any card to jump straight to that list.'
+	},
+
+	// ── Equipment Catalog ────────────────────────────────────────────────────
+	{
+		target: 'a[href="/student/catalog"]',
+		advanceWhenRoute: '/student/catalog',
+		placement: 'right',
+		clickHint: 'Click here to open the Equipment Catalog',
+		title: 'Browse the Equipment Catalog',
+		body: 'You can still explore everything the lab offers. Click to open the catalog.'
+	},
+	{
+		route: '/student/catalog',
+		target: '[data-tour="student-catalog-pending"]',
+		placement: 'bottom',
+		optional: true,
+		title: 'Your request is being processed',
+		body: "This notice appears because you already have a request awaiting action. Until it's processed or resolved, requesting equipment and changing item lists stay locked — that's what prevents accidental duplicate requests."
+	},
+	{
+		route: '/student/catalog',
+		target: '[data-tour="student-catalog-header"]',
+		placement: 'bottom',
+		title: 'The Equipment Catalog',
+		body: 'Every borrowable item lives here with its photo, availability, and details. Browsing is always open, so you can line up what to borrow next.'
+	},
+	{
+		route: '/student/catalog',
+		target: '[data-tour="student-catalog-search"]',
+		placement: 'bottom',
+		title: 'Find what you need',
+		body: 'Search by name, description, or code. Once your current request is resolved, requesting reopens and you can add items again.'
+	},
+
+	// ── My Requests (the page that matters right now) ────────────────────────
+	{
+		target: 'a[href="/student/requests"]',
+		advanceWhenRoute: '/student/requests',
+		placement: 'right',
+		clickHint: 'Click here to open My Requests',
+		title: 'Track your active request',
+		body: 'This is where your pending request lives right now. Click to open it.'
+	},
+	{
+		route: '/student/requests',
+		target: '[data-tour="student-requests-header"]',
+		placement: 'bottom',
+		title: 'My Requests',
+		body: "Your request shows its status here — Under Review, Approved, Ready for Pickup, or Declined. While it's still Under Review you can cancel it here if you need to; if it's declined, your instructor's reason appears so you know what to adjust."
+	},
+
+	// ── My Borrowed Items ────────────────────────────────────────────────────
+	{
+		target: 'a[href="/student/borrowed"]',
+		advanceWhenRoute: '/student/borrowed',
+		placement: 'right',
+		clickHint: 'Click here to open My Borrowed Items',
+		title: 'Your borrowed items',
+		body: 'Items you currently hold live here. Click to take a look.'
+	},
+	{
+		route: '/student/borrowed',
+		target: '[data-tour="student-borrowed-header"]',
+		placement: 'bottom',
+		title: 'My Borrowed Items',
+		body: 'See what you hold, your return deadlines, and any replacement obligations. Returning items on time keeps your Trust Score healthy.'
+	},
+
+	{
+		route: '/student/borrowed',
+		title: "You're all set 🎉",
+		body: 'Once your current request is processed, requesting reopens and you can borrow again. Replay this tour anytime from the Help page to walk through the full borrowing flow.'
+	}
+];
+
 const instructor: TourStep[] = [
 	{
 		route: '/instructor/dashboard',
