@@ -33,11 +33,17 @@ function storageKey(role: OnboardingRole, userId: string): string {
 /**
  * True once the given user has completed or skipped the tour.
  *
- * The account-level value (`onboardingCompletedAt`, returned by the auth
- * endpoints) is the source of truth: it follows the user across devices and is
- * empty for every newly created or imported account, so those users always get
- * the tour on their first login. The device flag is only a fallback for when
- * that value isn't available (older session payload, offline).
+ * Completion is satisfied by EITHER signal:
+ *   1. The account-level timestamp (`onboardingCompletedAt`, returned by the auth
+ *      endpoints) — authoritative and follows the user across devices.
+ *   2. This device's localStorage flag — set the moment the user finishes or
+ *      skips the tour here.
+ *
+ * The device flag is a genuine fallback, not just for a missing payload: when the
+ * account-level timestamp is absent (a new/imported account, or a backend that
+ * doesn't persist it), a user who has already dismissed the tour on this device
+ * must NOT be shown it again on every visit. Only a brand-new user — no account
+ * timestamp AND no device flag — gets the automatic tour, exactly once.
  */
 export function hasCompletedOnboarding(
 	role: OnboardingRole,
@@ -45,8 +51,9 @@ export function hasCompletedOnboarding(
 	serverCompletedAt?: string | null
 ): boolean {
 	if (!browser || !userId) return true; // fail safe: never nag when we can't tell
-	if (serverCompletedAt !== undefined) return serverCompletedAt !== null;
+	if (serverCompletedAt) return true; // real account-level completion — authoritative
 	try {
+		// No account-level completion: honour this device's "already seen it" flag.
 		return localStorage.getItem(storageKey(role, userId)) === '1';
 	} catch {
 		// localStorage can throw in private-mode / storage-disabled browsers.
