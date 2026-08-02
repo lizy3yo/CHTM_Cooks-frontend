@@ -19,10 +19,12 @@ import { browser } from '$app/environment';
 /**
  * Bump when the tour content changes enough to warrant showing it again.
  * v2 — the tour is now presented page by page, so everyone sees it once more.
+ * v3 — admin tour added; instructor & custodian tours expanded to full
+ *      page-by-page walkthroughs, so those roles see the updated tour once more.
  */
-export const ONBOARDING_VERSION = 2;
+export const ONBOARDING_VERSION = 3;
 
-export type OnboardingRole = 'student' | 'instructor' | 'custodian';
+export type OnboardingRole = 'student' | 'instructor' | 'custodian' | 'admin';
 
 function storageKey(role: OnboardingRole, userId: string): string {
 	return `chtm.onboarding.v${ONBOARDING_VERSION}.${role}.${userId}`;

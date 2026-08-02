@@ -1096,7 +1096,7 @@
 
 	<div class="space-y-6">
 		<!-- Header -->
-		<div>
+		<div data-tour="admin-requests-header">
 			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Requests & Borrowed Items</h1>
 			<p class="mt-1 text-sm text-gray-500">Prepare, distribute, and receive borrowed equipment</p>
 		</div>
@@ -1117,7 +1117,7 @@
 				{/each}
 			</div>
 		{:else}
-			<div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
+			<div class="grid grid-cols-2 gap-3 lg:grid-cols-5" data-tour="admin-requests-stats">
 				<button
 					type="button"
 					onclick={() => { activeTab = 'all'; overdueOnly = false; pendingReturnOnly = false; searchQuery = ''; }}
@@ -1285,7 +1285,7 @@
 		<div class="rounded-xl bg-white shadow-sm">
 			<div class="p-6">
 				<!-- Search and Filter Bar -->
-				<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-tour="admin-requests-search">
 					<div class="relative flex-1">
 						<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
 							<svg
@@ -1426,6 +1426,7 @@
 										<!-- svelte-ignore a11y_click_events_have_key_events -->
 										<!-- svelte-ignore a11y_no_static_element_interactions -->
 										<div
+											data-tour="admin-requests-row"
 											class="cursor-pointer overflow-hidden rounded-xl border-l-4 bg-white shadow-sm ring-1 ring-gray-200 transition-all hover:shadow-md {getCardBorderColor(
 												request.status,
 												request.rawStatus,
@@ -1626,6 +1627,7 @@
 											<!-- svelte-ignore a11y_click_events_have_key_events -->
 											<!-- svelte-ignore a11y_no_static_element_interactions -->
 											<div
+												data-tour="admin-requests-row"
 												class="grid cursor-pointer gap-3 p-4 transition-colors md:grid-cols-[32px_0.6fr_1fr_2.4fr_0.8fr] md:items-start md:gap-4 {highlightedRequestId ===
 												request.rawId
 													? 'bg-pink-50/50 ring-1 ring-pink-300 ring-inset'
@@ -1853,7 +1855,7 @@
 								</svg>
 							</div>
 							<div class="min-w-0 flex-1">
-								<h2 class="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
+								<h2 class="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl" data-tour="admin-requests-detail">
 									Request Details
 								</h2>
 								<p class="mt-0.5 font-mono text-xs font-semibold text-pink-600 sm:text-sm">

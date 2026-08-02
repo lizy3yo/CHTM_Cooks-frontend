@@ -1244,7 +1244,7 @@
 			{/each}
 		</div>
 	{:else}
-		<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+		<div class="grid grid-cols-2 gap-3 lg:grid-cols-4" data-tour="instructor-requests-stats">
 			<button
 				type="button"
 				onclick={() => {
@@ -1350,7 +1350,7 @@
 
 	<!-- Card Container -->
 	<div class="rounded-xl bg-white shadow-sm ring-1 ring-gray-900/5">
-		<div class="border-b border-gray-200 bg-gray-50/50 p-4 sm:p-6">
+		<div class="border-b border-gray-200 bg-gray-50/50 p-4 sm:p-6" data-tour="instructor-requests-filters">
 			<!-- Search + Sort + Filters -->
 			<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 				<div class="flex flex-1 items-center gap-2">

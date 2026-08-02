@@ -937,7 +937,7 @@
 	</div>
 
 	<!-- ─── STATS CARDS ─────────────────────────────────────────────────────── -->
-	<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-3" data-tour="custodian-transactions-stats">
 		<!-- Card 1: Total Walk-ins -->
 		<button
 			type="button"
@@ -1016,7 +1016,7 @@
 	</div>
 
 	<!-- ─── TABS ────────────────────────────────────────────────────────────── -->
-	<div class="border-b border-gray-200">
+	<div class="border-b border-gray-200" data-tour="custodian-transactions-tabs">
 		<nav class="flex gap-6" aria-label="Tabs">
 			<button
 				type="button"

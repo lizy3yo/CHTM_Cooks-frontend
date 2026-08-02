@@ -1117,7 +1117,7 @@
 				{/each}
 			</div>
 		{:else}
-			<div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
+			<div class="grid grid-cols-2 gap-3 lg:grid-cols-5" data-tour="custodian-requests-stats">
 				<button
 					type="button"
 					onclick={() => { activeTab = 'all'; overdueOnly = false; pendingReturnOnly = false; searchQuery = ''; }}
@@ -1285,7 +1285,7 @@
 		<div class="rounded-xl bg-white shadow-sm">
 			<div class="p-6">
 				<!-- Search and Filter Bar -->
-				<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-tour="custodian-requests-search">
 					<div class="relative flex-1">
 						<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
 							<svg

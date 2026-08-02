@@ -374,11 +374,176 @@ const student: TourStep[] = [
 	}
 ];
 
+/**
+ * Student tour shown to accounts that are NOT enrolled in any class code.
+ *
+ * An unenrolled student cannot submit a borrow request (the whole request wizard
+ * is gated on enrollment), so the standard hands-on tour — which fills out a real
+ * request — would walk them into a dead end. This variant instead orients them,
+ * explains plainly why borrowing is locked, and tells them the one action that
+ * unlocks it: getting enrolled by their instructor. The engine picks this set
+ * over `student` when the account has no active enrollment (see OnboardingController).
+ */
+export const studentUnenrolled: TourStep[] = [
+	{
+		route: '/student/dashboard',
+		title: 'Welcome to the Student Portal 👋',
+		body: "Let's take a quick tour of your portal. First, something worth knowing: our records show you're not enrolled in a class code yet, so borrowing is locked for now. This tour will show you around and explain exactly how to get set up. You can skip anytime."
+	},
+
+	// ── Dashboard ─────────────────────────────────────────────────────────────
+	{
+		route: '/student/dashboard',
+		target: '[data-tour="student-dash-header"]',
+		placement: 'bottom',
+		title: 'Your Dashboard',
+		body: "This is your home base — you'll land here every time you sign in. Once you're enrolled and borrowing, it shows a snapshot of your activity at a glance."
+	},
+	{
+		route: '/student/dashboard',
+		target: '[data-tour="student-dash-trust"]',
+		placement: 'bottom',
+		title: 'Trust Score',
+		body: 'Every student has a Trust Score that reflects their borrowing history. Returning items on time and in good condition keeps it high. It comes into play once you begin borrowing.'
+	},
+
+	// ── Equipment Catalog ────────────────────────────────────────────────────
+	{
+		target: 'a[href="/student/catalog"]',
+		advanceWhenRoute: '/student/catalog',
+		placement: 'right',
+		clickHint: 'Click here to open the Equipment Catalog',
+		title: 'Browse the Equipment Catalog',
+		body: 'You can still explore everything the lab offers. Click to open the catalog.'
+	},
+	{
+		route: '/student/catalog',
+		target: '[data-tour="student-catalog-header"]',
+		placement: 'bottom',
+		title: 'The Equipment Catalog',
+		body: 'Every borrowable item lives here with its photo, availability, and details. Browsing is open to everyone — it’s requesting that needs enrollment.'
+	},
+	{
+		route: '/student/catalog',
+		target: '[data-tour="student-catalog-search"]',
+		placement: 'bottom',
+		title: 'Find what you need',
+		body: 'Search by name, description, or code to see what the lab has. Feel free to note the items you plan to borrow once you can.'
+	},
+	{
+		route: '/student/catalog',
+		target: '[data-tour="student-catalog-enroll"]',
+		placement: 'bottom',
+		optional: true,
+		title: 'Enrollment required to borrow',
+		body: "Here's where borrowing is gated. Because you're not enrolled in a class code, the Request Equipment action is locked. A class code links each request to a specific course and instructor — it's required before you can borrow."
+	},
+	{
+		route: '/student/catalog',
+		title: 'How to get enrolled',
+		body: 'Enrollment is handled by your instructor. Ask the instructor of your laboratory course to add you to their class code. As soon as they do, the Request Equipment button unlocks and you can start borrowing right away.'
+	},
+
+	// ── My Requests (where activity will appear once enrolled) ───────────────
+	{
+		target: 'a[href="/student/requests"]',
+		advanceWhenRoute: '/student/requests',
+		placement: 'right',
+		clickHint: 'Click here to open My Requests',
+		title: 'Where your requests will appear',
+		body: 'Once you can submit requests, this is where you track them. Click to take a peek.'
+	},
+	{
+		route: '/student/requests',
+		target: '[data-tour="student-requests-header"]',
+		placement: 'bottom',
+		title: 'My Requests',
+		body: 'Every request you make will show its status here — Under Review, Approved, Ready for Pickup, or Declined — so you always know where it stands.'
+	},
+
+	// ── My Borrowed Items (where activity will appear once enrolled) ─────────
+	{
+		target: 'a[href="/student/borrowed"]',
+		advanceWhenRoute: '/student/borrowed',
+		placement: 'right',
+		clickHint: 'Click here to open My Borrowed Items',
+		title: 'Where your borrowed items will live',
+		body: 'Items you currently hold will appear here. Click to take a look.'
+	},
+	{
+		route: '/student/borrowed',
+		target: '[data-tour="student-borrowed-header"]',
+		placement: 'bottom',
+		title: 'My Borrowed Items',
+		body: 'This shows what you hold, your return deadlines, and any replacement obligations. Returning items on time keeps your record — and your Trust Score — healthy.'
+	},
+
+	{
+		route: '/student/borrowed',
+		title: 'One step to get started 🎉',
+		body: "Here's your next move: contact your instructor to be enrolled in a class code. Once you're in, replay this tour anytime from the Help page to walk through the full borrowing flow. Welcome aboard!"
+	}
+];
+
 const instructor: TourStep[] = [
 	{
 		route: '/instructor/dashboard',
 		title: 'Welcome, Instructor 👋',
-		body: "Let's take a hands-on tour of your tools — reviewing student requests, managing inventory, and tracking activity. I'll open a real request so you can see the review screen, but nothing will be decided. You can skip anytime."
+		body: "Let's take a hands-on, page-by-page tour of your tools — your dashboard, inventory, reviewing student requests, history, and reports. I'll open a real request so you can see the review screen, but nothing will be decided. You can skip anytime."
+	},
+
+	// ── Dashboard ─────────────────────────────────────────────────────────────
+	{
+		route: '/instructor/dashboard',
+		target: '[data-tour="instructor-dash-header"]',
+		placement: 'bottom',
+		title: 'Your Dashboard',
+		body: "You land here every time you sign in — a snapshot of everything that needs your attention. Let's walk through it."
+	},
+	{
+		route: '/instructor/dashboard',
+		target: '[data-tour="instructor-dash-kpis"]',
+		placement: 'bottom',
+		title: 'Key numbers at a glance',
+		body: "These cards count requests pending your approval, items in fulfillment, what's currently borrowed, and anything overdue. Tap any card to jump straight to that filtered list."
+	},
+	{
+		route: '/instructor/dashboard',
+		target: '[data-tour="instructor-dash-actions"]',
+		placement: 'top',
+		title: 'Requests Needing Action',
+		body: "A live queue of the requests waiting on you — grouped so you can see what to approve, what's being fulfilled, and what's out on loan, all in one place."
+	},
+
+	// ── Inventory ────────────────────────────────────────────────────────────
+	{
+		target: 'a[href="/instructor/inventory"]',
+		advanceWhenRoute: '/instructor/inventory',
+		placement: 'right',
+		clickHint: 'Click here to open Inventory',
+		title: 'Open Inventory',
+		body: 'Check stock before you approve requests. Click to open it.'
+	},
+	{
+		route: '/instructor/inventory',
+		target: '[data-tour="instructor-inventory-header"]',
+		placement: 'bottom',
+		title: 'Inventory Management',
+		body: 'Browse current stock, item details, and availability so your approval decisions are well-informed.'
+	},
+	{
+		route: '/instructor/inventory',
+		target: '[data-tour="instructor-inventory-stats"]',
+		placement: 'bottom',
+		title: 'Stock at a glance',
+		body: "These cards total lab stock, what's physically available, what's released, and the overall stock-flow balance. Click any card to open a read-only breakdown."
+	},
+	{
+		route: '/instructor/inventory',
+		target: '[data-tour="instructor-inventory-search"]',
+		placement: 'bottom',
+		title: 'Find an item',
+		body: 'Search by name, description, or code, and filter by category or status to quickly locate any item.'
 	},
 
 	// ── Student Requests ─────────────────────────────────────────────────────
@@ -395,7 +560,21 @@ const instructor: TourStep[] = [
 		target: '[data-tour="instructor-requests-header"]',
 		placement: 'bottom',
 		title: 'Student Requests',
-		body: 'Pending borrow requests wait here for your decision. Let’s open one to see the review screen.'
+		body: 'Every borrow request from your students waits here for your decision.'
+	},
+	{
+		route: '/instructor/requests',
+		target: '[data-tour="instructor-requests-stats"]',
+		placement: 'bottom',
+		title: 'Filter by stage',
+		body: 'These cards count requests by stage — total, pending, with the custodian, and completed. Click one to filter the list to that stage.'
+	},
+	{
+		route: '/instructor/requests',
+		target: '[data-tour="instructor-requests-filters"]',
+		placement: 'bottom',
+		title: 'Search & sort',
+		body: 'Find a request by student, ID, or item, and sort or filter the list to focus on what needs your attention.'
 	},
 	{
 		route: '/instructor/requests',
@@ -414,13 +593,20 @@ const instructor: TourStep[] = [
 		body: 'Here you see the student, the items, the dates, and the purpose. From here you Approve or Decline — and when you decline, you pick a standard reason and a professional message is sent to the student automatically. We won’t decide anything during this tour.'
 	},
 
-	// ── Inventory (navigating here closes the request modal) ─────────────────
+	// ── History (navigating here closes the request modal) ───────────────────
 	{
-		route: '/instructor/inventory',
-		target: '[data-tour="instructor-inventory-header"]',
+		route: '/instructor/history',
+		target: '[data-tour="history-header"]',
 		placement: 'bottom',
-		title: 'Inventory Management',
-		body: 'Browse current stock, item details, and availability so your approval decisions are well-informed.'
+		title: 'Borrow Request History',
+		body: "An all-time archive of your students' borrowing — requests, requested items, and per-student and per-item profiles you can drill into."
+	},
+	{
+		route: '/instructor/history',
+		target: '[data-tour="history-tabs"]',
+		placement: 'bottom',
+		title: 'Explore the archive',
+		body: 'Switch between Request Logs, Requested Items, the Students Directory, and Item Adjustments to slice the history the way you need.'
 	},
 
 	// ── Reports & Analytics ──────────────────────────────────────────────────
@@ -429,7 +615,7 @@ const instructor: TourStep[] = [
 		advanceWhenRoute: '/instructor/reports',
 		placement: 'right',
 		clickHint: 'Click here to open Reports & Analytics',
-		title: 'Reports & Analytics',
+		title: 'Open Reports & Analytics',
 		body: 'Want the bigger picture? Click to open your reports.'
 	},
 	{
@@ -437,7 +623,29 @@ const instructor: TourStep[] = [
 		target: '[data-tour="instructor-reports-header"]',
 		placement: 'bottom',
 		title: 'Reports & Analytics',
-		body: 'Track borrowing trends, equipment usage, and student activity through visual reports you can review at a glance.'
+		body: 'Track borrowing trends, equipment usage, and student activity through visual reports — and export them to Excel when you need to share them.'
+	},
+	{
+		route: '/instructor/reports',
+		target: '[data-tour="instructor-reports-filters"]',
+		placement: 'bottom',
+		title: 'Set your reporting window',
+		body: 'Pick a date range and filter by class, student, or custodian so every chart reflects exactly the slice you care about.'
+	},
+	{
+		route: '/instructor/reports',
+		target: '[data-tour="instructor-reports-tabs"]',
+		placement: 'bottom',
+		title: 'Every angle in one place',
+		body: 'Move between Overview, Borrowing Analytics, Inventory, and Student Risk reports to explore your data from every angle.'
+	},
+	{
+		route: '/instructor/reports',
+		target: '[data-tour="instructor-reports-stats"]',
+		placement: 'bottom',
+		optional: true,
+		title: 'Your headline metrics',
+		body: 'The Overview cards give you the key totals — requests, return rate, and overdue items — at a glance.'
 	},
 
 	{
@@ -451,7 +659,61 @@ const custodian: TourStep[] = [
 	{
 		route: '/custodian/dashboard',
 		title: 'Welcome, Custodian 👋',
-		body: "Let's take a hands-on tour of your workflow — releasing approved items, processing returns, and keeping inventory accurate. I'll open a real request so you can see the detail screen, but nothing will be changed. You can skip anytime."
+		body: "Let's take a hands-on, page-by-page tour of your workflow — your dashboard, inventory, releasing and returning items, history, alternative transactions, and reports. I'll open a real request so you can see the detail screen, but nothing will be changed. You can skip anytime."
+	},
+
+	// ── Dashboard ─────────────────────────────────────────────────────────────
+	{
+		route: '/custodian/dashboard',
+		target: '[data-tour="custodian-dash-header"]',
+		placement: 'bottom',
+		title: 'Your Dashboard',
+		body: "You land here every time you sign in — a live overview of everything moving through the lab. Let's walk through it."
+	},
+	{
+		route: '/custodian/dashboard',
+		target: '[data-tour="custodian-dash-kpis"]',
+		placement: 'bottom',
+		title: 'Key numbers at a glance',
+		body: "These cards summarise what's currently borrowed, what's pending, what's overdue, and any open replacement cases. Tap any card to jump straight to that list."
+	},
+	{
+		route: '/custodian/dashboard',
+		target: '[data-tour="custodian-dash-actions"]',
+		placement: 'top',
+		title: 'Requests Needing Action',
+		body: "A live queue of what needs handling — approved requests waiting for release, items ready for pickup, and what's currently out (overdue ones flagged in red)."
+	},
+
+	// ── Inventory ────────────────────────────────────────────────────────────
+	{
+		target: 'a[href="/custodian/inventory"]',
+		advanceWhenRoute: '/custodian/inventory',
+		placement: 'right',
+		clickHint: 'Click here to open Inventory',
+		title: 'Open Inventory',
+		body: 'Keeping stock accurate starts here. Click to open it.'
+	},
+	{
+		route: '/custodian/inventory',
+		target: '[data-tour="custodian-inventory-header"]',
+		placement: 'bottom',
+		title: 'Inventory Management',
+		body: "Maintain stock counts, item details, and availability so students always see what's truly on hand."
+	},
+	{
+		route: '/custodian/inventory',
+		target: '[data-tour="custodian-inventory-stats"]',
+		placement: 'bottom',
+		title: 'Stock at a glance',
+		body: "These cards total lab stock, what's physically available, what's released, and the overall stock-flow balance. Click any card to open a read-only breakdown."
+	},
+	{
+		route: '/custodian/inventory',
+		target: '[data-tour="custodian-inventory-search"]',
+		placement: 'bottom',
+		title: 'Find an item',
+		body: 'Search by name, description, or code, and filter by category or status to quickly locate any item.'
 	},
 
 	// ── Requests & Borrowed Items ────────────────────────────────────────────
@@ -468,7 +730,21 @@ const custodian: TourStep[] = [
 		target: '[data-tour="custodian-requests-header"]',
 		placement: 'bottom',
 		title: 'Requests & Borrowed Items',
-		body: "This is your hub for releasing equipment and tracking what's out on loan. Let's open a request to see the details."
+		body: "This is your hub for releasing equipment and tracking what's out on loan."
+	},
+	{
+		route: '/custodian/requests',
+		target: '[data-tour="custodian-requests-stats"]',
+		placement: 'bottom',
+		title: 'Filter by stage',
+		body: 'These cards count requests by stage — total, pending, ready, currently borrowed, and overdue. Click one to filter the list to that stage.'
+	},
+	{
+		route: '/custodian/requests',
+		target: '[data-tour="custodian-requests-search"]',
+		placement: 'bottom',
+		title: 'Search & sort',
+		body: 'Find a request by student, ID, or item, switch between list and card views, and sort to focus on what needs handling.'
 	},
 	{
 		route: '/custodian/requests',
@@ -487,43 +763,279 @@ const custodian: TourStep[] = [
 		body: 'From here you release approved items, confirm hand-offs to students, and process returns — inspecting items and recording their condition. We won’t change anything during this tour.'
 	},
 
-	// ── Inventory (navigating here closes the request modal) ─────────────────
+	// ── History (navigating here closes the request modal) ───────────────────
 	{
-		route: '/custodian/inventory',
-		target: '[data-tour="custodian-inventory-header"]',
+		route: '/custodian/history',
+		target: '[data-tour="history-header"]',
 		placement: 'bottom',
-		title: 'Inventory Management',
-		body: "Maintain stock counts, item details, and availability so students always see what's truly on hand."
+		title: 'Borrow Request History',
+		body: 'An all-time archive of borrowing activity — requests, requested items, and per-student and per-item profiles you can drill into.'
+	},
+	{
+		route: '/custodian/history',
+		target: '[data-tour="history-tabs"]',
+		placement: 'bottom',
+		title: 'Explore the archive',
+		body: 'Switch between Request Logs, Requested Items, the Students Directory, and Item Adjustments to slice the history the way you need.'
 	},
 
-	// ── Transactions ─────────────────────────────────────────────────────────
+	// ── Alternative Transactions ─────────────────────────────────────────────
 	{
 		target: 'a[href="/custodian/transactions"]',
 		advanceWhenRoute: '/custodian/transactions',
 		placement: 'right',
-		clickHint: 'Click here to open Transactions',
-		title: 'Handle Returns & Transactions',
-		body: 'Process returns and special cases here. Click to open it.'
+		clickHint: 'Click here to open Alternative Transactions',
+		title: 'Handle Returns & Special Cases',
+		body: 'Process walk-ins, confidential orders, and donations here. Click to open it.'
 	},
 	{
 		route: '/custodian/transactions',
 		target: '[data-tour="custodian-transactions-header"]',
 		placement: 'bottom',
 		title: 'Alternative Transactions',
-		body: 'Inspect returned items, record their condition, and complete each transaction — including replacements for lost or damaged equipment.'
+		body: 'Handle the cases that fall outside the normal borrow flow — walk-in borrows, confidential admin orders, and item donations.'
+	},
+	{
+		route: '/custodian/transactions',
+		target: '[data-tour="custodian-transactions-stats"]',
+		placement: 'bottom',
+		title: 'Transaction totals',
+		body: 'These cards summarise walk-ins, active walk-in borrows, and confidential admin orders. Click one to jump to that tab.'
+	},
+	{
+		route: '/custodian/transactions',
+		target: '[data-tour="custodian-transactions-tabs"]',
+		placement: 'bottom',
+		title: 'Switch between transaction types',
+		body: 'Move between Walk-in Transactions, Confidential Admin Requests, and Item Donations — each with its own list and search.'
+	},
+
+	// ── Reports & Analytics ──────────────────────────────────────────────────
+	{
+		target: 'a[href="/custodian/reports"]',
+		advanceWhenRoute: '/custodian/reports',
+		placement: 'right',
+		clickHint: 'Click here to open Reports & Analytics',
+		title: 'Open Reports & Analytics',
+		body: 'Want the bigger picture? Click to open your reports.'
+	},
+	{
+		route: '/custodian/reports',
+		target: '[data-tour="custodian-reports-header"]',
+		placement: 'bottom',
+		title: 'Reports & Analytics',
+		body: 'Track borrowing, inventory, and student-risk trends through visual reports — and export them to Excel when you need to share them.'
+	},
+	{
+		route: '/custodian/reports',
+		target: '[data-tour="custodian-reports-filters"]',
+		placement: 'bottom',
+		title: 'Set your reporting window',
+		body: 'Pick a date range and filter so every chart reflects exactly the slice you care about.'
+	},
+	{
+		route: '/custodian/reports',
+		target: '[data-tour="custodian-reports-tabs"]',
+		placement: 'bottom',
+		title: 'Every angle in one place',
+		body: 'Move between Overview, Borrowing, Inventory, and Student Risk reports to explore your data from every angle.'
 	},
 
 	{
-		route: '/custodian/transactions',
+		route: '/custodian/reports',
 		title: "You're all set! 🎉",
 		body: 'Replay this tour anytime from the Help page, which also has FAQs and support chat.'
+	}
+];
+
+const admin: TourStep[] = [
+	{
+		route: '/admin/dashboard',
+		title: 'Welcome to the Admin Portal 👋',
+		body: "You're in the monitoring seat. The Admin Portal is read-only — you can see everything happening across the kitchen laboratory without changing any records. Let's take a page-by-page tour of what you can keep an eye on. You can skip anytime."
+	},
+
+	// ── Dashboard ─────────────────────────────────────────────────────────────
+	{
+		route: '/admin/dashboard',
+		target: '[data-tour="admin-dash-header"]',
+		placement: 'bottom',
+		title: 'Your Dashboard',
+		body: "Every time you sign in you land here — a live operational overview of the whole lab. Let's look at the key panels."
+	},
+	{
+		route: '/admin/dashboard',
+		target: '[data-tour="admin-dash-kpis"]',
+		placement: 'bottom',
+		title: 'Key numbers at a glance',
+		body: "These cards summarise what's currently borrowed, what's pending action, what's overdue, and any open replacement cases. Each one is a shortcut — click it to jump straight to that filtered list."
+	},
+	{
+		route: '/admin/dashboard',
+		target: '[data-tour="admin-dash-actions"]',
+		placement: 'top',
+		title: 'Requests Needing Action',
+		body: "A live queue of requests moving through the workflow — pending release, ready for pickup, and currently borrowed (overdue ones flagged in red). A quick read on where things stand."
+	},
+	{
+		route: '/admin/dashboard',
+		target: '[data-tour="admin-dash-analytics"]',
+		placement: 'top',
+		title: 'Operational snapshots',
+		body: 'Request breakdown, inventory variance, and student-risk summaries give you an at-a-glance health check. Use the link on each card to open the full report.'
+	},
+
+	// ── Inventory Catalog ────────────────────────────────────────────────────
+	{
+		target: 'a[href="/admin/inventory"]',
+		advanceWhenRoute: '/admin/inventory',
+		placement: 'right',
+		clickHint: 'Click here to open the Inventory Catalog',
+		title: 'Open the Inventory Catalog',
+		body: 'This is the full record of every item in the lab. Click to take a look.'
+	},
+	{
+		route: '/admin/inventory',
+		target: '[data-tour="admin-inventory-header"]',
+		placement: 'bottom',
+		title: 'Inventory Catalog',
+		body: "Browse the complete catalogue — every item, its category, stock level, and condition. As an admin you're viewing this record, not editing it."
+	},
+	{
+		route: '/admin/inventory',
+		target: '[data-tour="admin-inventory-stats"]',
+		placement: 'bottom',
+		title: 'Stock at a glance',
+		body: "These cards total your lab stock, what's physically available, what's released or out, and the overall stock-flow balance. Click any card to open a read-only breakdown."
+	},
+	{
+		route: '/admin/inventory',
+		target: '[data-tour="admin-inventory-tabs"]',
+		placement: 'bottom',
+		title: 'Switch between views',
+		body: 'Toggle between all Items, Required Items, and Categories to explore the catalogue from different angles.'
+	},
+	{
+		route: '/admin/inventory',
+		target: '[data-tour="admin-inventory-search"]',
+		placement: 'bottom',
+		title: 'Find an item',
+		body: 'Search by name, description, or code, and narrow the list with the category, status, and sort filters.'
+	},
+
+	// ── Borrow Transactions ──────────────────────────────────────────────────
+	{
+		target: 'a[href="/admin/requests"]',
+		advanceWhenRoute: '/admin/requests',
+		placement: 'right',
+		clickHint: 'Click here to open Borrow Transactions',
+		title: 'Open Borrow Transactions',
+		body: 'Every borrow request and its progress lives here. Click to open it.'
+	},
+	{
+		route: '/admin/requests',
+		target: '[data-tour="admin-requests-header"]',
+		placement: 'bottom',
+		title: 'Borrow Transactions',
+		body: 'The full log of borrow requests — from first submitted through returned. This is your window into who has what and where each request is in the workflow.'
+	},
+	{
+		route: '/admin/requests',
+		target: '[data-tour="admin-requests-stats"]',
+		placement: 'bottom',
+		title: 'Filter by status',
+		body: 'These cards count requests by stage — total, pending, ready, currently borrowed, and overdue. Click one to filter the list to that stage.'
+	},
+	{
+		route: '/admin/requests',
+		target: '[data-tour="admin-requests-search"]',
+		placement: 'bottom',
+		title: 'Search & sort',
+		body: 'Find a specific request by student, request ID, or item, and sort or filter the list to focus on what you need.'
+	},
+	{
+		route: '/admin/requests',
+		target: '[data-tour="admin-requests-row"]',
+		placement: 'bottom',
+		clickHint: 'Click any request to open it',
+		advanceWhen: '[data-tour="admin-requests-detail"]',
+		title: 'Open a request',
+		body: 'Go ahead and click any request to open its full detail. This just opens the record for viewing — nothing is changed. The tour continues as soon as it opens.'
+	},
+	{
+		route: '/admin/requests',
+		target: '[data-tour="admin-requests-detail"]',
+		placement: 'bottom',
+		title: 'The request detail',
+		body: 'Review the student, the items, the schedule, and the purpose of any request — a complete, read-only picture of the transaction.'
+	},
+
+	// ── History (navigating here closes the request modal) ───────────────────
+	{
+		route: '/admin/history',
+		target: '[data-tour="history-header"]',
+		placement: 'bottom',
+		title: 'Borrow Request History',
+		body: 'An all-time archive of borrowing activity — requests, requested items, and per-student and per-item profiles you can drill into.'
+	},
+	{
+		route: '/admin/history',
+		target: '[data-tour="history-tabs"]',
+		placement: 'bottom',
+		title: 'Explore the archive',
+		body: 'Switch between Request Logs, Requested Items, the Students Directory, and Item Adjustments to slice the history the way you need.'
+	},
+	{
+		route: '/admin/history',
+		target: '[data-tour="history-filters"]',
+		placement: 'bottom',
+		title: 'Search & filter history',
+		body: 'Search and filter by status or location to zero in on any past transaction.'
+	},
+
+	// ── Reports & Analytics ──────────────────────────────────────────────────
+	{
+		target: 'a[href="/admin/analytics"]',
+		advanceWhenRoute: '/admin/analytics',
+		placement: 'right',
+		clickHint: 'Click here to open Reports & Analytics',
+		title: 'Open Reports & Analytics',
+		body: 'For the big picture, click to open your analytics.'
+	},
+	{
+		route: '/admin/analytics',
+		target: '[data-tour="admin-analytics-header"]',
+		placement: 'bottom',
+		title: 'Reports & Analytics',
+		body: 'Visual reports on borrowing trends, inventory, and student risk. You can also export the data to Excel from here when you need to share it.'
+	},
+	{
+		route: '/admin/analytics',
+		target: '[data-tour="admin-analytics-filters"]',
+		placement: 'bottom',
+		title: 'Set your reporting window',
+		body: 'Choose a date range and filter by class, instructor, student, or custodian so every chart reflects exactly the slice you care about.'
+	},
+	{
+		route: '/admin/analytics',
+		target: '[data-tour="admin-analytics-tabs"]',
+		placement: 'bottom',
+		title: 'Every angle in one place',
+		body: 'Move between Overview, Borrowing, Inventory, Student Risk, and transaction reports. Rows inside each report open read-only detail views for a closer look.'
+	},
+
+	{
+		route: '/admin/analytics',
+		title: "You're all set! 🎉",
+		body: "That's the full monitoring picture. You can replay this tour anytime from your account Settings. Happy monitoring!"
 	}
 ];
 
 export const tourSteps: Record<OnboardingRole, TourStep[]> = {
 	student,
 	instructor,
-	custodian
+	custodian,
+	admin
 };
 
 // ── Page-by-page chaptering ──────────────────────────────────────────────────
@@ -541,11 +1053,19 @@ const PAGE_LABELS: Record<string, string> = {
 	'/instructor/dashboard': 'Dashboard',
 	'/instructor/requests': 'Request Approvals',
 	'/instructor/inventory': 'Inventory',
+	'/instructor/history': 'History',
 	'/instructor/reports': 'Reports & Analytics',
 	'/custodian/dashboard': 'Dashboard',
 	'/custodian/requests': 'Requests',
 	'/custodian/inventory': 'Inventory',
-	'/custodian/transactions': 'Alternative Transactions'
+	'/custodian/history': 'History',
+	'/custodian/transactions': 'Alternative Transactions',
+	'/custodian/reports': 'Reports & Analytics',
+	'/admin/dashboard': 'Dashboard',
+	'/admin/inventory': 'Inventory Catalog',
+	'/admin/requests': 'Borrow Transactions',
+	'/admin/history': 'History',
+	'/admin/analytics': 'Reports & Analytics'
 };
 
 export function pageLabelFor(route: string | undefined): string {

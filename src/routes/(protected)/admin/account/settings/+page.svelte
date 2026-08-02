@@ -2,7 +2,9 @@
 	import { userSettingsStore } from '$lib/stores/userSettings';
 	import { toastStore } from '$lib/stores/toast';
 	import { confirmStore } from '$lib/stores/confirm';
-	import { Moon, Sun, MessageSquare, Type, Eye, RotateCcw, ShieldCheck, FileText, ChevronDown, ChevronUp } from 'lucide-svelte';
+	import { user } from '$lib/stores/auth';
+	import { requestTour, resetOnboarding } from '$lib/stores/onboarding';
+	import { Moon, Sun, MessageSquare, Type, Eye, RotateCcw, ShieldCheck, FileText, ChevronDown, ChevronUp, HelpCircle, PlayCircle } from 'lucide-svelte';
 
 	let privacyOpen = $state(false);
 	let termsOpen = $state(false);
@@ -205,6 +207,48 @@
 			</div>
 		</div>
 
+
+		<!-- Guided Tour Section -->
+		<div class="rounded-lg bg-white shadow">
+			<div class="border-b border-gray-200 px-6 py-4">
+				<h2 class="text-base font-semibold text-gray-900">Guided Tour</h2>
+				<p class="mt-1 text-sm text-gray-500">Replay the walkthrough of the Admin monitoring portal</p>
+			</div>
+			<div class="flex flex-col gap-4 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+				<div class="flex items-start gap-3">
+					<div class="mt-0.5 rounded-lg bg-pink-50 p-2">
+						<HelpCircle size={18} class="text-pink-600" />
+					</div>
+					<div>
+						<h3 class="text-sm font-medium text-gray-900">Welcome tour</h3>
+						<p class="mt-0.5 text-xs text-gray-500">
+							Take the page-by-page tour again now, or reset it so it appears the next time you open your dashboard.
+						</p>
+					</div>
+				</div>
+				<div class="flex shrink-0 flex-wrap items-center gap-2">
+					<button
+						onclick={() => requestTour('admin')}
+						class="inline-flex items-center gap-2 rounded-lg border border-pink-200 bg-pink-50 px-4 py-2 text-sm font-semibold text-pink-700 transition-colors hover:bg-pink-100"
+					>
+						<PlayCircle size={16} /> Take the guided tour
+					</button>
+					<button
+						onclick={() => {
+							if (!$user?.id) return;
+							resetOnboarding('admin', $user.id);
+							toastStore.success(
+								'The welcome tour will show again next time you open your dashboard.',
+								'Tour reset'
+							);
+						}}
+						class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+					>
+						<RotateCcw size={14} /> Reset tour
+					</button>
+				</div>
+			</div>
+		</div>
 
 		<!-- Privacy Policy Section -->
 		<div class="rounded-lg bg-white shadow">

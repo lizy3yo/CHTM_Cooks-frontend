@@ -574,7 +574,7 @@
 				<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Item Request Profile</h1>
 				<p class="mt-1 text-sm text-gray-500">All-time request stats and student logs for {selectedItem.name}</p>
 			{:else}
-				<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Borrow Request History</h1>
+				<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl" data-tour="history-header">Borrow Request History</h1>
 				<p class="mt-1 text-sm text-gray-500">View items requested, requesting students, and individual all-time profiles</p>
 			{/if}
 		</div>
@@ -890,7 +890,7 @@
 				<!-- LIST OVERVIEW WITH TABS (REQUESTS TAB / ITEMS TAB / STUDENT DIRECTORY TAB) -->
 				<!-- Navigation Tabs for Requests vs. Items vs. Students -->
 				<div class="border-b border-gray-200">
-					<nav class="-mb-px flex gap-6" aria-label="History sub-navigation">
+					<nav class="-mb-px flex gap-6" aria-label="History sub-navigation" data-tour="history-tabs">
 						<button
 							onclick={() => { activeMainTab = 'requests'; currentPage = 1; }}
 							class="border-b-2 pb-4 text-sm font-semibold transition-all {activeMainTab === 'requests'
@@ -927,7 +927,7 @@
 				</div>
 
 				<!-- Search & Filters Container -->
-				<div class="grid grid-cols-1 gap-4 md:grid-cols-12">
+				<div class="grid grid-cols-1 gap-4 md:grid-cols-12" data-tour="history-filters">
 					<!-- Search -->
 					<div class="relative md:col-span-6">
 						<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -981,7 +981,7 @@
 				</div>
 
 				<!-- Content Card -->
-				<div class="rounded-2xl border border-gray-200 bg-white shadow-xs overflow-hidden">
+				<div class="rounded-2xl border border-gray-200 bg-white shadow-xs overflow-hidden" data-tour="history-table">
 					{#if activeMainTab === 'requests'}
 						<!-- REQUESTS LIST TABLE -->
 						{#if paginatedRequests.length === 0}

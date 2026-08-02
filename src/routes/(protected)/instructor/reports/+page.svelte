@@ -586,7 +586,7 @@
 
 	const EXPORT_SECTIONS: ExportSection[] = [
 		{ id: 'overview', label: 'Overview', description: 'Totals, top items, status count, overdue list' },
-		{ id: 'borrowing', label: 'Borrowing Analytics', description: 'Time charts, borrower metrics, individual transactions' },
+		{ id: 'borrowing', label: 'Borrowing Analytics', description: 'Time charts, borrower metrics, individual transactions' },
 		{ id: 'inventory', label: 'Inventory', description: 'EOM Variance, damage rates, alert logs, required counts' },
 		{ id: 'students', label: 'Student Risk', description: 'Trust scores, risk tiers, repeat offender profiles' },
 		{ id: 'walk-in', label: 'Walk-in Transactions', description: 'Desk walk-in checkouts to students and guests' }
@@ -680,7 +680,7 @@
 		</button>
 	</div>
 
-	<div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-4">
+	<div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-4" data-tour="instructor-reports-filters">
 		<div class="flex flex-wrap items-center gap-3">
 			<span class="text-sm font-semibold text-gray-700">Date Range:</span>
 			{#each [{ id: 'today', label: 'Today' }, { id: 'last7', label: 'Last 7 Days' }, { id: 'mtd', label: 'Month-to-Date' }, { id: 'custom', label: 'Custom' }] as option}
@@ -763,7 +763,7 @@
 
 	<div class="rounded-xl border border-gray-200 bg-white shadow-sm">
 		<div class="border-b border-gray-200 px-4">
-			<nav class="flex gap-4 overflow-x-auto" aria-label="Report tabs">
+			<nav class="flex gap-4 overflow-x-auto" aria-label="Report tabs" data-tour="instructor-reports-tabs">
 				{#each [{ id: 'overview', label: 'Overview', icon: BarChart3 }, { id: 'borrowing', label: 'Borrowing Analytics', icon: Package }, { id: 'inventory', label: 'Inventory', icon: Package }, { id: 'students', label: 'Student Risk', icon: Users }, { id: 'processed', label: 'Processed Transactions', icon: FileText }, { id: 'walk-in', label: 'Walk-in Transactions', icon: Users }] as tab}
 					<button
 						onclick={() => (activeTab = tab.id as Tab)}
@@ -798,7 +798,7 @@
 		{:else if (activeTab === 'overview' && summaryReport) || report}
 			<div class="space-y-6 p-6">
 				{#if activeTab === 'overview'}
-					<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+					<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-tour="instructor-reports-stats">
 						<div
 							class="rounded-xl border border-gray-200 bg-linear-to-br from-pink-50 to-white p-5"
 						>

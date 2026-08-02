@@ -209,7 +209,7 @@
 <div class="space-y-6">
 
 	<!-- ── Header ─────────────────────────────────────────────────────────── -->
-	<div class="flex items-start justify-between gap-3">
+	<div class="flex items-start justify-between gap-3" data-tour="instructor-dash-header">
 		<div class="min-w-0">
 			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">{greeting}, {$user?.firstName}</h1>
 			<p class="mt-0.5 text-sm text-gray-500">Instructor Portal — Equipment & Request Overview</p>
@@ -232,7 +232,7 @@
 		</div>
 	{:else}
 		<!-- ── KPI Strip ───────────────────────────────────────────────────── -->
-		<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+		<div class="grid grid-cols-2 gap-3 sm:grid-cols-4" data-tour="instructor-dash-kpis">
 
 			<button
 				type="button"
@@ -285,7 +285,7 @@
 	{/if}
 
 		<!-- ── Requests Needing Action ────────────────────────────────────── -->
-		<div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+		<div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100" data-tour="instructor-dash-actions">
 			<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
 				<div class="flex items-center gap-2">
 					<ClipboardList size={16} class="text-pink-500" />

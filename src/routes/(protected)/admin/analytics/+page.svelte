@@ -856,7 +856,7 @@
 
 	const EXPORT_SECTIONS: ExportSection[] = [
 		{ id: 'overview', label: 'Overview', description: 'Totals, top items, status count, overdue list' },
-		{ id: 'borrowing', label: 'Borrowing Analytics', description: 'Time charts, borrower metrics, individual transactions' },
+		{ id: 'borrowing', label: 'Borrowing Analytics', description: 'Time charts, borrower metrics, individual transactions' },
 		{ id: 'inventory', label: 'Inventory', description: 'EOM Variance, damage rates, alert logs, required counts' },
 		{ id: 'students', label: 'Student Risk', description: 'Trust scores, risk tiers, repeat offender profiles' },
 		{ id: 'walk-in', label: 'Walk-in Transactions', description: 'Desk walk-in checkouts to students and guests' }
@@ -953,7 +953,7 @@
 
 <div class="space-y-6">
 	<!-- Header -->
-	<div class="flex items-start justify-between gap-4">
+	<div class="flex items-start justify-between gap-4" data-tour="admin-analytics-header">
 		<div>
 			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Reports & Analytics</h1>
 			<p class="mt-1 text-sm text-gray-500">
@@ -972,7 +972,7 @@
 		</button>
 	</div>
 
-	<div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-4">
+	<div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-4" data-tour="admin-analytics-filters">
 		<div class="flex flex-wrap items-center gap-3">
 			<span class="text-sm font-semibold text-gray-700">Date Range:</span>
 			{#each [{ id: 'today', label: 'Today' }, { id: 'last7', label: 'Last 7 Days' }, { id: 'mtd', label: 'Month-to-Date' }, { id: 'custom', label: 'Custom' }] as option}
@@ -1053,7 +1053,7 @@
 		</div>
 	</div>
 
-	<div class="rounded-xl border border-gray-200 bg-white shadow-sm">
+	<div class="rounded-xl border border-gray-200 bg-white shadow-sm" data-tour="admin-analytics-tabs">
 		<div class="border-b border-gray-200 px-4">
 			<nav class="flex gap-4 overflow-x-auto" aria-label="Report tabs">
 				{#each [{ id: 'overview', label: 'Overview', icon: BarChart3 }, { id: 'borrowing', label: 'Borrowing Analytics', icon: Package }, { id: 'inventory', label: 'Inventory', icon: Package }, { id: 'students', label: 'Student Risk', icon: Users }, { id: 'processed', label: 'Processed Transactions', icon: FileText }, { id: 'walk-in', label: 'Walk-in Transactions', icon: Users }] as tab}

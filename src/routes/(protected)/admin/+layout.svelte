@@ -6,6 +6,7 @@
 	import AdminBottomNav from '$lib/components/admin/AdminBottomNav.svelte';
 	import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
 	import ConfirmDialogContainer from '$lib/components/ui/ConfirmDialogContainer.svelte';
+	import OnboardingController from '$lib/components/onboarding/OnboardingController.svelte';
 	import { sidebarCollapsed } from '$lib/stores/superadmin';
 	import { authStore, user, isLoading } from '$lib/stores/auth';
 	import type { Snippet } from 'svelte';
@@ -44,4 +45,5 @@
 <AdminBottomNav />
 <ToastContainer />
 <ConfirmDialogContainer />
+<OnboardingController role="admin" />
 {/if}

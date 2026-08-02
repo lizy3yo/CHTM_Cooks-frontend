@@ -3143,7 +3143,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 	<!-- Header -->
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 		<div class="min-w-0">
-			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Inventory Management</h1>
+			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl" data-tour="admin-inventory-header">Inventory Management</h1>
 			<p class="mt-1 text-sm text-gray-500">Manage kitchen laboratory inventory and stock levels</p>
 		</div>
 
@@ -3700,7 +3700,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 				{/each}
 			</div>
 		{:else}
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" data-tour="admin-inventory-stats">
 				<!-- Card 1: Total Lab Stock -->
 				<button type="button" onclick={() => { stockModalMode = 'total'; showStockModal = true; }} class="rounded-lg border border-transparent bg-white p-3 shadow transition-all duration-200 sm:p-5 w-full text-left cursor-pointer hover:shadow-md active:scale-[0.99]">
 					<div class="flex items-center justify-between gap-2">
@@ -3847,7 +3847,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 		{/if}
 
 		<!-- Tabs Navigation -->
-		<div class="border-b border-gray-200 bg-white">
+		<div class="border-b border-gray-200 bg-white" data-tour="admin-inventory-tabs">
 			<nav class="-mb-px flex" aria-label="Inventory tabs">
 				<button
 					onclick={() => switchTab('all-items')}
@@ -3910,7 +3910,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 				{:else}
 					<!-- All Items View -->
 					<div class="p-4 sm:p-6">
-						<div class="mb-4 flex flex-col gap-3">
+						<div class="mb-4 flex flex-col gap-3" data-tour="admin-inventory-search">
 							<!-- Premium Industry Standard Filter controls -->
 							<div class="flex flex-col gap-3">
 								<!-- 1. Full-Width Search Field -->

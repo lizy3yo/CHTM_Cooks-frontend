@@ -10,7 +10,7 @@
 		tourReset,
 		type OnboardingRole
 	} from '$lib/stores/onboarding';
-	import { tourSteps } from './tourSteps';
+	import { tourSteps, studentUnenrolled } from './tourSteps';
 	import OnboardingTour from './OnboardingTour.svelte';
 
 	interface Props {
@@ -20,7 +20,41 @@
 	let { role }: Props = $props();
 
 	let open = $state(false);
-	const steps = $derived(tourSteps[role]);
+
+	// ── Enrollment-aware variant (students only) ─────────────────────────────
+	// A student with no active class-code enrollment cannot submit a borrow
+	// request — the whole request wizard is gated — so the standard hands-on tour
+	// would lead them into a dead end. Such students get a dedicated variant that
+	// orients them and explains how to get enrolled instead. `null` = not yet
+	// known. Only ever read behind a `role === 'student'` guard, so for other
+	// roles it simply stays `null` and never affects the tour.
+	let studentEnrolled = $state<boolean | null>(null);
+
+	$effect(() => {
+		if (role !== 'student') return;
+		const id = userId;
+		if (!id || studentEnrolled !== null) return;
+		let cancelled = false;
+		void (async () => {
+			try {
+				const res = await fetch('/api/class-codes/my-classes', { credentials: 'include' });
+				if (!res.ok) throw new Error('lookup failed');
+				const data = await res.json();
+				if (!cancelled) studentEnrolled = (data.classCodes?.length ?? 0) > 0;
+			} catch {
+				// If we can't tell, assume enrolled — never wrongly greet a real
+				// borrower with the "you're not enrolled yet" tour.
+				if (!cancelled) studentEnrolled = true;
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	const steps = $derived(
+		role === 'student' && studentEnrolled === false ? studentUnenrolled : tourSteps[role]
+	);
 
 	const userId = $derived($user?.id ?? null);
 	/**
@@ -47,8 +81,13 @@
 	$effect(() => {
 		const id = userId;
 		const path = $page.url.pathname;
+		const enrolled = studentEnrolled; // dependency: re-run once enrollment resolves
 		if (autoChecked || !id) return;
 		if (!path.startsWith(`/${role}`)) return;
+		// For students, hold until enrollment is known so the correct variant
+		// (standard vs. unenrolled) starts — don't consume the once-per-session
+		// guard while we're still undecided.
+		if (role === 'student' && enrolled === null) return;
 
 		autoChecked = true;
 		if (hasCompletedOnboarding(role, id, serverCompletedAt)) return;

@@ -4056,7 +4056,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 				{/each}
 			</div>
 		{:else}
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" data-tour="instructor-inventory-stats">
 				<!-- Card 1: Total Lab Stock -->
 				<button type="button" onclick={() => { stockModalMode = 'total'; showStockModal = true; }} class="rounded-lg bg-white p-3 shadow sm:p-5 border border-transparent transition-all duration-200 w-full text-left cursor-pointer hover:shadow-md active:scale-[0.99]">
 					<div class="flex items-center justify-between gap-2">
@@ -4215,7 +4215,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 						<!-- Premium Industry Standard Filter controls -->
 						<div class="flex flex-col gap-3">
 							<!-- 1. Full-Width Search Field -->
-							<div class="relative w-full">
+							<div class="relative w-full" data-tour="instructor-inventory-search">
 								<input
 									type="text"
 									placeholder="Search by name, description, or code..."
