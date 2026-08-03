@@ -4,6 +4,7 @@
 	import { fly, fade, scale } from 'svelte/transition';
 	import { quintOut, cubicOut } from 'svelte/easing';
 	import { chatStore } from '$lib/stores/chat';
+	import { fabCollapsed } from '$lib/stores/scrollCollapse';
 	import { user } from '$lib/stores/auth';
 	import { userSettingsStore } from '$lib/stores/userSettings';
 	import { themeStore } from '$lib/stores/theme';
@@ -13,6 +14,7 @@
 		Trash2,
 		Bot,
 		ChevronDown,
+		ChevronLeft,
 		RotateCcw,
 		Minimize2,
 		PanelLeft,
@@ -314,14 +316,19 @@
 
 {#if !isOpen && !hasBlockingModal && isChatbotEnabled}
 	<button
-		onclick={() => chatStore.open()}
+		onclick={() => ($fabCollapsed ? fabCollapsed.set(false) : chatStore.open())}
 		class="fab-btn"
-		aria-label="Open Aria Assistant"
+		class:collapsed={$fabCollapsed}
+		aria-label={$fabCollapsed ? 'Show Aria Assistant' : 'Open Aria Assistant'}
 		in:scale={{ duration: 300, easing: quintOut }}
 	>
 		<span class="fab-ring"></span>
 		<span class="fab-inner">
-			<Bot size={22} />
+			{#if $fabCollapsed}
+				<ChevronLeft size={18} />
+			{:else}
+				<Bot size={22} />
+			{/if}
 		</span>
 	</button>
 {/if}
@@ -536,7 +543,7 @@
 		height: 56px;
 		border: none;
 		cursor: pointer;
-		transition: transform 0.2s ease;
+		transition: transform 0.2s ease, width 0.28s ease, height 0.28s ease, right 0.28s ease;
 	}
 	@media (min-width: 1024px) {
 		.fab-btn {
@@ -546,6 +553,20 @@
 	}
 	.fab-btn:hover { transform: scale(1.08); }
 	.fab-btn:active { transform: scale(0.95); }
+
+	/* Collapsed: tuck into a slim arrow tab flush against the right edge. */
+	.fab-btn.collapsed {
+		right: 0;
+		width: 22px;
+		height: 48px;
+	}
+	.fab-btn.collapsed .fab-ring { display: none; }
+	.fab-btn.collapsed .fab-inner {
+		width: 22px;
+		height: 48px;
+		border-radius: 14px 0 0 14px;
+		box-shadow: -6px 6px 18px rgba(219, 39, 119, 0.4);
+	}
 
 	.fab-ring {
 		position: absolute;
@@ -567,6 +588,7 @@
 		background: linear-gradient(135deg, #db2777, #be185d);
 		color: white;
 		box-shadow: 0 8px 24px rgba(219, 39, 119, 0.45);
+		transition: width 0.28s ease, height 0.28s ease, border-radius 0.28s ease;
 	}
 
 	@keyframes spin { to { transform: rotate(360deg); } }

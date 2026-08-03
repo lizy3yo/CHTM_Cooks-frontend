@@ -10,6 +10,7 @@
 	import LoadingBar from '$lib/components/ui/LoadingBar.svelte';
 	import PWAInstallPrompt from '$lib/components/pwa/PWAInstallPrompt.svelte';
 	import OfflineStatusBanner from '$lib/components/offline/OfflineStatusBanner.svelte';
+	import { initScrollCollapse } from '$lib/stores/scrollCollapse';
 	import { initializeDatabase } from '$lib/db/schema';
 	import { initializeSyncService } from '$lib/services/syncService';
 	import './layout.css';
@@ -149,11 +150,15 @@
 		// Add keyboard listeners
 		window.addEventListener('keydown', handleKeyDown);
 		window.addEventListener('keyup', handleKeyUp);
-		
+
+		// Collapse floating widgets (chatbot / PWA prompt) while scrolling down.
+		const cleanupScrollCollapse = initScrollCollapse();
+
 		// Cleanup function
 		return () => {
 			window.removeEventListener('keydown', handleKeyDown);
 			window.removeEventListener('keyup', handleKeyUp);
+			cleanupScrollCollapse();
 		};
 	});
 </script>

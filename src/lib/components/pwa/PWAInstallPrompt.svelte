@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Download, X } from 'lucide-svelte';
+	import { Download, X, ChevronDown, ChevronLeft } from 'lucide-svelte';
 	import favicon from '$lib/assets/CHTM_LOGO.png';
+	import { fabCollapsed } from '$lib/stores/scrollCollapse';
 
 	let deferredPrompt: any = $state(null);
 	let showBanner = $state(false);
@@ -284,7 +285,17 @@
 
 <!-- Mobile/Tablet Toast (Top) -->
 {#if showBanner && (deviceType === 'mobile' || deviceType === 'tablet')}
-	<div class="pwa-toast-container">
+	<div class="pwa-toast-container" class:collapsed={$fabCollapsed}>
+		{#if $fabCollapsed}
+			<button
+				class="pwa-mini-tab"
+				onclick={() => fabCollapsed.set(false)}
+				aria-label="Show install prompt"
+			>
+				<img src={favicon} alt="" class="pwa-mini-icon" />
+				<ChevronDown size={16} />
+			</button>
+		{:else}
 		<div class="pwa-toast" class:tablet={deviceType === 'tablet'}>
 			<!-- App Icon -->
 			<div class="toast-icon-wrapper">
@@ -344,21 +355,32 @@
 				</button>
 			{/if}
 		</div>
+		{/if}
 	</div>
 {/if}
 
 <!-- Desktop Floating Button (Bottom Right) -->
 {#if showButton && deviceType === 'desktop'}
-	<div class="pwa-floating-card">
-		<button
-			class="pwa-install-button"
-			onclick={handleButtonClick}
-			aria-label="Install CHTM Cooks app"
-			title="Install CHTM Cooks"
-		>
-			<Download size={22} strokeWidth={2.5} />
-			<span>Install App</span>
-		</button>
+	<div class="pwa-floating-card" class:collapsed={$fabCollapsed}>
+		{#if $fabCollapsed}
+			<button
+				class="pwa-edge-tab"
+				onclick={() => fabCollapsed.set(false)}
+				aria-label="Show install app"
+			>
+				<ChevronLeft size={18} />
+			</button>
+		{:else}
+			<button
+				class="pwa-install-button"
+				onclick={handleButtonClick}
+				aria-label="Install CHTM Cooks app"
+				title="Install CHTM Cooks"
+			>
+				<Download size={22} strokeWidth={2.5} />
+				<span>Install App</span>
+			</button>
+		{/if}
 	</div>
 {/if}
 
@@ -376,6 +398,34 @@
 		width: calc(100% - 2rem);
 		max-width: 28rem;
 		pointer-events: none;
+	}
+
+	/* Collapsed: the toast tucks away, leaving a small pull-down tab at the top. */
+	.pwa-toast-container.collapsed {
+		top: 0;
+		display: flex;
+		justify-content: center;
+	}
+	.pwa-mini-tab {
+		pointer-events: auto;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		background: #1a0a12;
+		border: 1px solid rgba(233, 30, 99, 0.25);
+		border-top: none;
+		border-radius: 0 0 14px 14px;
+		padding: 6px 14px;
+		color: #fff;
+		cursor: pointer;
+		box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+		animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+	.pwa-mini-tab:hover { background: #2a1019; }
+	.pwa-mini-icon {
+		width: 20px;
+		height: 20px;
+		border-radius: 5px;
 	}
 
 	.pwa-toast {
@@ -527,7 +577,33 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+		transition: right 0.28s ease, bottom 0.28s ease;
 	}
+
+	/* Collapsed: slide to a slim arrow tab on the right edge, above the chatbot. */
+	.pwa-floating-card.collapsed {
+		right: 0;
+		bottom: 88px;
+		padding: 0;
+		background: transparent;
+		box-shadow: none;
+		border-radius: 0;
+		animation: none;
+	}
+	.pwa-edge-tab {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 48px;
+		border: none;
+		cursor: pointer;
+		color: #fff;
+		background: linear-gradient(135deg, #e91e63, #c2185b);
+		border-radius: 14px 0 0 14px;
+		box-shadow: -6px 6px 18px rgba(233, 30, 99, 0.4);
+	}
+	.pwa-edge-tab:hover { filter: brightness(1.05); }
 
 	@keyframes fadeInScale {
 		from {
