@@ -800,7 +800,7 @@
 				{#if activeTab === 'overview'}
 					<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-tour="instructor-reports-stats">
 						<div
-							class="rounded-xl border border-gray-200 bg-linear-to-br from-pink-50 to-white p-5"
+							class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm hover:shadow-md sm:p-5"
 						>
 							<div class="flex items-start justify-between">
 								<div>
@@ -810,48 +810,40 @@
 									</p>
 									<p class="mt-1 text-xs text-gray-600">Period total</p>
 								</div>
-								<div class="rounded-full bg-pink-100 p-3">
+								<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 sm:h-12 sm:w-12">
 									<BarChart3 size={20} class="text-pink-600" />
 								</div>
 							</div>
 						</div>
 						<div
-							class="rounded-xl border border-gray-200 bg-linear-to-br from-emerald-50 to-white p-5"
+							class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm hover:shadow-md sm:p-5"
 						>
 							<div class="flex items-start justify-between">
 								<div>
 									<p class="text-sm font-semibold text-gray-700">Return Rate</p>
-									<p
-										class="mt-2 text-3xl font-bold {returnRate >= 85
-											? 'text-emerald-600'
-											: 'text-amber-600'}"
-									>
+									<p class="mt-2 text-3xl font-bold text-gray-900">
 										{returnRate}%
 									</p>
 									<p class="mt-1 text-xs text-gray-600">Target: 90%</p>
 								</div>
-								<div class="rounded-full bg-emerald-100 p-3">
-									<TrendingUp size={20} class="text-emerald-600" />
+								<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 sm:h-12 sm:w-12">
+									<TrendingUp size={20} class="text-pink-600" />
 								</div>
 							</div>
 						</div>
 						<div
-							class="rounded-xl border border-gray-200 bg-linear-to-br from-rose-50 to-white p-5"
+							class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm hover:shadow-md sm:p-5"
 						>
 							<div class="flex items-start justify-between">
 								<div>
 									<p class="text-sm font-semibold text-gray-700">Overdue Items</p>
-									<p
-										class="mt-2 text-3xl font-bold {overdueCount > 0
-											? 'text-rose-600'
-											: 'text-emerald-600'}"
-									>
+									<p class="mt-2 text-3xl font-bold text-gray-900">
 										{numberFmt.format(overdueCount)}
 									</p>
 									<p class="mt-1 text-xs text-gray-600">Requires attention</p>
 								</div>
-								<div class="rounded-full bg-rose-100 p-3">
-									<AlertTriangle size={20} class="text-rose-600" />
+								<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 sm:h-12 sm:w-12">
+									<AlertTriangle size={20} class="text-pink-600" />
 								</div>
 							</div>
 						</div>

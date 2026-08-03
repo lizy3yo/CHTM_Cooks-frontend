@@ -937,7 +937,7 @@
 	</div>
 
 	<!-- ─── STATS CARDS ─────────────────────────────────────────────────────── -->
-	<div class="grid grid-cols-1 gap-4 sm:grid-cols-3" data-tour="custodian-transactions-stats">
+	<div class="grid grid-cols-2 gap-3 sm:grid-cols-3" data-tour="custodian-transactions-stats">
 		<!-- Card 1: Total Walk-ins -->
 		<button
 			type="button"
@@ -945,21 +945,16 @@
 				activeTab = 'walk-in';
 				walkInStatusFilter = 'all';
 			}}
-			class="group cursor-pointer rounded-xl border p-5 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-pink-500 {activeTab === 'walk-in' && walkInStatusFilter === 'all'
-				? 'border-pink-500 bg-pink-50/30 ring-2 ring-pink-500/20'
-				: 'border-gray-100 bg-white hover:border-pink-200'}"
+			class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:border-pink-300 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-pink-500/20 sm:p-5 {activeTab === 'walk-in' && walkInStatusFilter === 'all' ? 'border-pink-400 bg-pink-50 ring-2 ring-pink-500/30' : ''}"
 		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-semibold tracking-wider text-gray-600 uppercase transition-colors group-hover:text-pink-600"
-					>Total Walk-ins</span
-				>
-				<div class="rounded-lg bg-pink-50 p-2 text-pink-600 transition-colors group-hover:bg-pink-100">
-					<Users size={16} />
+			<div class="flex items-center justify-between gap-2">
+				<div class="min-w-0">
+					<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Total Walk-ins</p>
+					<p class="mt-1 text-xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">{walkInStats.total}</p>
 				</div>
-			</div>
-			<div class="mt-4 flex items-baseline gap-2">
-				<span class="text-3xl font-bold text-gray-900">{walkInStats.total}</span>
-				<span class="text-xs text-gray-600">records logged (click to filter all)</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 sm:h-12 sm:w-12">
+					<Users class="h-5 w-5 sm:h-6 sm:w-6" />
+				</div>
 			</div>
 		</button>
 
@@ -970,21 +965,16 @@
 				activeTab = 'walk-in';
 				walkInStatusFilter = 'borrowed';
 			}}
-			class="group cursor-pointer rounded-xl border p-5 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-amber-500 {activeTab === 'walk-in' && walkInStatusFilter === 'borrowed'
-				? 'border-amber-500 bg-amber-50/30 ring-2 ring-amber-500/20'
-				: 'border-gray-100 bg-white hover:border-amber-200'}"
+			class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:border-pink-300 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-pink-500/20 sm:p-5 {activeTab === 'walk-in' && walkInStatusFilter === 'borrowed' ? 'border-pink-400 bg-pink-50 ring-2 ring-pink-500/30' : ''}"
 		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-semibold tracking-wider text-gray-600 uppercase transition-colors group-hover:text-amber-600"
-					>Active Walk-in Borrows</span
-				>
-				<div class="rounded-lg bg-amber-50 p-2 text-amber-600 transition-colors group-hover:bg-amber-100">
-					<Clock size={16} />
+			<div class="flex items-center justify-between gap-2">
+				<div class="min-w-0">
+					<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Active Walk-in Borrows</p>
+					<p class="mt-1 text-xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">{walkInStats.active}</p>
 				</div>
-			</div>
-			<div class="mt-4 flex items-baseline gap-2">
-				<span class="text-3xl font-bold text-amber-600">{walkInStats.active}</span>
-				<span class="text-xs text-gray-600">out of lab (click to filter active)</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 sm:h-12 sm:w-12">
+					<Clock class="h-5 w-5 sm:h-6 sm:w-6" />
+				</div>
 			</div>
 		</button>
 
@@ -994,23 +984,16 @@
 			onclick={() => {
 				activeTab = 'confidential';
 			}}
-			class="group cursor-pointer rounded-xl border p-5 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 {activeTab === 'confidential'
-				? 'border-indigo-500 bg-indigo-50/30 ring-2 ring-indigo-500/20'
-				: 'border-gray-100 bg-white hover:border-indigo-200'}"
+			class="col-span-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:border-pink-300 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-pink-500/20 sm:col-span-1 sm:p-5 {activeTab === 'confidential' ? 'border-pink-400 bg-pink-50 ring-2 ring-pink-500/30' : ''}"
 		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-semibold tracking-wider text-gray-600 uppercase transition-colors group-hover:text-indigo-600"
-					>Confidential Admin Orders</span
-				>
-				<div class="rounded-lg bg-indigo-50 p-2 text-indigo-600 transition-colors group-hover:bg-indigo-100">
-					<Lock size={15} />
+			<div class="flex items-center justify-between gap-2">
+				<div class="min-w-0">
+					<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Confidential Admin Orders</p>
+					<p class="mt-1 text-xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">{confidentialStats.pending + confidentialStats.active}</p>
 				</div>
-			</div>
-			<div class="mt-4 flex items-baseline gap-2">
-				<span class="text-3xl font-bold text-indigo-700"
-					>{confidentialStats.pending + confidentialStats.active}</span
-				>
-				<span class="text-xs text-gray-600">active pipelines (click to open tab)</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 sm:h-12 sm:w-12">
+					<Lock class="h-5 w-5 sm:h-6 sm:w-6" />
+				</div>
 			</div>
 		</button>
 	</div>

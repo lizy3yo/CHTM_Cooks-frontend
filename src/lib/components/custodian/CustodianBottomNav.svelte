@@ -28,11 +28,6 @@
 			name: 'Alt Trans',
 			href: '/custodian/transactions',
 			icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4'
-		},
-		{
-			name: 'Resources',
-			href: '/custodian/replacement',
-			icon: 'M21 2v6h-6M3 12a9 9 0 0115-6.7L21 8M3 22v-6h6M21 12a9 9 0 01-15 6.7L3 16'
 		}
 	] as const;
 
@@ -113,48 +108,75 @@
 	class="fixed inset-x-0 bottom-0 z-40 flex h-16 items-end border-t border-gray-200 bg-white pb-safe lg:hidden"
 	aria-label="Bottom navigation"
 >
-	{#each items as item, index}
-		{@const active = isActive(item.href)}
-
-		{#if index === 2}
-			<!-- Raised centre action button for QR scanner with white background and pink border -->
-			<button
-				type="button"
-				onclick={openScanner}
-				class="group relative -top-4 mx-auto flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white shadow-lg ring-4 ring-pink-600 transition-all duration-300 active:scale-95"
-				aria-label="Scan QR Code"
+	<!-- Left group -->
+	<div class="flex flex-1 items-end">
+		{#each items.slice(0, 2) as item}
+			{@const active = isActive(item.href)}
+			<a
+				href={item.href}
+				class="relative flex flex-1 flex-col items-center justify-center gap-1 pb-2 pt-2 text-xs font-medium transition-colors duration-200
+					{active ? 'text-pink-600' : 'text-gray-400 hover:text-gray-600'}"
+				aria-current={active ? 'page' : undefined}
 			>
-				<!-- Glowing ring on hover/tap -->
-				<span class="absolute -inset-2 rounded-full bg-pink-400 opacity-0 blur-lg transition-opacity duration-300 group-hover:opacity-40 group-active:opacity-40"></span>
-				
-				<!-- Lucide QR Code Icon -->
-				<QrCode class="relative h-7 w-7 text-pink-600" strokeWidth={2.5} />
-			</button>
-		{/if}
+				<svg
+					class="h-5 w-5 transition-transform duration-200 {active ? 'scale-110' : ''}"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+					aria-hidden="true"
+				>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="{active ? 2.5 : 2}" d={item.icon} />
+				</svg>
+				<span>{item.name}</span>
 
-		<a
-			href={item.href}
-			class="flex flex-1 flex-col items-center justify-center gap-1 pb-2 pt-2 text-xs font-medium transition-colors duration-200
-				{active ? 'text-pink-600' : 'text-gray-400 hover:text-gray-600'}"
-			aria-current={active ? 'page' : undefined}
-		>
-			<svg
-				class="h-5 w-5 transition-transform duration-200 {active ? 'scale-110' : ''}"
-				fill="none"
-				stroke="currentColor"
-				viewBox="0 0 24 24"
-				aria-hidden="true"
+				{#if active}
+					<span class="absolute bottom-1 h-1 w-1 rounded-full bg-pink-600"></span>
+				{/if}
+			</a>
+		{/each}
+	</div>
+
+	<!-- Raised centre action button for the QR scanner — kept dead-centre between the two link groups -->
+	<button
+		type="button"
+		onclick={openScanner}
+		class="group relative -top-4 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white shadow-lg ring-4 ring-pink-600 transition-all duration-300 active:scale-95"
+		aria-label="Scan QR Code"
+	>
+		<!-- Glowing ring on hover/tap -->
+		<span class="absolute -inset-2 rounded-full bg-pink-400 opacity-0 blur-lg transition-opacity duration-300 group-hover:opacity-40 group-active:opacity-40"></span>
+
+		<!-- Lucide QR Code Icon -->
+		<QrCode class="relative h-7 w-7 text-pink-600" strokeWidth={2.5} />
+	</button>
+
+	<!-- Right group -->
+	<div class="flex flex-1 items-end">
+		{#each items.slice(2) as item}
+			{@const active = isActive(item.href)}
+			<a
+				href={item.href}
+				class="relative flex flex-1 flex-col items-center justify-center gap-1 pb-2 pt-2 text-xs font-medium transition-colors duration-200
+					{active ? 'text-pink-600' : 'text-gray-400 hover:text-gray-600'}"
+				aria-current={active ? 'page' : undefined}
 			>
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="{active ? 2.5 : 2}" d={item.icon} />
-			</svg>
-			<span>{item.name}</span>
+				<svg
+					class="h-5 w-5 transition-transform duration-200 {active ? 'scale-110' : ''}"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+					aria-hidden="true"
+				>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="{active ? 2.5 : 2}" d={item.icon} />
+				</svg>
+				<span>{item.name}</span>
 
-			<!-- Active indicator dot -->
-			{#if active}
-				<span class="absolute bottom-1 h-1 w-1 rounded-full bg-pink-600"></span>
-			{/if}
-		</a>
-	{/each}
+				{#if active}
+					<span class="absolute bottom-1 h-1 w-1 rounded-full bg-pink-600"></span>
+				{/if}
+			</a>
+		{/each}
+	</div>
 </nav>
 
 <!-- Spacer so page content isn't hidden behind the bottom nav -->

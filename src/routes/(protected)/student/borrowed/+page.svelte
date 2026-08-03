@@ -716,64 +716,60 @@
 	<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
 		<button
 			onclick={() => (selectedFilter = 'all')}
-			class="w-full text-left rounded-lg p-3 shadow sm:p-5 border transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer {selectedFilter === 'all' ? 'border-blue-200 bg-blue-50/50 shadow-sm' : 'bg-white border-transparent hover:shadow-md hover:border-blue-200/50 hover:bg-blue-50/10'}"
+			class="w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:p-5 {selectedFilter === 'all' ? 'border-blue-400 bg-blue-50 ring-2 ring-blue-500/30' : ''}"
 		>
 			<div class="flex items-center justify-between gap-2">
 				<div class="min-w-0">
 					<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Currently Borrowed</p>
 					<p class="mt-1 text-2xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">{metrics.totalActive}</p>
 				</div>
-				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 sm:h-12 sm:w-12">
-					<Package size={18} class="text-blue-600 sm:hidden" />
-					<Package size={24} class="hidden text-blue-600 sm:block" />
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 sm:h-12 sm:w-12">
+					<Package class="h-5 w-5 sm:h-6 sm:w-6" />
 				</div>
 			</div>
 		</button>
 
 		<button
 			onclick={() => (selectedFilter = 'overdue')}
-			class="w-full text-left rounded-lg p-3 shadow sm:p-5 border transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-red-500/20 cursor-pointer {selectedFilter === 'overdue' ? 'border-red-200 bg-red-50/50 shadow-sm' : 'bg-white border-transparent hover:shadow-md hover:border-red-200/50 hover:bg-red-50/10'}"
+			class="w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-red-500/20 sm:p-5 {selectedFilter === 'overdue' ? 'border-red-400 bg-red-50 ring-2 ring-red-500/30' : ''}"
 		>
 			<div class="flex items-center justify-between gap-2">
 				<div class="min-w-0">
 					<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Overdue</p>
 					<p class="mt-1 text-2xl font-semibold text-red-600 sm:mt-2 sm:text-3xl">{metrics.overdue}</p>
 				</div>
-				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 sm:h-12 sm:w-12">
-					<AlertCircle size={18} class="text-red-600 sm:hidden" />
-					<AlertCircle size={24} class="hidden text-red-600 sm:block" />
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 sm:h-12 sm:w-12">
+					<AlertCircle class="h-5 w-5 sm:h-6 sm:w-6" />
 				</div>
 			</div>
 		</button>
 
 		<button
 			onclick={() => (selectedFilter = 'due-soon')}
-			class="w-full text-left rounded-lg p-3 shadow sm:p-5 border transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-amber-500/20 cursor-pointer {selectedFilter === 'due-soon' ? 'border-amber-200 bg-amber-50/50 shadow-sm' : 'bg-white border-transparent hover:shadow-md hover:border-amber-200/50 hover:bg-amber-50/10'}"
+			class="w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-amber-500/20 sm:p-5 {selectedFilter === 'due-soon' ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-500/30' : ''}"
 		>
 			<div class="flex items-center justify-between gap-2">
 				<div class="min-w-0">
 					<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Due Soon (48h)</p>
 					<p class="mt-1 text-2xl font-semibold text-amber-600 sm:mt-2 sm:text-3xl">{metrics.dueSoon}</p>
 				</div>
-				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 sm:h-12 sm:w-12">
-					<Clock size={18} class="text-amber-600 sm:hidden" />
-					<Clock size={24} class="hidden text-amber-600 sm:block" />
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 sm:h-12 sm:w-12">
+					<Clock class="h-5 w-5 sm:h-6 sm:w-6" />
 				</div>
 			</div>
 		</button>
 
 		<button
 			onclick={() => (selectedFilter = 'unresolved')}
-			class="w-full text-left rounded-lg p-3 shadow sm:p-5 border transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-rose-500/20 cursor-pointer {selectedFilter === 'unresolved' ? 'border-rose-200 bg-rose-50/50 shadow-sm' : 'bg-white border-transparent hover:shadow-md hover:border-rose-200/50 hover:bg-rose-50/10'}"
+			class="w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-rose-500/20 sm:p-5 {selectedFilter === 'unresolved' ? 'border-rose-400 bg-rose-50 ring-2 ring-rose-500/30' : ''}"
 		>
 			<div class="flex items-center justify-between gap-2">
 				<div class="min-w-0">
 					<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Unresolved Cases</p>
 					<p class="mt-1 text-2xl font-semibold text-rose-600 sm:mt-2 sm:text-3xl">{metrics.unresolved}</p>
 				</div>
-				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 sm:h-12 sm:w-12">
-					<AlertTriangle size={18} class="text-rose-600 sm:hidden" />
-					<AlertTriangle size={24} class="hidden text-rose-600 sm:block" />
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 sm:h-12 sm:w-12">
+					<AlertTriangle class="h-5 w-5 sm:h-6 sm:w-6" />
 				</div>
 			</div>
 		</button>

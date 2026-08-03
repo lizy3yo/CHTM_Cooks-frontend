@@ -1121,7 +1121,7 @@
 				<button
 					type="button"
 					onclick={() => { activeTab = 'all'; overdueOnly = false; pendingReturnOnly = false; searchQuery = ''; }}
-					class="rounded-lg border border-blue-200 bg-blue-50 p-3 shadow-sm hover:shadow-md hover:border-blue-300/60 hover:bg-blue-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:p-5 {activeTab === 'all' ? 'ring-2 ring-blue-500/50' : ''}"
+					class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:p-5 {activeTab === 'all' ? 'border-blue-400 bg-blue-50 ring-2 ring-blue-500/30' : ''}"
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
@@ -1131,10 +1131,10 @@
 							</p>
 						</div>
 						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 sm:h-12 sm:w-12"
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 sm:h-12 sm:w-12"
 						>
 							<svg
-								class="h-5 w-5 text-blue-600 sm:h-6 sm:w-6"
+								class="h-5 w-5 sm:h-6 sm:w-6"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -1153,20 +1153,20 @@
 				<button
 					type="button"
 					onclick={() => { activeTab = 'pending'; overdueOnly = false; pendingReturnOnly = false; }}
-					class="rounded-lg border border-yellow-200 bg-yellow-50 p-3 shadow-sm hover:shadow-md hover:border-yellow-300/60 hover:bg-yellow-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-yellow-500/20 sm:p-5 {activeTab === 'pending' ? 'ring-2 ring-yellow-500/50' : ''}"
+					class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-amber-500/20 sm:p-5 {activeTab === 'pending' ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-500/30' : ''}"
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Pending</p>
-							<p class="mt-1 text-xl font-semibold text-yellow-600 sm:mt-2 sm:text-3xl">
+							<p class="mt-1 text-xl font-semibold text-amber-600 sm:mt-2 sm:text-3xl">
 								{stats.pendingCount}
 							</p>
 						</div>
 						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-yellow-100 sm:h-12 sm:w-12"
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 sm:h-12 sm:w-12"
 						>
 							<svg
-								class="h-5 w-5 text-yellow-600 sm:h-6 sm:w-6"
+								class="h-5 w-5 sm:h-6 sm:w-6"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -1185,20 +1185,20 @@
 				<button
 					type="button"
 					onclick={() => { activeTab = 'ready'; overdueOnly = false; pendingReturnOnly = false; }}
-					class="rounded-lg border border-green-200 bg-green-50 p-3 shadow-sm hover:shadow-md hover:border-green-300/60 hover:bg-green-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-green-500/20 sm:p-5 {activeTab === 'ready' ? 'ring-2 ring-green-500/50' : ''}"
+					class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-emerald-500/20 sm:p-5 {activeTab === 'ready' ? 'border-emerald-400 bg-emerald-50 ring-2 ring-emerald-500/30' : ''}"
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Ready</p>
-							<p class="mt-1 text-xl font-semibold text-green-600 sm:mt-2 sm:text-3xl">
+							<p class="mt-1 text-xl font-semibold text-emerald-600 sm:mt-2 sm:text-3xl">
 								{stats.readyCount}
 							</p>
 						</div>
 						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100 sm:h-12 sm:w-12"
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 sm:h-12 sm:w-12"
 						>
 							<svg
-								class="h-5 w-5 text-green-600 sm:h-6 sm:w-6"
+								class="h-5 w-5 sm:h-6 sm:w-6"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -1217,20 +1217,20 @@
 				<button
 					type="button"
 					onclick={() => { activeTab = 'active'; overdueOnly = false; pendingReturnOnly = false; }}
-					class="rounded-lg border border-purple-200 bg-purple-50 p-3 shadow-sm hover:shadow-md hover:border-purple-300/60 hover:bg-purple-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-purple-500/20 sm:p-5 {activeTab === 'active' && !overdueOnly && !pendingReturnOnly ? 'ring-2 ring-purple-500/50' : ''}"
+					class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-violet-500/20 sm:p-5 {activeTab === 'active' && !overdueOnly && !pendingReturnOnly ? 'border-violet-400 bg-violet-50 ring-2 ring-violet-500/30' : ''}"
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Currently Borrowed</p>
-							<p class="mt-1 text-xl font-semibold text-purple-600 sm:mt-2 sm:text-3xl">
+							<p class="mt-1 text-xl font-semibold text-violet-600 sm:mt-2 sm:text-3xl">
 								{stats.activeCount}
 							</p>
 						</div>
 						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 sm:h-12 sm:w-12"
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600 sm:h-12 sm:w-12"
 						>
 							<svg
-								class="h-5 w-5 text-purple-600 sm:h-6 sm:w-6"
+								class="h-5 w-5 sm:h-6 sm:w-6"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -1249,7 +1249,7 @@
 				<button
 					type="button"
 					onclick={() => { activeTab = 'active'; overdueOnly = true; pendingReturnOnly = false; }}
-					class="col-span-2 rounded-lg border border-red-200 bg-red-50 p-3 shadow-sm hover:shadow-md hover:border-red-300/60 hover:bg-red-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-red-500/20 lg:col-span-1 sm:p-5 {activeTab === 'active' && overdueOnly ? 'ring-2 ring-red-500/50' : ''}"
+					class="col-span-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-red-500/20 lg:col-span-1 sm:p-5 {activeTab === 'active' && overdueOnly ? 'border-red-400 bg-red-50 ring-2 ring-red-500/30' : ''}"
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
@@ -1259,10 +1259,10 @@
 							</p>
 						</div>
 						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 sm:h-12 sm:w-12"
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 sm:h-12 sm:w-12"
 						>
 							<svg
-								class="h-5 w-5 text-red-600 sm:h-6 sm:w-6"
+								class="h-5 w-5 sm:h-6 sm:w-6"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"

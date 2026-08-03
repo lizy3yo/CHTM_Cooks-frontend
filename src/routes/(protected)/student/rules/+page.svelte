@@ -248,7 +248,7 @@
 <style>
 	@media print {
 		/* Print styling enhancements */
-		:global(aside), :global(.fixed), button, a {
+		:global(aside), :global(.fixed), button {
 			display: none !important;
 		}
 		:global(body) {

@@ -1251,10 +1251,10 @@
 					setWorkflowFilter('all');
 					searchQuery = '';
 				}}
-				class="w-full text-left rounded-lg p-3 shadow sm:p-5 border transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer
+				class="w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:p-5
 					{activeTab === 'all'
-						? 'border-blue-200 bg-blue-50/30 ring-1 ring-blue-200/50 shadow-md'
-						: 'bg-white border-transparent hover:shadow-md hover:border-blue-200/50 hover:bg-gray-50/50'}"
+						? 'border-blue-400 bg-blue-50 ring-2 ring-blue-500/30'
+						: ''}"
 			>
 				<div class="flex items-center justify-between gap-2">
 					<div class="min-w-0">
@@ -1264,7 +1264,7 @@
 						</p>
 					</div>
 					<div
-						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 sm:h-12 sm:w-12"
+						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 sm:h-12 sm:w-12"
 					>
 						<ClipboardList class="h-5 w-5 text-blue-600 sm:h-6 sm:w-6" />
 					</div>
@@ -1276,10 +1276,10 @@
 				onclick={() => {
 					setWorkflowFilter('pending');
 				}}
-				class="w-full text-left rounded-lg p-3 shadow sm:p-5 border transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-amber-500/20 cursor-pointer
+				class="w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-amber-500/20 sm:p-5
 					{activeTab === 'pending'
-						? 'border-amber-200 bg-amber-50/30 ring-1 ring-amber-200/50 shadow-md'
-						: 'bg-white border-transparent hover:shadow-md hover:border-amber-200/50 hover:bg-gray-50/50'}"
+						? 'border-amber-400 bg-amber-50 ring-2 ring-amber-500/30'
+						: ''}"
 			>
 				<div class="flex items-center justify-between gap-2">
 					<div class="min-w-0">
@@ -1289,7 +1289,7 @@
 						</p>
 					</div>
 					<div
-						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 sm:h-12 sm:w-12"
+						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 sm:h-12 sm:w-12"
 					>
 						<Clock3 class="h-5 w-5 text-amber-600 sm:h-6 sm:w-6" />
 					</div>
@@ -1301,22 +1301,22 @@
 				onclick={() => {
 					setWorkflowFilter('fulfillment');
 				}}
-				class="w-full text-left rounded-lg p-3 shadow sm:p-5 border transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer
+				class="w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:p-5
 					{activeTab === 'fulfillment'
-						? 'border-blue-200 bg-blue-50/30 ring-1 ring-blue-200/50 shadow-md'
-						: 'bg-white border-transparent hover:shadow-md hover:border-blue-200/50 hover:bg-gray-50/50'}"
+						? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-500/30'
+						: ''}"
 			>
 				<div class="flex items-center justify-between gap-2">
 					<div class="min-w-0">
 						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">With Custodian</p>
-						<p class="mt-1 text-xl font-semibold text-blue-600 sm:mt-2 sm:text-3xl">
+						<p class="mt-1 text-xl font-semibold text-indigo-600 sm:mt-2 sm:text-3xl">
 							{stats.fulfillmentCount}
 						</p>
 					</div>
 					<div
-						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 sm:h-12 sm:w-12"
+						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 sm:h-12 sm:w-12"
 					>
-						<PackageCheck class="h-5 w-5 text-blue-600 sm:h-6 sm:w-6" />
+						<PackageCheck class="h-5 w-5 text-indigo-600 sm:h-6 sm:w-6" />
 					</div>
 				</div>
 			</button>
@@ -1326,22 +1326,22 @@
 				onclick={() => {
 					setWorkflowFilter('resolved_completed');
 				}}
-				class="w-full text-left rounded-lg p-3 shadow sm:p-5 border transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer
+				class="w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-emerald-500/20 sm:p-5
 					{workflowFilter === 'resolved_completed'
-						? 'border-teal-200 bg-teal-50/30 ring-1 ring-teal-200/50 shadow-md'
-						: 'bg-white border-transparent hover:shadow-md hover:border-teal-200/50 hover:bg-gray-50/50'}"
+						? 'border-emerald-400 bg-emerald-50 ring-2 ring-emerald-500/30'
+						: ''}"
 			>
 				<div class="flex items-center justify-between gap-2">
 					<div class="min-w-0">
 						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Completed</p>
-						<p class="mt-1 text-xl font-semibold text-teal-600 sm:mt-2 sm:text-3xl">
+						<p class="mt-1 text-xl font-semibold text-emerald-600 sm:mt-2 sm:text-3xl">
 							{stats.completedCount}
 						</p>
 					</div>
 					<div
-						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-100 sm:h-12 sm:w-12"
+						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 sm:h-12 sm:w-12"
 					>
-						<CheckCircle2 class="h-5 w-5 text-teal-600 sm:h-6 sm:w-6" />
+						<CheckCircle2 class="h-5 w-5 text-emerald-600 sm:h-6 sm:w-6" />
 					</div>
 				</div>
 			</button>

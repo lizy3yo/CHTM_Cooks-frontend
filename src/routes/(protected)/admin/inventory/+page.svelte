@@ -3702,7 +3702,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 		{:else}
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" data-tour="admin-inventory-stats">
 				<!-- Card 1: Total Lab Stock -->
-				<button type="button" onclick={() => { stockModalMode = 'total'; showStockModal = true; }} class="rounded-lg border border-transparent bg-white p-3 shadow transition-all duration-200 sm:p-5 w-full text-left cursor-pointer hover:shadow-md active:scale-[0.99]">
+				<button type="button" onclick={() => { stockModalMode = 'total'; showStockModal = true; }} class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:border-pink-300 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-pink-500/20 sm:p-5 w-full">
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Total Lab Stock</p>
@@ -3712,31 +3712,31 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 							<p class="mt-1 text-[10px] text-gray-400">Total items owned by lab</p>
 						</div>
 						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 sm:h-12 sm:w-12"
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 sm:h-12 sm:w-12"
 						>
-							<Package size={18} class="text-blue-600 sm:hidden" />
-							<Package size={24} class="hidden text-blue-600 sm:block" />
+							<Package size={18} class="text-pink-600 sm:hidden" />
+							<Package size={24} class="hidden text-pink-600 sm:block" />
 						</div>
 					</div>
 				</button>
 
 				<!-- Card 2: Physical Available -->
-				<button type="button" onclick={() => { stockModalMode = 'available'; showStockModal = true; }} class="rounded-lg border border-transparent bg-white p-3 shadow transition-all duration-200 sm:p-5 w-full text-left cursor-pointer hover:shadow-md active:scale-[0.99]">
+				<button type="button" onclick={() => { stockModalMode = 'available'; showStockModal = true; }} class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:border-pink-300 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-pink-500/20 sm:p-5 w-full">
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">
 								Physical Available
 							</p>
-							<p class="mt-1 text-2xl font-semibold text-emerald-600 sm:mt-2 sm:text-3xl">
+							<p class="mt-1 text-2xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">
 								{totalAvailable}
 							</p>
 							<p class="mt-1 text-[10px] text-gray-400">Inside laboratory space</p>
 						</div>
 						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 sm:h-12 sm:w-12"
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 sm:h-12 sm:w-12"
 						>
 							<svg
-								class="h-5 w-5 text-emerald-600 sm:hidden"
+								class="h-5 w-5 text-pink-600 sm:hidden"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -3749,7 +3749,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 								/>
 							</svg>
 							<svg
-								class="hidden h-6 w-6 text-emerald-600 sm:block"
+								class="hidden h-6 w-6 text-pink-600 sm:block"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -3766,20 +3766,20 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 				</button>
 
 				<!-- Card 3: Out / Released -->
-				<button type="button" onclick={() => (showReleasedModal = true)} class="rounded-lg border border-transparent bg-white p-3 shadow transition-all duration-200 sm:p-5 w-full text-left cursor-pointer hover:border-blue-300 hover:shadow-md active:scale-[0.99]">
+				<button type="button" onclick={() => (showReleasedModal = true)} class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:border-pink-300 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-pink-500/20 sm:p-5 w-full">
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Released / Out</p>
-							<p class="mt-1 text-2xl font-semibold text-blue-600 sm:mt-2 sm:text-3xl">
+							<p class="mt-1 text-2xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">
 								{totalReleased}
 							</p>
 							<p class="mt-1 text-[10px] text-gray-400">Currently out / checked out</p>
 						</div>
 						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 sm:h-12 sm:w-12"
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 sm:h-12 sm:w-12"
 						>
 							<svg
-								class="h-5 w-5 text-blue-600 sm:hidden"
+								class="h-5 w-5 text-pink-600 sm:hidden"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -3792,7 +3792,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 								/>
 							</svg>
 							<svg
-								class="hidden h-6 w-6 text-blue-600 sm:block"
+								class="hidden h-6 w-6 text-pink-600 sm:block"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -3809,14 +3809,14 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 				</button>
 
 				<!-- Card 4: Flow Balance -->
-				<button type="button" onclick={() => { stockModalMode = 'flow'; showStockModal = true; }} class="rounded-lg border border-transparent bg-white p-3 shadow transition-all duration-200 sm:p-5 w-full text-left cursor-pointer hover:shadow-md active:scale-[0.99]">
+				<button type="button" onclick={() => { stockModalMode = 'flow'; showStockModal = true; }} class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:border-pink-300 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-pink-500/20 sm:p-5 w-full">
 					<div class="flex h-full flex-col justify-between">
 						<div class="mb-2 flex items-center justify-between gap-2">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">
 								Stock Flow Balance
 							</p>
 							<span
-								class="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-600/10"
+								class="inline-flex items-center rounded-md bg-pink-100 px-1.5 py-0.5 text-[10px] font-semibold text-pink-600 ring-1 ring-pink-600/10"
 							>
 								{flowPercentage}% Avail
 							</span>
