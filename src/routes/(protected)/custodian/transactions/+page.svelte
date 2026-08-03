@@ -100,6 +100,9 @@
 	let donationDate = $state(new Date().toISOString().split('T')[0]);
 	let donationNotes = $state('');
 
+	// Donation logging is a step-by-step wizard: 1) Donor  2) Item  3) Review.
+	let donationStep = $state(1);
+
 	// Existing item selection for donation
 	let selectedDonationItem = $state<InventoryItem | null>(null);
 	let donationItemSearchQuery = $state('');
@@ -149,6 +152,45 @@
 			toastStore.error('Failed to load donation records.');
 		} finally {
 			donationsLoading = false;
+		}
+	}
+
+	function closeDonationModal() {
+		showDonationModal = false;
+		donationStep = 1;
+	}
+
+	// Advance the donation wizard, validating the current step.
+	function goNextDonationStep() {
+		if (donationStep === 1) {
+			if (!donorName.trim()) {
+				toastStore.error('Please enter the donor name or organization.');
+				return;
+			}
+			if (!donationPurpose.trim()) {
+				toastStore.error('Please enter the purpose of the donation.');
+				return;
+			}
+			if (!donationDate) {
+				toastStore.error('Please set the date received.');
+				return;
+			}
+			donationStep = 2;
+		} else if (donationStep === 2) {
+			if (donationAction === 'new_item') {
+				if (!newItemName.trim() || !newItemCategory.trim()) {
+					toastStore.error('Please specify the new item name and category.');
+					return;
+				}
+			} else if (!selectedDonationItem) {
+				toastStore.error('Please select an existing inventory item.');
+				return;
+			}
+			if (!donationQuantity || donationQuantity <= 0) {
+				toastStore.error('Please enter a valid quantity.');
+				return;
+			}
+			donationStep = 3;
 		}
 	}
 
@@ -208,6 +250,7 @@
 
 			// Reset modal form
 			showDonationModal = false;
+			donationStep = 1;
 			donorName = '';
 			donationQuantity = 1;
 			donationUnit = '';
@@ -250,6 +293,11 @@
 	let itemSearchQuery = $state('');
 	let walkInCart = $state<WalkInItem[]>([]);
 
+	// Walk-in checkout is a step-by-step wizard: 1) Borrower  2) Equipment  3) Review.
+	let walkInStep = $state(1);
+	let walkInCategoryFilter = $state('all');
+	let walkInSortBy = $state<'name' | 'category' | 'availability'>('name');
+
 	// --- Return Form State ---
 	let selectedWalkIn = $state<WalkInTransaction | null>(null);
 	let returnInspection = $state<
@@ -268,6 +316,11 @@
 	let confidentialityLevel = $state<'Confidential' | 'Strictly Confidential'>('Confidential');
 	let confidentialReturnDate = $state('');
 	let confidentialCart = $state<WalkInItem[]>([]);
+
+	// Confidential request is a step-by-step wizard: 1) Requester  2) Equipment  3) Review.
+	let confidentialStep = $state(1);
+	let confidentialCategoryFilter = $state('all');
+	let confidentialSortBy = $state<'name' | 'category' | 'availability'>('name');
 
 	const todayDateStr = new Date().toLocaleDateString('en-CA');
 	let maxAllowedDays = $state(30);
@@ -307,6 +360,64 @@
 				item.quantity + (item.donations ?? 0) > 0
 		)
 	);
+
+	// Available stock for a walk-in item (on-hand quantity + donated stock).
+	const walkInAvailable = (item: InventoryItem) => item.quantity + (item.donations ?? 0);
+
+	// Distinct categories for the equipment-picker filter.
+	const walkInCategories = $derived.by(() => {
+		const set = new Set<string>();
+		for (const it of inventoryItems) if (!it.archived) set.add(it.category);
+		return Array.from(set).sort();
+	});
+
+	// Catalog-style equipment list for the picker step: search + category + sort.
+	const walkInEquipmentList = $derived.by(() => {
+		const q = itemSearchQuery.trim().toLowerCase();
+		const list = inventoryItems.filter(
+			(item) =>
+				!item.archived &&
+				walkInAvailable(item) > 0 &&
+				(walkInCategoryFilter === 'all' || item.category === walkInCategoryFilter) &&
+				(q === '' ||
+					item.name.toLowerCase().includes(q) ||
+					item.category.toLowerCase().includes(q) ||
+					(item.specification ?? '').toLowerCase().includes(q))
+		);
+		const sorted = [...list];
+		if (walkInSortBy === 'name') {
+			sorted.sort((a, b) => a.name.localeCompare(b.name));
+		} else if (walkInSortBy === 'category') {
+			sorted.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+		} else {
+			sorted.sort((a, b) => walkInAvailable(b) - walkInAvailable(a));
+		}
+		return sorted;
+	});
+
+	// Catalog-style equipment list for the confidential-request picker step.
+	const confidentialEquipmentList = $derived.by(() => {
+		const q = itemSearchQuery.trim().toLowerCase();
+		const list = inventoryItems.filter(
+			(item) =>
+				!item.archived &&
+				walkInAvailable(item) > 0 &&
+				(confidentialCategoryFilter === 'all' || item.category === confidentialCategoryFilter) &&
+				(q === '' ||
+					item.name.toLowerCase().includes(q) ||
+					item.category.toLowerCase().includes(q) ||
+					(item.specification ?? '').toLowerCase().includes(q))
+		);
+		const sorted = [...list];
+		if (confidentialSortBy === 'name') {
+			sorted.sort((a, b) => a.name.localeCompare(b.name));
+		} else if (confidentialSortBy === 'category') {
+			sorted.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+		} else {
+			sorted.sort((a, b) => walkInAvailable(b) - walkInAvailable(a));
+		}
+		return sorted;
+	});
 
 	// Stats Computations
 	const walkInStats = $derived.by(() => {
@@ -509,18 +620,59 @@
 		walkInCart = walkInCart.filter((i) => i.id !== itemId);
 	}
 
+	// Advance the wizard, validating the current step before moving on.
+	function goNextWalkInStep() {
+		if (walkInStep === 1) {
+			if (isCustomBorrower) {
+				if (!customStudentName.trim() || !customStudentEmail.trim()) {
+					toastStore.error('Guest full name and email are required.');
+					return;
+				}
+			} else {
+				if (!selectedStudent) {
+					toastStore.error('Please select a student from the lookup database.');
+					return;
+				}
+				if (!selectedClassCode) {
+					toastStore.error('Class code is required for database students.');
+					return;
+				}
+			}
+			if (!returnDate) {
+				toastStore.error('Please set a return date deadline.');
+				return;
+			}
+			if (returnDate < todayDateStr) {
+				toastStore.error('Return date cannot be in the past.');
+				return;
+			}
+			if (returnDate > maxReturnDateStr) {
+				toastStore.error(`Return date exceeds the ${maxAllowedDays}-day maximum.`);
+				return;
+			}
+			walkInStep = 2;
+		} else if (walkInStep === 2) {
+			if (walkInCart.length === 0) {
+				toastStore.error('Add at least one item to the basket.');
+				return;
+			}
+			walkInStep = 3;
+		}
+	}
+
 	async function submitWalkInCheckout() {
 		let name = '';
 		let sid = '';
 		let email = '';
 
 		if (isCustomBorrower) {
-			if (!customStudentName.trim() || !customStudentID.trim() || !customStudentEmail.trim()) {
-				toastStore.error('All guest student details are required.');
+			if (!customStudentName.trim() || !customStudentEmail.trim()) {
+				toastStore.error('Guest full name and email are required.');
 				return;
 			}
 			name = customStudentName;
-			sid = customStudentID;
+			// Guests may not have a school ID — default to a clear placeholder.
+			sid = customStudentID.trim() || 'GUEST';
 			email = customStudentEmail;
 		} else {
 			if (!selectedStudent) {
@@ -623,6 +775,10 @@
 		purpose = '';
 		returnDate = '';
 		walkInCart = [];
+		walkInStep = 1;
+		itemSearchQuery = '';
+		walkInCategoryFilter = 'all';
+		walkInSortBy = 'name';
 	}
 
 	// ─── ACTIONS: RETURN & INSPECTION ────────────────────────────────────────
@@ -737,6 +893,44 @@
 		confidentialCart = confidentialCart.filter((i) => i.id !== itemId);
 	}
 
+	// Advance the confidential-request wizard, validating the current step.
+	function goNextConfidentialStep() {
+		if (confidentialStep === 1) {
+			if (isCustomAdmin) {
+				if (!customAdminName.trim()) {
+					toastStore.error('Requester name is required.');
+					return;
+				}
+			} else if (!selectedAdmin) {
+				toastStore.error('Please select an administrator.');
+				return;
+			}
+			if (!confidentialPurpose.trim()) {
+				toastStore.error('Please specify a secure activity purpose.');
+				return;
+			}
+			if (!confidentialReturnDate) {
+				toastStore.error('Please set an expected return deadline.');
+				return;
+			}
+			if (confidentialReturnDate < todayDateStr) {
+				toastStore.error('Return deadline cannot be in the past.');
+				return;
+			}
+			if (confidentialReturnDate > maxReturnDateStr) {
+				toastStore.error(`Return deadline exceeds the ${maxAllowedDays}-day maximum.`);
+				return;
+			}
+			confidentialStep = 2;
+		} else if (confidentialStep === 2) {
+			if (confidentialCart.length === 0) {
+				toastStore.error('Add at least one item to the request basket.');
+				return;
+			}
+			confidentialStep = 3;
+		}
+	}
+
 	async function submitConfidentialRequest() {
 		let name = '';
 		let aid = '';
@@ -816,6 +1010,10 @@
 		confidentialPurpose = '';
 		confidentialReturnDate = '';
 		confidentialCart = [];
+		confidentialStep = 1;
+		itemSearchQuery = '';
+		confidentialCategoryFilter = 'all';
+		confidentialSortBy = 'name';
 	}
 
 	// Transition state machine for Confidential Requests
@@ -1455,76 +1653,148 @@
 <!-- ─── MODAL: LOG ITEM DONATION ────────────────────────────────────────── -->
 {#if showDonationModal}
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-		<div class="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
-			<!-- Modal Header -->
-			<div class="flex items-center justify-between border-b border-gray-100 pb-4">
-				<div class="flex items-center gap-2">
-					<div class="rounded-lg bg-red-50 p-2 text-red-500">
-						<Heart size={20} class="fill-red-500 text-red-500" />
+		<div class="relative flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+			<!-- Header + Stepper -->
+			<div class="border-b border-gray-100 px-6 pt-5 pb-4">
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						<div class="rounded-lg bg-red-50 p-2 text-red-500">
+							<Heart size={20} class="fill-red-500 text-red-500" />
+						</div>
+						<div>
+							<h2 class="text-lg font-bold text-gray-900">Log Item Donation</h2>
+							<p class="text-xs text-gray-500">Receive and register equipment donations to inventory</p>
+						</div>
 					</div>
-					<div>
-						<h2 class="text-lg font-bold text-gray-900">Log Item Donation</h2>
-						<p class="text-xs text-gray-500">Receive and register equipment donations to inventory</p>
-					</div>
-				</div>
-				<button
-					type="button"
-					onclick={() => (showDonationModal = false)}
-					class="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-				>
-					<X size={18} />
-				</button>
-			</div>
-
-			<!-- Action Selector Tabs -->
-			<div class="mt-4">
-				<div class="grid grid-cols-2 gap-2 rounded-xl border border-gray-200 bg-gray-100 p-1">
 					<button
 						type="button"
-						onclick={() => (donationAction = 'new_item')}
-						class="flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-all {donationAction === 'new_item'
-							? 'border border-gray-200/50 bg-white text-red-600 shadow-xs'
-							: 'text-gray-500 hover:text-gray-700'}"
+						onclick={closeDonationModal}
+						class="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
 					>
-						<Plus size={14} /> New Inventory Item
-					</button>
-					<button
-						type="button"
-						onclick={() => (donationAction = 'add_to_existing')}
-						class="flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-all {donationAction === 'add_to_existing'
-							? 'border border-gray-200/50 bg-white text-red-600 shadow-xs'
-							: 'text-gray-500 hover:text-gray-700'}"
-					>
-						<Package size={14} /> Add to Existing Item
+						<X size={18} />
 					</button>
 				</div>
-				<p class="mt-1.5 text-[11px] text-gray-400">
-					{#if donationAction === 'new_item'}
-						Creates a new item in the inventory and records the donation.
-					{:else}
-						Adds quantity to an existing item in the inventory and records the donation.
-					{/if}
-				</p>
+
+				<!-- Steps -->
+				<div class="mt-4 flex items-center gap-2">
+					{#each ['Donor', 'Item', 'Review'] as label, i}
+						{@const n = i + 1}
+						<div class="flex items-center gap-2">
+							<div
+								class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors {donationStep >=
+								n
+									? 'bg-red-600 text-white'
+									: 'bg-gray-100 text-gray-400'}"
+							>
+								{n}
+							</div>
+							<span
+								class="hidden text-xs font-semibold sm:inline {donationStep >= n
+									? 'text-gray-900'
+									: 'text-gray-400'}">{label}</span
+							>
+						</div>
+						{#if i < 2}
+							<div
+								class="h-0.5 flex-1 rounded-full transition-colors {donationStep > n
+									? 'bg-red-600'
+									: 'bg-gray-100'}"
+							></div>
+						{/if}
+					{/each}
+				</div>
 			</div>
 
-			<!-- Modal Body Form -->
-			<form onsubmit={(e) => { e.preventDefault(); handleCreateDonation(); }} class="mt-4 space-y-4 border-t border-gray-100 pt-4">
-				<!-- Donor Name -->
-				<div>
-					<label for="donorName" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
-						Donor Name *
-					</label>
-					<input
-						id="donorName"
-						type="text"
-						required
-						bind:value={donorName}
-						placeholder="Individual or organization name"
-						class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-					/>
-				</div>
+			<!-- Body -->
+			<div class="min-h-0 flex-1 overflow-y-auto p-6">
+				{#if donationStep === 1}
+					<!-- Step 1: Donor -->
+					<div class="space-y-4">
+						<div>
+							<label for="donorName" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+								Donor Name *
+							</label>
+							<input
+								id="donorName"
+								type="text"
+								bind:value={donorName}
+								placeholder="Individual or organization name"
+								class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+							/>
+						</div>
+						<div class="grid grid-cols-2 gap-3">
+							<div>
+								<label for="donationPurpose" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+									Purpose *
+								</label>
+								<input
+									id="donationPurpose"
+									type="text"
+									bind:value={donationPurpose}
+									placeholder="Intended use of the donated item"
+									class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+								/>
+							</div>
+							<div>
+								<label for="donationDate" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+									Date Received *
+								</label>
+								<input
+									id="donationDate"
+									type="date"
+									bind:value={donationDate}
+									class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+								/>
+							</div>
+						</div>
+						<div>
+							<label for="donationNotes" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+								Notes <span class="text-gray-400 font-normal text-[11px]">(optional)</span>
+							</label>
+							<input
+								id="donationNotes"
+								type="text"
+								bind:value={donationNotes}
+								placeholder="Additional notes"
+								class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+							/>
+						</div>
+					</div>
+				{:else if donationStep === 2}
+					<!-- Step 2: Item -->
+					<div class="space-y-4">
+						<!-- Action Selector Tabs -->
+						<div>
+							<div class="grid grid-cols-2 gap-2 rounded-xl border border-gray-200 bg-gray-100 p-1">
+								<button
+									type="button"
+									onclick={() => (donationAction = 'new_item')}
+									class="flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-all {donationAction === 'new_item'
+										? 'border border-gray-200/50 bg-white text-red-600 shadow-xs'
+										: 'text-gray-500 hover:text-gray-700'}"
+								>
+									<Plus size={14} /> New Inventory Item
+								</button>
+								<button
+									type="button"
+									onclick={() => (donationAction = 'add_to_existing')}
+									class="flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-all {donationAction === 'add_to_existing'
+										? 'border border-gray-200/50 bg-white text-red-600 shadow-xs'
+										: 'text-gray-500 hover:text-gray-700'}"
+								>
+									<Package size={14} /> Add to Existing Item
+								</button>
+							</div>
+							<p class="mt-1.5 text-[11px] text-gray-400">
+								{#if donationAction === 'new_item'}
+									Creates a new item in the inventory and records the donation.
+								{:else}
+									Adds quantity to an existing item in the inventory and records the donation.
+								{/if}
+							</p>
+						</div>
 
-				{#if donationAction === 'new_item'}
+						{#if donationAction === 'new_item'}
 					<!-- Item Name -->
 					<div>
 						<label for="newItemName" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
@@ -1707,63 +1977,90 @@
 					</div>
 				</div>
 
-				<!-- Purpose & Date Received -->
-				<div class="grid grid-cols-2 gap-3">
-					<div>
-						<label for="donationPurpose" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
-							Purpose *
-						</label>
-						<input
-							id="donationPurpose"
-							type="text"
-							required
-							bind:value={donationPurpose}
-							placeholder="Intended use of the donated item"
-							class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-						/>
 					</div>
-					<div>
-						<label for="donationDate" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
-							Date Received *
-						</label>
-						<input
-							id="donationDate"
-							type="date"
-							required
-							bind:value={donationDate}
-							class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-						/>
+				{:else}
+					<!-- Step 3: Review -->
+					<div class="space-y-4">
+						<div class="rounded-xl border border-gray-200 p-4 text-sm">
+							<div class="flex items-start justify-between gap-3 py-1.5">
+								<span class="text-gray-500">Donor</span>
+								<span class="text-right font-semibold text-gray-900">{donorName || '—'}</span>
+							</div>
+							<div class="flex items-start justify-between gap-3 border-t border-gray-100 py-1.5">
+								<span class="text-gray-500">Item</span>
+								<span class="text-right font-semibold text-gray-900">
+									{donationAction === 'new_item'
+										? newItemName || '—'
+										: (selectedDonationItem?.name ?? '—')}
+									<span
+										class="ml-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-500"
+										>{donationAction === 'new_item' ? 'New' : 'Existing'}</span
+									>
+								</span>
+							</div>
+							<div class="flex items-start justify-between gap-3 border-t border-gray-100 py-1.5">
+								<span class="text-gray-500">Quantity</span>
+								<span class="text-right font-semibold text-gray-900"
+									>{donationQuantity}{donationUnit.trim() ? ` ${donationUnit.trim()}` : ''}</span
+								>
+							</div>
+							<div class="flex items-start justify-between gap-3 border-t border-gray-100 py-1.5">
+								<span class="text-gray-500">Purpose</span>
+								<span class="text-right font-semibold text-gray-900">{donationPurpose || '—'}</span>
+							</div>
+							<div class="flex items-start justify-between gap-3 border-t border-gray-100 py-1.5">
+								<span class="text-gray-500">Date received</span>
+								<span class="text-right font-semibold text-gray-900">{donationDate || '—'}</span>
+							</div>
+							{#if donationNotes.trim()}
+								<div class="flex items-start justify-between gap-3 border-t border-gray-100 py-1.5">
+									<span class="text-gray-500">Notes</span>
+									<span class="text-right font-medium text-gray-700">{donationNotes}</span>
+								</div>
+							{/if}
+						</div>
+
+						{#if donationAction === 'new_item' && newItemPicture}
+							<img
+								src={newItemPicture}
+								alt="Donated item"
+								class="h-24 w-24 rounded-lg object-cover ring-1 ring-gray-200"
+							/>
+						{/if}
+
+						<div class="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+							{donationAction === 'new_item'
+								? 'This creates a new inventory item and records the donation against it.'
+								: 'This adds the donated quantity to the selected item and records the donation.'}
+						</div>
 					</div>
-				</div>
+				{/if}
+			</div>
 
-				<!-- Notes (optional) -->
-				<div>
-					<label for="donationNotes" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
-						Notes <span class="text-gray-400 font-normal text-[11px]">(optional)</span>
-					</label>
-					<input
-						id="donationNotes"
-						type="text"
-						bind:value={donationNotes}
-						placeholder="Additional notes"
-						class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-					/>
-				</div>
-
-				<!-- Modal Footer -->
-				<div class="flex items-center justify-end gap-3 border-t border-gray-100 pt-4">
+			<!-- Footer -->
+			<div class="flex items-center justify-between gap-3 border-t border-gray-100 px-6 py-4">
+				<button
+					type="button"
+					onclick={() => (donationStep === 1 ? closeDonationModal() : (donationStep -= 1))}
+					disabled={isSubmittingDonation}
+					class="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+				>
+					{donationStep === 1 ? 'Cancel' : 'Back'}
+				</button>
+				{#if donationStep < 3}
 					<button
 						type="button"
-						onclick={() => (showDonationModal = false)}
-						class="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-						disabled={isSubmittingDonation}
+						onclick={goNextDonationStep}
+						class="rounded-xl bg-red-600 px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-red-700"
 					>
-						Cancel
+						Next
 					</button>
+				{:else}
 					<button
-						type="submit"
-						class="flex items-center gap-1.5 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-red-700"
+						type="button"
+						onclick={handleCreateDonation}
 						disabled={isSubmittingDonation}
+						class="flex items-center gap-1.5 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-red-700 disabled:opacity-50"
 					>
 						{#if isSubmittingDonation}
 							Logging...
@@ -1771,8 +2068,8 @@
 							Log Donation
 						{/if}
 					</button>
-				</div>
-			</form>
+				{/if}
+			</div>
 		</div>
 	</div>
 {/if}
@@ -1781,22 +2078,55 @@
 {#if showWalkInModal}
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
 		<div
-			class="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+			class="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
 		>
-			<!-- Header -->
-			<div class="flex items-center justify-between border-b border-gray-100 pb-4">
-				<div class="flex items-center gap-2">
-					<Sparkles class="text-pink-600" size={20} />
-					<h2 class="text-lg font-bold text-gray-900">New Walk-in Checkout Workflow</h2>
+			<!-- Header + Stepper -->
+			<div class="border-b border-gray-100 px-6 pt-5 pb-4">
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						<Sparkles class="text-pink-600" size={20} />
+						<h2 class="text-lg font-bold text-gray-900">New Walk-in Checkout</h2>
+					</div>
+					<button onclick={closeWalkInModal} class="text-gray-400 hover:text-gray-500">
+						<X size={20} />
+					</button>
 				</div>
-				<button onclick={closeWalkInModal} class="text-gray-400 hover:text-gray-500">
-					<X size={20} />
-				</button>
+
+				<!-- Steps -->
+				<div class="mt-4 flex items-center gap-2">
+					{#each ['Borrower', 'Equipment', 'Review'] as label, i}
+						{@const n = i + 1}
+						<div class="flex items-center gap-2">
+							<div
+								class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors {walkInStep >=
+								n
+									? 'bg-pink-600 text-white'
+									: 'bg-gray-100 text-gray-400'}"
+							>
+								{n}
+							</div>
+							<span
+								class="hidden text-xs font-semibold sm:inline {walkInStep >= n
+									? 'text-gray-900'
+									: 'text-gray-400'}">{label}</span
+							>
+						</div>
+						{#if i < 2}
+							<div
+								class="h-0.5 flex-1 rounded-full transition-colors {walkInStep > n
+									? 'bg-pink-600'
+									: 'bg-gray-100'}"
+							></div>
+						{/if}
+					{/each}
+				</div>
 			</div>
 
-			<!-- Form Content -->
-			<div class="mt-6 space-y-6">
-				<!-- Step 1: Student Lookup -->
+			<!-- Body -->
+			<div class="min-h-0 flex-1 overflow-y-auto p-6">
+				{#if walkInStep === 1}
+				<div class="space-y-6">
+					<!-- Step 1: Student Lookup -->
 				<div>
 					<span class="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase"
 						>Borrower Profile</span
@@ -1852,7 +2182,7 @@
 							{/if}
 						</div>
 					{:else}
-						<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+						<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 							<div>
 								<span class="mb-1 block text-xs text-gray-500">Full Name</span>
 								<input
@@ -1860,15 +2190,6 @@
 									bind:value={customStudentName}
 									class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
 									placeholder="Juan Dela Cruz"
-								/>
-							</div>
-							<div>
-								<span class="mb-1 block text-xs text-gray-500">Student ID #</span>
-								<input
-									type="text"
-									bind:value={customStudentID}
-									class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none"
-									placeholder="2024-10023"
 								/>
 							</div>
 							<div>
@@ -1942,63 +2263,130 @@
 					></textarea>
 				</div>
 
-				<!-- Step 3: Catalog & Cart Selection -->
-				<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-					<!-- Catalog list search -->
-					<div class="border-gray-150 rounded-xl border p-4">
-						<span class="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase"
-							>Inventory Stock Lookup</span
-						>
-						<div class="relative mb-3">
-							<span
-								class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-gray-400"
-							>
-								<Search size={14} />
-							</span>
-							<input
-								type="text"
-								bind:value={itemSearchQuery}
-								placeholder="Search equipment..."
-								class="w-full rounded-lg border border-gray-200 bg-white py-1.5 pr-3 pl-8 text-xs text-gray-900 focus:border-pink-500 focus:outline-none"
-							/>
+				</div>
+				{:else if walkInStep === 2}
+					<!-- Step 2: Equipment Picker -->
+					<div class="space-y-4">
+						<!-- Search + filters -->
+						<div>
+							<div class="relative">
+								<span
+									class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"
+								>
+									<Search size={16} />
+								</span>
+								<input
+									type="text"
+									bind:value={itemSearchQuery}
+									placeholder="Search equipment by name, category, or specification..."
+									class="w-full rounded-xl border border-gray-300 bg-white py-2.5 pr-3 pl-10 text-sm text-gray-900 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 focus:outline-none"
+								/>
+							</div>
+							<div class="mt-3 flex flex-wrap items-center gap-2">
+								<select
+									bind:value={walkInCategoryFilter}
+									class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 focus:border-pink-500 focus:outline-none"
+								>
+									<option value="all">All Categories</option>
+									{#each walkInCategories as cat}
+										<option value={cat}>{cat}</option>
+									{/each}
+								</select>
+								<select
+									bind:value={walkInSortBy}
+									class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 focus:border-pink-500 focus:outline-none"
+								>
+									<option value="name">Name (A-Z)</option>
+									<option value="category">Category</option>
+									<option value="availability">Availability</option>
+								</select>
+								<span class="ml-auto text-xs font-medium text-gray-500">
+									{walkInEquipmentList.length}
+									{walkInEquipmentList.length === 1 ? 'result' : 'results'}
+								</span>
+							</div>
 						</div>
 
-						<div class="max-h-56 space-y-1 divide-y divide-gray-100 overflow-y-auto">
-							{#each filteredInventory as item}
-								<div class="flex items-center justify-between py-2 text-xs">
-									<div>
-										<p class="font-semibold text-gray-900">{item.name}</p>
-										<p class="text-[10px] text-gray-400">
-											{item.category} · Stock: {item.quantity + (item.donations ?? 0)}
-										</p>
-									</div>
+						<!-- Results list -->
+						<div class="max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-200">
+							{#if walkInEquipmentList.length === 0}
+								<div class="py-12 text-center text-sm text-gray-400">
+									<Package size={22} class="mx-auto mb-2 text-gray-300" />
+									No equipment found. Try a different search or filter.
+								</div>
+							{:else}
+								{#each walkInEquipmentList as item}
+									{@const avail = walkInAvailable(item)}
+									{@const inCart = walkInCart.find((c) => c.id === item.id)}
 									<button
 										type="button"
 										onclick={() => addToWalkInCart(item)}
-										class="cursor-pointer rounded bg-pink-50 px-2 py-1 font-semibold text-pink-700 transition-colors hover:bg-pink-100"
+										class="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50"
 									>
-										Add
+										{#if item.picture}
+											<img
+												src={item.picture}
+												alt={item.name}
+												class="h-12 w-12 shrink-0 rounded-lg object-cover ring-1 ring-gray-200"
+												loading="lazy"
+											/>
+										{:else}
+											<div
+												class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-300 ring-1 ring-gray-200"
+											>
+												<Package size={20} />
+											</div>
+										{/if}
+										<div class="min-w-0 flex-1">
+											<div class="flex items-center gap-2">
+												<p class="truncate text-sm font-semibold text-gray-900 group-hover:text-pink-600">
+													{item.name}
+												</p>
+												{#if inCart}
+													<span
+														class="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700"
+													>
+														In basket · {inCart.selectedQty}
+													</span>
+												{/if}
+											</div>
+											<p class="mt-0.5 text-xs text-gray-500">{item.category}</p>
+											<span
+												class="mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold {avail >
+												5
+													? 'bg-emerald-100 text-emerald-700'
+													: 'bg-amber-100 text-amber-700'}"
+											>
+												{avail} available
+											</span>
+										</div>
+										<div
+											class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pink-600 text-white opacity-0 transition-opacity group-hover:opacity-100"
+										>
+											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+											</svg>
+										</div>
 									</button>
-								</div>
-							{/each}
+								{/each}
+							{/if}
 						</div>
-					</div>
 
-					<!-- Borrow Cart list -->
-					<div
-						class="border-gray-150 flex flex-col justify-between rounded-xl border bg-gray-50/50 p-4"
-					>
-						<div>
-							<span class="mb-3 block text-xs font-bold tracking-wider text-gray-400 uppercase"
-								>Selected Borrow Basket</span
-							>
+						<!-- Selected basket -->
+						<div class="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+							<div class="mb-3 flex items-center justify-between">
+								<span class="text-xs font-bold tracking-wider text-gray-500 uppercase">Selected Basket</span>
+								<span class="rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-bold text-pink-700">
+									{walkInCart.length} item{walkInCart.length === 1 ? '' : 's'}
+								</span>
+							</div>
 							{#if walkInCart.length === 0}
-								<div class="py-12 text-center text-xs text-gray-400">
+								<div class="py-6 text-center text-xs text-gray-400">
 									<Package size={20} class="mx-auto mb-2 text-gray-300" />
-									No items selected yet.
+									No items selected yet. Tap an item above to add it.
 								</div>
 							{:else}
-								<div class="max-h-56 space-y-2 overflow-y-auto">
+								<div class="max-h-44 space-y-2 overflow-y-auto">
 									{#each walkInCart as cartItem}
 										<div
 											class="flex items-center justify-between rounded-lg border border-gray-100 bg-white p-2 text-xs"
@@ -2040,25 +2428,100 @@
 							{/if}
 						</div>
 					</div>
-				</div>
+				{:else}
+					<!-- Step 3: Review & Confirm -->
+					<div class="space-y-5">
+						<div>
+							<span class="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase">Borrower</span>
+							<div class="rounded-xl border border-gray-200 p-4 text-sm">
+								{#if isCustomBorrower}
+									<p class="font-semibold text-gray-900">
+										{customStudentName || '—'}
+										<span class="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">Guest</span>
+									</p>
+									<p class="mt-0.5 text-xs text-gray-500">{customStudentEmail || '—'}</p>
+								{:else}
+									<p class="font-semibold text-gray-900">
+										{selectedStudent ? `${selectedStudent.firstName} ${selectedStudent.lastName}` : '—'}
+									</p>
+									<p class="mt-0.5 text-xs text-gray-500">
+										{selectedStudent?.email ?? ''} · Class: {selectedClassCode || '—'}
+									</p>
+								{/if}
+							</div>
+						</div>
+
+						<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+							<div class="rounded-xl border border-gray-200 p-3">
+								<p class="text-[10px] font-bold tracking-wider text-gray-400 uppercase">Usage</p>
+								<p class="mt-1 text-sm font-semibold text-gray-900">
+									{usageLocation === 'school' ? 'Inside School / Lab' : 'Outdoor / Home Use'}
+								</p>
+							</div>
+							<div class="rounded-xl border border-gray-200 p-3">
+								<p class="text-[10px] font-bold tracking-wider text-gray-400 uppercase">Return by</p>
+								<p class="mt-1 text-sm font-semibold text-gray-900">{returnDate || '—'}</p>
+							</div>
+							<div class="rounded-xl border border-gray-200 p-3">
+								<p class="text-[10px] font-bold tracking-wider text-gray-400 uppercase">Total units</p>
+								<p class="mt-1 text-sm font-semibold text-gray-900">
+									{walkInCart.reduce((s, i) => s + i.selectedQty, 0)}
+								</p>
+							</div>
+						</div>
+
+						{#if purpose.trim()}
+							<div>
+								<span class="mb-1 block text-xs font-bold tracking-wider text-gray-400 uppercase">Activity Purpose</span>
+								<p class="rounded-xl border border-gray-200 p-3 text-sm text-gray-700">{purpose}</p>
+							</div>
+						{/if}
+
+						<div>
+							<span class="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase">Equipment</span>
+							<div class="divide-y divide-gray-100 rounded-xl border border-gray-200">
+								{#each walkInCart as ci}
+									<div class="flex items-center justify-between px-4 py-2.5 text-sm">
+										<span class="min-w-0 truncate font-medium text-gray-900">{ci.name}</span>
+										<span class="shrink-0 font-semibold text-pink-600">×{ci.selectedQty}</span>
+									</div>
+								{/each}
+							</div>
+						</div>
+
+						<div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+							This releases the items immediately and adjusts stock — it bypasses the usual pre-approval flow.
+						</div>
+					</div>
+				{/if}
 			</div>
 
-			<!-- Footer Buttons -->
-			<div class="mt-8 flex justify-end gap-3 border-t border-gray-100 pt-4">
+			<!-- Footer -->
+			<div class="flex items-center justify-between gap-3 border-t border-gray-100 px-6 py-4">
 				<button
 					type="button"
-					onclick={() => closeWalkInModal()}
+					onclick={() => (walkInStep === 1 ? closeWalkInModal() : (walkInStep -= 1))}
 					class="cursor-pointer rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
 				>
-					Cancel
+					{walkInStep === 1 ? 'Cancel' : 'Back'}
 				</button>
-				<button
-					type="button"
-					onclick={submitWalkInCheckout}
-					class="cursor-pointer rounded-lg bg-pink-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
-				>
-					Confirm & Issue Immediately
-				</button>
+				{#if walkInStep < 3}
+					<button
+						type="button"
+						onclick={goNextWalkInStep}
+						class="cursor-pointer rounded-lg bg-pink-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
+					>
+						Next
+					</button>
+				{:else}
+					<button
+						type="button"
+						onclick={submitWalkInCheckout}
+						class="cursor-pointer rounded-lg bg-pink-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
+					>
+						Confirm & Issue Immediately
+					</button>
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -2169,20 +2632,55 @@
 {#if showConfidentialModal}
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
 		<div
-			class="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+			class="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
 		>
-			<div class="flex items-center justify-between border-b border-gray-100 pb-4">
-				<div class="flex items-center gap-2">
-					<Lock class="text-indigo-600" size={20} />
-					<h2 class="text-lg font-bold text-gray-900">Secure Admin Request Form</h2>
+			<!-- Header + Stepper -->
+			<div class="border-b border-gray-100 px-6 pt-5 pb-4">
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						<Lock class="text-indigo-600" size={20} />
+						<h2 class="text-lg font-bold text-gray-900">Secure Admin Request Form</h2>
+					</div>
+					<button onclick={closeConfidentialModal} class="text-gray-400 hover:text-gray-500">
+						<X size={20} />
+					</button>
 				</div>
-				<button onclick={closeConfidentialModal} class="text-gray-400 hover:text-gray-500">
-					<X size={20} />
-				</button>
+
+				<!-- Steps -->
+				<div class="mt-4 flex items-center gap-2">
+					{#each ['Requester', 'Equipment', 'Review'] as label, i}
+						{@const n = i + 1}
+						<div class="flex items-center gap-2">
+							<div
+								class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors {confidentialStep >=
+								n
+									? 'bg-indigo-600 text-white'
+									: 'bg-gray-100 text-gray-400'}"
+							>
+								{n}
+							</div>
+							<span
+								class="hidden text-xs font-semibold sm:inline {confidentialStep >= n
+									? 'text-gray-900'
+									: 'text-gray-400'}">{label}</span
+							>
+						</div>
+						{#if i < 2}
+							<div
+								class="h-0.5 flex-1 rounded-full transition-colors {confidentialStep > n
+									? 'bg-indigo-600'
+									: 'bg-gray-100'}"
+							></div>
+						{/if}
+					{/each}
+				</div>
 			</div>
 
-			<div class="mt-6 space-y-6">
-				<!-- Step 1: Admin Selector -->
+			<!-- Body -->
+			<div class="min-h-0 flex-1 overflow-y-auto p-6">
+				{#if confidentialStep === 1}
+				<div class="space-y-6">
+					<!-- Step 1: Admin Selector -->
 				<div>
 					<span class="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase"
 						>Requester Profile</span
@@ -2307,63 +2805,130 @@
 					></textarea>
 				</div>
 
-				<!-- Step 3: Catalog & Cart Selection -->
-				<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-					<!-- Catalog list search -->
-					<div class="border-gray-150 rounded-xl border p-4">
-						<span class="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase"
-							>Inventory Stock Lookup</span
-						>
-						<div class="relative mb-3">
-							<span
-								class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-gray-400"
-							>
-								<Search size={14} />
-							</span>
-							<input
-								type="text"
-								bind:value={itemSearchQuery}
-								placeholder="Search equipment..."
-								class="w-full rounded-lg border border-gray-200 bg-white py-1.5 pr-3 pl-8 text-xs text-gray-900 focus:border-pink-500 focus:outline-none"
-							/>
+				</div>
+				{:else if confidentialStep === 2}
+					<!-- Step 2: Equipment Picker -->
+					<div class="space-y-4">
+						<!-- Search + filters -->
+						<div>
+							<div class="relative">
+								<span
+									class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"
+								>
+									<Search size={16} />
+								</span>
+								<input
+									type="text"
+									bind:value={itemSearchQuery}
+									placeholder="Search equipment by name, category, or specification..."
+									class="w-full rounded-xl border border-gray-300 bg-white py-2.5 pr-3 pl-10 text-sm text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+								/>
+							</div>
+							<div class="mt-3 flex flex-wrap items-center gap-2">
+								<select
+									bind:value={confidentialCategoryFilter}
+									class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 focus:border-indigo-500 focus:outline-none"
+								>
+									<option value="all">All Categories</option>
+									{#each walkInCategories as cat}
+										<option value={cat}>{cat}</option>
+									{/each}
+								</select>
+								<select
+									bind:value={confidentialSortBy}
+									class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 focus:border-indigo-500 focus:outline-none"
+								>
+									<option value="name">Name (A-Z)</option>
+									<option value="category">Category</option>
+									<option value="availability">Availability</option>
+								</select>
+								<span class="ml-auto text-xs font-medium text-gray-500">
+									{confidentialEquipmentList.length}
+									{confidentialEquipmentList.length === 1 ? 'result' : 'results'}
+								</span>
+							</div>
 						</div>
 
-						<div class="max-h-56 space-y-1 divide-y divide-gray-100 overflow-y-auto">
-							{#each filteredInventory as item}
-								<div class="flex items-center justify-between py-2 text-xs">
-									<div>
-										<p class="font-semibold text-gray-900">{item.name}</p>
-										<p class="text-[10px] text-gray-400">
-											{item.category} · Stock: {item.quantity + (item.donations ?? 0)}
-										</p>
-									</div>
+						<!-- Results list -->
+						<div class="max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-200">
+							{#if confidentialEquipmentList.length === 0}
+								<div class="py-12 text-center text-sm text-gray-400">
+									<Package size={22} class="mx-auto mb-2 text-gray-300" />
+									No equipment found. Try a different search or filter.
+								</div>
+							{:else}
+								{#each confidentialEquipmentList as item}
+									{@const avail = walkInAvailable(item)}
+									{@const inCart = confidentialCart.find((c) => c.id === item.id)}
 									<button
 										type="button"
 										onclick={() => addToConfidentialCart(item)}
-										class="cursor-pointer rounded bg-indigo-50 px-2 py-1 font-semibold text-indigo-700 transition-colors hover:bg-indigo-100"
+										class="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50"
 									>
-										Add
+										{#if item.picture}
+											<img
+												src={item.picture}
+												alt={item.name}
+												class="h-12 w-12 shrink-0 rounded-lg object-cover ring-1 ring-gray-200"
+												loading="lazy"
+											/>
+										{:else}
+											<div
+												class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-300 ring-1 ring-gray-200"
+											>
+												<Package size={20} />
+											</div>
+										{/if}
+										<div class="min-w-0 flex-1">
+											<div class="flex items-center gap-2">
+												<p class="truncate text-sm font-semibold text-gray-900 group-hover:text-indigo-600">
+													{item.name}
+												</p>
+												{#if inCart}
+													<span
+														class="inline-flex shrink-0 items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700"
+													>
+														In basket · {inCart.selectedQty}
+													</span>
+												{/if}
+											</div>
+											<p class="mt-0.5 text-xs text-gray-500">{item.category}</p>
+											<span
+												class="mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold {avail >
+												5
+													? 'bg-emerald-100 text-emerald-700'
+													: 'bg-amber-100 text-amber-700'}"
+											>
+												{avail} available
+											</span>
+										</div>
+										<div
+											class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white opacity-0 transition-opacity group-hover:opacity-100"
+										>
+											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+											</svg>
+										</div>
 									</button>
-								</div>
-							{/each}
+								{/each}
+							{/if}
 						</div>
-					</div>
 
-					<!-- Cart list -->
-					<div
-						class="border-gray-150 flex flex-col justify-between rounded-xl border bg-gray-50/50 p-4"
-					>
-						<div>
-							<span class="mb-3 block text-xs font-bold tracking-wider text-gray-400 uppercase"
-								>Request Assets Basket</span
-							>
+						<!-- Request basket -->
+						<div class="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+							<div class="mb-3 flex items-center justify-between">
+								<span class="text-xs font-bold tracking-wider text-gray-500 uppercase">Request Assets Basket</span>
+								<span class="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+									{confidentialCart.length} item{confidentialCart.length === 1 ? '' : 's'}
+								</span>
+							</div>
 							{#if confidentialCart.length === 0}
-								<div class="py-12 text-center text-xs text-gray-400">
+								<div class="py-6 text-center text-xs text-gray-400">
 									<Package size={20} class="mx-auto mb-2 text-gray-300" />
-									No items selected yet.
+									No items selected yet. Tap an item above to add it.
 								</div>
 							{:else}
-								<div class="max-h-56 space-y-2 overflow-y-auto">
+								<div class="max-h-44 space-y-2 overflow-y-auto">
 									{#each confidentialCart as cartItem}
 										<div
 											class="flex items-center justify-between rounded-lg border border-gray-100 bg-white p-2 text-xs"
@@ -2405,25 +2970,99 @@
 							{/if}
 						</div>
 					</div>
-				</div>
+				{:else}
+					<!-- Step 3: Review & Confirm -->
+					<div class="space-y-5">
+						<div>
+							<span class="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase">Requester</span>
+							<div class="rounded-xl border border-gray-200 p-4 text-sm">
+								{#if isCustomAdmin}
+									<p class="font-semibold text-gray-900">
+										{customAdminName || '—'}
+										<span class="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">Staff</span>
+									</p>
+								{:else}
+									<p class="font-semibold text-gray-900">
+										{selectedAdmin ? `${selectedAdmin.firstName} ${selectedAdmin.lastName}` : '—'}
+									</p>
+									<p class="mt-0.5 text-xs text-gray-500">
+										{selectedAdmin?.email ?? ''}{selectedAdmin ? ` · ${selectedAdmin.role.toUpperCase()}` : ''}
+									</p>
+								{/if}
+							</div>
+						</div>
+
+						<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+							<div class="rounded-xl border border-gray-200 p-3">
+								<p class="text-[10px] font-bold tracking-wider text-gray-400 uppercase">Priority</p>
+								<p class="mt-1 text-sm font-semibold text-gray-900">{requestPriority}</p>
+							</div>
+							<div class="rounded-xl border border-gray-200 p-3">
+								<p class="text-[10px] font-bold tracking-wider text-gray-400 uppercase">Classification</p>
+								<p class="mt-1 text-sm font-semibold text-gray-900">{confidentialityLevel}</p>
+							</div>
+							<div class="rounded-xl border border-gray-200 p-3">
+								<p class="text-[10px] font-bold tracking-wider text-gray-400 uppercase">Return by</p>
+								<p class="mt-1 text-sm font-semibold text-gray-900">{confidentialReturnDate || '—'}</p>
+							</div>
+							<div class="rounded-xl border border-gray-200 p-3">
+								<p class="text-[10px] font-bold tracking-wider text-gray-400 uppercase">Total units</p>
+								<p class="mt-1 text-sm font-semibold text-gray-900">
+									{confidentialCart.reduce((s, i) => s + i.selectedQty, 0)}
+								</p>
+							</div>
+						</div>
+
+						<div>
+							<span class="mb-1 block text-xs font-bold tracking-wider text-gray-400 uppercase">Activity Purpose (Secure Log)</span>
+							<p class="rounded-xl border border-gray-200 p-3 text-sm text-gray-700">{confidentialPurpose || '—'}</p>
+						</div>
+
+						<div>
+							<span class="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase">Requested Assets</span>
+							<div class="divide-y divide-gray-100 rounded-xl border border-gray-200">
+								{#each confidentialCart as ci}
+									<div class="flex items-center justify-between px-4 py-2.5 text-sm">
+										<span class="min-w-0 truncate font-medium text-gray-900">{ci.name}</span>
+										<span class="shrink-0 font-semibold text-indigo-600">×{ci.selectedQty}</span>
+									</div>
+								{/each}
+							</div>
+						</div>
+
+						<div class="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-700">
+							This creates a confidential request pipeline recorded in the secure log. Stock is reserved as the request moves through preparation and dispatch.
+						</div>
+					</div>
+				{/if}
 			</div>
 
-			<!-- Footer Buttons -->
-			<div class="mt-8 flex justify-end gap-3 border-t border-gray-100 pt-4">
+			<!-- Footer -->
+			<div class="flex items-center justify-between gap-3 border-t border-gray-100 px-6 py-4">
 				<button
 					type="button"
-					onclick={closeConfidentialModal}
+					onclick={() => (confidentialStep === 1 ? closeConfidentialModal() : (confidentialStep -= 1))}
 					class="cursor-pointer rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
 				>
-					Cancel
+					{confidentialStep === 1 ? 'Cancel' : 'Back'}
 				</button>
-				<button
-					type="button"
-					onclick={submitConfidentialRequest}
-					class="cursor-pointer rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700"
-				>
-					Create Request Pipeline
-				</button>
+				{#if confidentialStep < 3}
+					<button
+						type="button"
+						onclick={goNextConfidentialStep}
+						class="cursor-pointer rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700"
+					>
+						Next
+					</button>
+				{:else}
+					<button
+						type="button"
+						onclick={submitConfidentialRequest}
+						class="cursor-pointer rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700"
+					>
+						Create Request Pipeline
+					</button>
+				{/if}
 			</div>
 		</div>
 	</div>
