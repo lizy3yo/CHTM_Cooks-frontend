@@ -62,6 +62,28 @@
 
 	// Data from store with client-side caching
 	let items = $state<InventoryItem[]>(hasCachedData ? cachedStore!.items : []);
+
+	// Most recent time any inventory item was updated — surfaced in the header so
+	// staff can see how fresh the data is ("the last time it updated").
+	const lastInventoryUpdate = $derived.by(() => {
+		let max = 0;
+		for (const it of items) {
+			const t = new Date(it.updatedAt).getTime();
+			if (!Number.isNaN(t) && t > max) max = t;
+		}
+		return max ? new Date(max) : null;
+	});
+	function formatLastUpdated(d: Date | null): string {
+		if (!d) return 'No updates yet';
+		const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+		if (mins < 1) return 'Updated just now';
+		if (mins < 60) return `Updated ${mins} minute${mins === 1 ? '' : 's'} ago`;
+		const hrs = Math.floor(mins / 60);
+		if (hrs < 24) return `Updated ${hrs} hour${hrs === 1 ? '' : 's'} ago`;
+		const days = Math.floor(hrs / 24);
+		if (days < 7) return `Updated ${days} day${days === 1 ? '' : 's'} ago`;
+		return `Updated ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+	}
 	let categories = $state<InventoryCategory[]>(hasCachedData ? cachedStore!.categories : []);
 	let loading = $state(false); // Only show skeleton if no cached data
 	let uploadingImage = $state(false);
@@ -3145,6 +3167,12 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 		<div class="min-w-0">
 			<h1 class="text-2xl font-bold text-gray-900 sm:text-3xl" data-tour="admin-inventory-header">Inventory Management</h1>
 			<p class="mt-1 text-sm text-gray-500">Manage kitchen laboratory inventory and stock levels</p>
+			{#if lastInventoryUpdate}
+				<p class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-pink-50 px-2.5 py-1 text-xs font-semibold text-pink-700 ring-1 ring-pink-200" title={lastInventoryUpdate.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}>
+					<svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+					{formatLastUpdated(lastInventoryUpdate)}
+				</p>
+			{/if}
 		</div>
 
 		<!-- Item Details Modal -->
