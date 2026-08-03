@@ -32,10 +32,15 @@
 	// Component Props
 	let { role = 'admin' } = $props<{ role?: string }>();
 
+	// Hydrate synchronously from the client cache so revisiting the page shows the
+	// last-loaded history instantly instead of a skeleton + refetch every time.
+	// Mirrors the query used by fetchRequests() so the cache key matches.
+	const initialHistory = browser ? borrowRequestsAPI.peekCachedList({ limit: 1000 }) : null;
+
 	// State variables
-	let requests = $state<BorrowRequestRecord[]>([]);
-	let totalRequestsCount = $state(0);
-	let loading = $state(true);
+	let requests = $state<BorrowRequestRecord[]>(initialHistory?.requests ?? []);
+	let totalRequestsCount = $state(initialHistory?.total ?? 0);
+	let loading = $state(!initialHistory);
 	let searchQuery = $state('');
 	let statusFilter = $state('');
 	let locationFilter = $state('');
