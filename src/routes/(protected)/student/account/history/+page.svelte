@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { browser } from '$app/environment';
 	import { borrowRequestsAPI, type BorrowRequestRecord } from '$lib/api/borrowRequests';
 	import { toastStore } from '$lib/stores/toast';
 	import { loadingStore } from '$lib/stores/loading';
@@ -30,19 +31,31 @@
 		QrCode,
 		CornerDownLeft
 	} from 'lucide-svelte';
-	import ActivityLogsSkeletonLoader from '$lib/components/ui/ActivityLogsSkeletonLoader.svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 
-	let history = $state<BorrowRequestRecord[]>([]);
-	let total = $state(0);
+	// Hydrate synchronously from the client cache so revisiting the page shows the
+	// last-loaded history instantly instead of a skeleton + refetch every time.
+	// Must mirror the default query used by loadHistory() (no status filter, no
+	// search, page 1, limit 10) so the cache key matches.
+	const initialHistory = browser
+		? borrowRequestsAPI.peekCachedList({
+				statuses: ['returned', 'resolved', 'cancelled', 'rejected'],
+				sortBy: 'createdAt',
+				page: 1,
+				limit: 10
+			})
+		: null;
+
+	let history = $state<BorrowRequestRecord[]>(initialHistory?.requests ?? []);
+	let total = $state(initialHistory?.total ?? 0);
 	let page = $state(1);
 	let limit = $state(10);
 	let search = $state('');
 	let statusFilter = $state('');
-	let loading = $state(true);
-	let byRequestLoading = $state(true);
-	let byItemLoading = $state(true);
+	let loading = $state(!initialHistory);
+	let byRequestLoading = $state(!initialHistory);
+	let byItemLoading = $state(!initialHistory);
 	let inFlightLoadId = 0;
 
 	let unsubscribeSSE: (() => void) | null = null;
@@ -676,7 +689,60 @@
 </svelte:head>
 
 {#if activeLoading && history.length === 0}
-	<ActivityLogsSkeletonLoader />
+	<!-- Skeleton mirrors the real layout (header + filter bar + card list) so it
+	     never introduces a wide table / horizontal scrollbar. -->
+	<div class="space-y-4 animate-pulse sm:space-y-6">
+		<!-- Header -->
+		<div>
+			<div class="h-8 w-40 rounded bg-gray-200"></div>
+			<div class="mt-2 h-4 w-64 rounded bg-gray-100"></div>
+		</div>
+
+		<!-- Filters bar -->
+		<div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+			<div
+				class="flex flex-col items-center justify-between gap-4 border-b border-gray-200 bg-gray-50/50 p-4 sm:flex-row"
+			>
+				<div class="flex w-full flex-col gap-3 sm:flex-1 sm:flex-row sm:items-center">
+					<div class="h-10 w-full rounded-lg bg-gray-100 sm:w-48"></div>
+					<div class="h-10 w-full rounded-lg bg-gray-100 sm:max-w-md sm:flex-1"></div>
+				</div>
+				<div class="h-9 w-full rounded-lg bg-gray-100 sm:w-40"></div>
+			</div>
+		</div>
+
+		<!-- Results list -->
+		<div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+			<div class="border-b border-gray-100 bg-gray-50/30 px-6 py-3">
+				<div class="h-4 w-40 rounded bg-gray-100"></div>
+			</div>
+			<div class="divide-y divide-gray-200">
+				{#each Array(5) as _}
+					<div class="p-5">
+						<div class="flex items-start gap-4">
+							<div class="hidden shrink-0 sm:block">
+								<div class="h-14 w-14 rounded-xl bg-gray-200"></div>
+							</div>
+							<div class="min-w-0 flex-1 space-y-3">
+								<div class="flex items-start justify-between gap-3">
+									<div class="space-y-2">
+										<div class="h-4 w-40 rounded bg-gray-200 sm:w-48"></div>
+										<div class="h-3 w-24 rounded bg-gray-100"></div>
+									</div>
+									<div class="h-6 w-24 shrink-0 rounded-full bg-gray-100"></div>
+								</div>
+								<div class="h-3 w-2/3 rounded bg-gray-100"></div>
+								<div class="flex flex-wrap gap-4">
+									<div class="h-3 w-24 rounded bg-gray-100"></div>
+									<div class="h-3 w-28 rounded bg-gray-100"></div>
+								</div>
+							</div>
+						</div>
+					</div>
+				{/each}
+			</div>
+		</div>
+	</div>
 {:else}
 	<div class="space-y-4 sm:space-y-6">
 		<!-- Header -->
