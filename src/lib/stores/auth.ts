@@ -71,6 +71,11 @@ function createAuthStore() {
 
 					if (meResponse.ok) {
 						const data = await meResponse.json();
+						if (currentState?.user && (currentState.user as any)?.id !== (data.user as any)?.id) {
+							import('$lib/utils/cacheManager').then(({ clearAllApplicationCaches }) => {
+								clearAllApplicationCaches();
+							});
+						}
 						update((state) => ({
 							...state,
 							user: data.user,
@@ -92,6 +97,11 @@ function createAuthStore() {
 
 					if (autoLoginResponse.ok) {
 						const data = await autoLoginResponse.json();
+						if (currentState?.user && (currentState.user as any)?.id !== (data.user as any)?.id) {
+							import('$lib/utils/cacheManager').then(({ clearAllApplicationCaches }) => {
+								clearAllApplicationCaches();
+							});
+						}
 						update((state) => ({
 							...state,
 							user: data.user,
@@ -124,13 +134,10 @@ function createAuthStore() {
 		console.log('[AuthStore.login] User keys:', user ? Object.keys(user) : 'null');
 		console.log('[AuthStore.login] User JSON:', JSON.stringify(user, null, 2));
 		
-		// Clear profile cache on login to ensure fresh data
+		// Flush all old application caches on login to ensure clean session state
 		if (browser) {
-			import('$lib/api/profile').then(({ profileApi }) => {
-				profileApi.clearCache();
-			});
-			import('$lib/stores/profile').then(({ profileStore }) => {
-				profileStore.clearCache();
+			import('$lib/utils/cacheManager').then(({ clearAllApplicationCaches }) => {
+				clearAllApplicationCaches();
 			});
 		}
 		
@@ -170,15 +177,13 @@ function createAuthStore() {
 		// Runs fire-and-forget — failures are logged but do not affect the
 		// already-completed client-side sign-out.
 		(async () => {
-			try {
-				const [{ profileApi }, { profileStore }] = await Promise.all([
-					import('$lib/api/profile'),
-					import('$lib/stores/profile')
-				]);
-				profileApi.clearCache();
-				profileStore.clearCache();
-			} catch {
-				// Cache clearing is best-effort; ignore errors.
+			if (browser) {
+				try {
+					const { clearAllApplicationCaches } = await import('$lib/utils/cacheManager');
+					clearAllApplicationCaches();
+				} catch {
+					// Cache clearing is best-effort; ignore errors.
+				}
 			}
 
 			try {

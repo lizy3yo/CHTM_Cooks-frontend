@@ -251,6 +251,17 @@ function createRequestCartStore() {
 			} catch (error) {
 				console.error('Failed to refresh cart:', error);
 			}
+		},
+
+		/**
+		 * Reset client store state on user sign-out or session switch
+		 */
+		reset(): void {
+			if (sseUnsubscribe) {
+				sseUnsubscribe();
+				sseUnsubscribe = null;
+			}
+			set(initialState);
 		}
 	};
 }

@@ -294,5 +294,10 @@ export const deletedItemsAPI = {
 	async permanentlyDelete(deletedId: string, type: 'item' | 'category'): Promise<{ success: boolean; message: string }> {
 		const response = await fetch('/api/inventory/deleted', getFetchOptions('DELETE', { deletedId, type }));
 		return handleResponse(response);
+	},
+
+	invalidateCache(): void {
+		activityLogsCache.clear();
+		inFlight.clear();
 	}
 };

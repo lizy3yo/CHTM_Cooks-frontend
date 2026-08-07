@@ -212,12 +212,16 @@ export const catalogAPI = {
 		return getFreshCatalogFromClientCache(filters);
 	},
 
+	invalidateCache(): void {
+		catalogResponseCache.clear();
+		catalogInFlightRequests.clear();
+	},
+
 	/**
 	 * Invalidate all client-side catalog cache entries.
 	 */
 	invalidateCatalogCache(): void {
-		catalogResponseCache.clear();
-		catalogInFlightRequests.clear();
+		this.invalidateCache();
 	},
 
 	/**
@@ -314,7 +318,7 @@ export const catalogAPI = {
 			const data = await handleResponse<{ item: CatalogItem }>(response);
 			
 			// Invalidate cache after successful update
-			this.invalidateCatalogCache();
+			this.invalidateCache();
 			
 			return data.item;
 		} catch (error) {
