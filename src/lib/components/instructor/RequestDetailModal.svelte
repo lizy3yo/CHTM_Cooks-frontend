@@ -354,10 +354,18 @@ let {
 								Student Appeal
 							</h3>
 							<!-- Original Decline Reason -->
-							{#if request.rejectionReason}
+							{#if request.rejectionReason || request.rejectionNotes}
 								<div class="mb-3 rounded-xl border border-red-200 bg-red-50 p-4">
 									<p class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-red-700">Original Decline Reason</p>
-									<p class="text-sm text-red-800">{request.rejectionReason}</p>
+									{#if request.rejectionReason}
+										<p class="text-sm font-semibold text-red-800">{request.rejectionReason}</p>
+									{/if}
+									{#if request.rejectionNotes && request.rejectionNotes !== request.rejectionReason}
+										<div class="mt-2 rounded-lg border border-red-200/80 bg-red-100/60 p-2.5">
+											<p class="text-[10px] font-bold text-red-900 uppercase tracking-wider">Instructor Note</p>
+											<p class="mt-0.5 text-xs text-red-800 leading-relaxed whitespace-pre-wrap">{request.rejectionNotes}</p>
+										</div>
+									{/if}
 								</div>
 							{/if}
 							<!-- Appeal reason -->

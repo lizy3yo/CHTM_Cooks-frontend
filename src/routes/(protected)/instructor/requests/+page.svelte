@@ -327,6 +327,7 @@
 			returnCondition: record.status === 'returned' ? 'Good' : undefined,
 			returnNotes: record.rejectionNotes,
 			rejectionReason: record.rejectReason,
+			rejectionNotes: record.rejectionNotes,
 			appealReason: record.appealReason,
 			appealCount: record.appealCount ?? 0,
 			isAppeal: record.status === 'pending_appeal',

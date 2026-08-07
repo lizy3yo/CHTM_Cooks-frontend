@@ -305,6 +305,7 @@
 			reminderCount: record.reminderCount || 0,
 			approvedBy: record.instructor?.fullName || 'Instructor',
 			rejectionReason: record.rejectReason,
+			rejectionNotes: record.rejectionNotes,
 			approvedDate: formatDateTime(record.approvedAt),
 			instructorData: record.instructor ?? null,
 			custodianData: record.custodian ?? null,

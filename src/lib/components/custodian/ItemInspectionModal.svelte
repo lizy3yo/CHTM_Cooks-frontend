@@ -104,11 +104,6 @@
 
 		// Recalculate good quantity
 		inspection.goodQty = inspection.quantity - inspection.damagedQty - inspection.missingQty;
-
-		// Reset over-return if there are damaged or missing items
-		if (inspection.damagedQty > 0 || inspection.missingQty > 0) {
-			inspection.additionalReturned = 0;
-		}
 	}
 
 	function setAllGood() {
@@ -443,40 +438,38 @@
 										</div>
 									</div>
 
-									<!-- Over-return adjuster (only active when nothing is damaged/missing) -->
-									{#if inspection.damagedQty === 0 && inspection.missingQty === 0}
-										<div class="h-6 w-px bg-gray-200"></div>
-										<div class="flex flex-col items-center">
-											<span class="text-[9px] uppercase font-bold text-blue-600 tracking-wider mb-1">Over-Return</span>
-											<div class="flex items-center border border-blue-200 rounded-lg bg-white overflow-hidden shadow-xs">
-												<button
-													type="button"
-													onclick={() => { inspection.additionalReturned = Math.max(0, inspection.additionalReturned - 1) }}
-													disabled={inspection.additionalReturned <= 0}
-													class="px-1.5 py-1 text-blue-600 hover:bg-blue-50 disabled:opacity-30 disabled:hover:bg-transparent"
-												>
-													<Minus class="h-3 w-3" />
-												</button>
-												<input
-													type="number"
-													min="0"
-													value={inspection.additionalReturned}
-													oninput={(e) => {
-														const val = parseInt(e.currentTarget.value) || 0;
-														inspection.additionalReturned = Math.max(0, val);
-													}}
-													class="w-8 border-none p-0 text-center text-xs font-bold text-gray-900 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-												/>
-												<button
-													type="button"
-													onclick={() => { inspection.additionalReturned += 1 }}
-													class="px-1.5 py-1 text-blue-600 hover:bg-blue-50"
-												>
-													<Plus class="h-3 w-3" />
-												</button>
-											</div>
+									<!-- Over-return adjuster (always visible for layout consistency) -->
+									<div class="h-6 w-px bg-gray-200"></div>
+									<div class="flex flex-col items-center">
+										<span class="text-[9px] uppercase font-bold text-blue-600 tracking-wider mb-1">Over-Return</span>
+										<div class="flex items-center border border-blue-200 rounded-lg bg-white overflow-hidden shadow-xs">
+											<button
+												type="button"
+												onclick={() => { inspection.additionalReturned = Math.max(0, inspection.additionalReturned - 1) }}
+												disabled={inspection.additionalReturned <= 0}
+												class="px-1.5 py-1 text-blue-600 hover:bg-blue-50 disabled:opacity-30 disabled:hover:bg-transparent"
+											>
+												<Minus class="h-3 w-3" />
+											</button>
+											<input
+												type="number"
+												min="0"
+												value={inspection.additionalReturned}
+												oninput={(e) => {
+													const val = parseInt(e.currentTarget.value) || 0;
+													inspection.additionalReturned = Math.max(0, val);
+												}}
+												class="w-8 border-none p-0 text-center text-xs font-bold text-gray-900 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+											/>
+											<button
+												type="button"
+												onclick={() => { inspection.additionalReturned += 1 }}
+												class="px-1.5 py-1 text-blue-600 hover:bg-blue-50"
+											>
+												<Plus class="h-3 w-3" />
+											</button>
 										</div>
-									{/if}
+									</div>
 								</div>
 							</div>
 

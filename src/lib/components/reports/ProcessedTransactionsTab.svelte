@@ -594,12 +594,20 @@
 					</div>
 
 					<!-- Rejection/Declined reason if any -->
-					{#if selectedRequest.status === 'rejected' && selectedRequest.rejectReason}
+					{#if selectedRequest.status === 'rejected' && (selectedRequest.rejectReason || selectedRequest.rejectionNotes)}
 						<div class="rounded-xl border border-red-200 p-4 bg-red-50/40">
 							<h4 class="text-xs font-bold uppercase tracking-wider text-red-700">Decline Reason</h4>
-							<p class="mt-1 text-sm font-semibold text-red-900">
-								{selectedRequest.rejectReason}
-							</p>
+							{#if selectedRequest.rejectReason}
+								<p class="mt-1 text-sm font-semibold text-red-900">
+									{selectedRequest.rejectReason}
+								</p>
+							{/if}
+							{#if selectedRequest.rejectionNotes && selectedRequest.rejectionNotes !== selectedRequest.rejectReason}
+								<div class="mt-2 rounded-lg border border-red-200/80 bg-red-100/60 p-2.5">
+									<p class="text-[10px] font-bold text-red-900 uppercase tracking-wider">Instructor Note</p>
+									<p class="mt-0.5 text-xs text-red-800 leading-relaxed whitespace-pre-wrap">{selectedRequest.rejectionNotes}</p>
+								</div>
+							{/if}
 						</div>
 					{/if}
 

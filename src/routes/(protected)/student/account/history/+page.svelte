@@ -289,6 +289,7 @@
 			pickedUpDate: request.pickedUpAt,
 			returnedAt: request.returnedAt,
 			rejectionReason: request.rejectReason,
+			rejectionNotes: request.rejectionNotes,
 			appealReason: request.appealReason,
 			appealCount: request.appealCount ?? 0
 		};
@@ -1710,7 +1711,7 @@
 						{/if}
 
 						<!-- Decline Reason -->
-						{#if selectedRequest.status === 'rejected' && selectedRequest.rejectionReason}
+						{#if selectedRequest.status === 'rejected' && (selectedRequest.rejectionReason || selectedRequest.rejectionNotes)}
 							<div
 								class="rounded-2xl border-2 border-red-200 bg-linear-to-br from-red-50 to-red-100/50 p-5"
 							>
@@ -1722,9 +1723,21 @@
 									</div>
 									<div class="min-w-0 flex-1">
 										<p class="text-sm font-bold text-red-900">Decline Reason</p>
-										<p class="mt-1.5 text-sm leading-relaxed text-red-800">
-											{selectedRequest.rejectionReason}
-										</p>
+										{#if selectedRequest.rejectionReason}
+											<p class="mt-1 text-sm font-semibold text-red-800 leading-relaxed">
+												{selectedRequest.rejectionReason}
+											</p>
+										{/if}
+										{#if selectedRequest.rejectionNotes && selectedRequest.rejectionNotes !== selectedRequest.rejectionReason}
+											<div class="mt-2.5 rounded-xl border border-red-200/80 bg-red-100/60 p-3">
+												<p class="text-[11px] font-bold text-red-900 uppercase tracking-wider">
+													Instructor Note
+												</p>
+												<p class="mt-0.5 text-xs text-red-800 leading-relaxed whitespace-pre-wrap">
+													{selectedRequest.rejectionNotes}
+												</p>
+											</div>
+										{/if}
 									</div>
 								</div>
 							</div>

@@ -237,6 +237,7 @@
 			pickedUpDate: request.pickedUpAt,
 			returnedAt: request.returnedAt,
 			rejectionReason: request.rejectReason,
+			rejectionNotes: request.rejectionNotes,
 			appealReason: request.appealReason,
 			appealCount: request.appealCount ?? 0
 		};
@@ -722,7 +723,21 @@
 		}
 	}
 
+	function isBorrowDateExceeded(request: any): boolean {
+		if (!request) return false;
+		const dateStr = request.borrowDate || request.returnDate;
+		if (!dateStr) return false;
+		const target = new Date(dateStr);
+		if (isNaN(target.getTime())) return false;
+		target.setHours(23, 59, 59, 999);
+		return new Date() > target;
+	}
+
 	function openAppealModal(request: any) {
+		if (isBorrowDateExceeded(request)) {
+			toastStore.error('Appeals are unavailable because the requested borrow date has passed.');
+			return;
+		}
 		appealRequestTarget = request;
 		appealReason = '';
 		showAppealModal = true;
@@ -736,6 +751,11 @@
 
 	async function submitAppeal() {
 		if (!appealRequestTarget || loadingAppeal) return;
+		if (isBorrowDateExceeded(appealRequestTarget)) {
+			toastStore.error('Appeals are unavailable because the requested borrow date has passed.');
+			closeAppealModal();
+			return;
+		}
 		if (appealReason.trim().length < 10) {
 			toastStore.error('Please provide a more detailed reason (at least 10 characters).');
 			return;
@@ -1420,7 +1440,7 @@
 												</div>
 
 												<!-- Decline Reason -->
-												{#if request.status === 'rejected' && request.rejectionReason}
+												{#if request.status === 'rejected' && (request.rejectionReason || request.rejectionNotes)}
 													<div class="mt-3 flex items-start gap-2 rounded-lg bg-red-50 p-2.5">
 														<svg
 															class="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500"
@@ -1434,9 +1454,16 @@
 																d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
 															/></svg
 														>
-														<div class="min-w-0">
+														<div class="min-w-0 flex-1">
 															<p class="text-[10px] font-semibold text-red-800">Decline Reason</p>
-															<p class="truncate text-xs text-red-700">{request.rejectionReason}</p>
+															{#if request.rejectionReason && request.rejectionReason !== 'Other (specify)'}
+																<p class="truncate text-xs font-semibold text-red-800">{request.rejectionReason}</p>
+															{/if}
+															{#if request.rejectionNotes}
+																<p class="truncate text-xs text-red-700">{request.rejectionNotes}</p>
+															{:else if request.rejectionReason}
+																<p class="truncate text-xs text-red-700">{request.rejectionReason}</p>
+															{/if}
 														</div>
 													</div>
 												{/if}
@@ -1500,15 +1527,24 @@
 														</button>
 													{/if}
 													{#if request.status === 'rejected'}
-														<button
-															onclick={(e) => {
-																e.stopPropagation();
-																openAppealModal(request);
-															}}
-															class="rounded-lg border border-pink-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-pink-700 shadow-sm transition-colors hover:bg-pink-50"
-														>
-															Appeal
-														</button>
+														{#if isBorrowDateExceeded(request)}
+															<span
+																class="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[11px] font-medium text-gray-400 cursor-not-allowed"
+																title="Borrow date has passed — appeal unavailable"
+															>
+																Appeal Expired
+															</span>
+														{:else}
+															<button
+																onclick={(e) => {
+																	e.stopPropagation();
+																	openAppealModal(request);
+																}}
+																class="rounded-lg border border-pink-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-pink-700 shadow-sm transition-colors hover:bg-pink-50"
+															>
+																Appeal
+															</button>
+														{/if}
 													{/if}
 												</div>
 											</div>
@@ -1639,12 +1675,12 @@
 														>
 															<Clock size={12} /> Awaiting confirmation
 														</p>
-													{:else if request.status === 'rejected' && request.rejectionReason}
+													{:else if request.status === 'rejected' && (request.rejectionReason || request.rejectionNotes)}
 														<p
 															class="mt-1.5 line-clamp-2 text-[11px] text-red-600"
-															title={request.rejectionReason}
+															title={request.rejectionNotes || request.rejectionReason}
 														>
-															{request.rejectionReason}
+															{request.rejectionNotes || request.rejectionReason}
 														</p>
 													{/if}
 												</div>
@@ -1688,15 +1724,24 @@
 														</button>
 													{/if}
 													{#if request.status === 'rejected'}
-														<button
-															onclick={(e) => {
-																e.stopPropagation();
-																openAppealModal(request);
-															}}
-															class="rounded-lg border border-pink-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-pink-700 shadow-sm transition-colors hover:bg-pink-50"
-														>
-															Appeal
-														</button>
+														{#if isBorrowDateExceeded(request)}
+															<span
+																class="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[11px] font-medium text-gray-400 cursor-not-allowed"
+																title="Borrow date has passed — appeal unavailable"
+															>
+																Appeal Expired
+															</span>
+														{:else}
+															<button
+																onclick={(e) => {
+																	e.stopPropagation();
+																	openAppealModal(request);
+																}}
+																class="rounded-lg border border-pink-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-pink-700 shadow-sm transition-colors hover:bg-pink-50"
+															>
+																Appeal
+															</button>
+														{/if}
 													{/if}
 												</div>
 											</div>
@@ -2413,7 +2458,7 @@
 						{/if}
 
 						<!-- Decline Reason -->
-						{#if selectedRequest.status === 'rejected' && selectedRequest.rejectionReason}
+						{#if selectedRequest.status === 'rejected' && (selectedRequest.rejectionReason || selectedRequest.rejectionNotes)}
 							<div
 								class="rounded-2xl border-2 border-red-200 bg-linear-to-br from-red-50 to-red-100/50 p-5"
 							>
@@ -2425,9 +2470,21 @@
 									</div>
 									<div class="min-w-0 flex-1">
 										<p class="text-sm font-bold text-red-900">Decline Reason</p>
-										<p class="mt-1.5 text-sm leading-relaxed text-red-800">
-											{selectedRequest.rejectionReason}
-										</p>
+										{#if selectedRequest.rejectionReason}
+											<p class="mt-1 text-sm font-semibold text-red-800 leading-relaxed">
+												{selectedRequest.rejectionReason}
+											</p>
+										{/if}
+										{#if selectedRequest.rejectionNotes && selectedRequest.rejectionNotes !== selectedRequest.rejectionReason}
+											<div class="mt-2.5 rounded-xl border border-red-200/80 bg-red-100/60 p-3">
+												<p class="text-[11px] font-bold text-red-900 uppercase tracking-wider">
+													Instructor Note
+												</p>
+												<p class="mt-0.5 text-xs text-red-800 leading-relaxed whitespace-pre-wrap">
+													{selectedRequest.rejectionNotes}
+												</p>
+											</div>
+										{/if}
 									</div>
 								</div>
 							</div>
@@ -2550,23 +2607,43 @@
 								>
 							</div>
 						{:else if selectedRequest.status === 'rejected'}
-							<div
-								class="animate-fadeIn flex-1 rounded-xl border border-pink-200 bg-pink-50 px-4 py-2.5 text-xs text-pink-700"
-							>
-								<div class="flex items-center gap-2">
-									<Info size={14} class="shrink-0 text-pink-400" />
-									<span
-										>This request was rejected by your instructor. You may submit an appeal using
-										the button on the right.</span
-									>
+							{#if isBorrowDateExceeded(selectedRequest)}
+								<div
+									class="animate-fadeIn flex-1 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800"
+								>
+									<div class="flex items-center gap-2">
+										<Info size={14} class="shrink-0 text-amber-500" />
+										<span
+											>This request was rejected by your instructor. Appeals are unavailable because the requested borrow date has passed.</span
+										>
+									</div>
 								</div>
-							</div>
-							<button
-								onclick={() => openAppealModal(selectedRequest)}
-								class="shrink-0 rounded-xl bg-linear-to-r from-pink-600 to-pink-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:from-pink-700 hover:to-pink-800 active:scale-[0.98] sm:px-6 sm:py-3"
-							>
-								Appeal Request
-							</button>
+								<button
+									disabled
+									class="shrink-0 cursor-not-allowed rounded-xl bg-gray-200 px-5 py-2.5 text-sm font-bold text-gray-400 opacity-75 sm:px-6 sm:py-3"
+									title="Borrow date has passed"
+								>
+									Appeal Unavailable
+								</button>
+							{:else}
+								<div
+									class="animate-fadeIn flex-1 rounded-xl border border-pink-200 bg-pink-50 px-4 py-2.5 text-xs text-pink-700"
+								>
+									<div class="flex items-center gap-2">
+										<Info size={14} class="shrink-0 text-pink-400" />
+										<span
+											>This request was rejected by your instructor. You may submit an appeal using
+											the button on the right.</span
+										>
+									</div>
+								</div>
+								<button
+									onclick={() => openAppealModal(selectedRequest)}
+									class="shrink-0 rounded-xl bg-linear-to-r from-pink-600 to-pink-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:from-pink-700 hover:to-pink-800 active:scale-[0.98] sm:px-6 sm:py-3"
+								>
+									Appeal Request
+								</button>
+							{/if}
 						{:else if selectedRequest.status === 'appealed'}
 							<div
 								class="animate-fadeIn flex flex-1 items-center gap-2.5 rounded-xl border border-pink-200 bg-pink-50 px-4 py-2.5 text-xs text-pink-700"
@@ -2644,12 +2721,20 @@
 				<!-- Content -->
 				<div class="px-5 py-5 sm:px-6 sm:py-6">
 					<!-- Original Decline Reason -->
-					{#if appealRequestTarget.rejectionReason}
+					{#if appealRequestTarget.rejectionReason || appealRequestTarget.rejectionNotes}
 						<div class="mb-5 rounded-xl border border-red-200 bg-red-50 p-4">
 							<p class="mb-1 text-xs font-semibold tracking-wide text-red-700 uppercase">
 								Original Decline Reason
 							</p>
-							<p class="text-sm text-red-800">{appealRequestTarget.rejectionReason}</p>
+							{#if appealRequestTarget.rejectionReason}
+								<p class="text-sm font-semibold text-red-800">{appealRequestTarget.rejectionReason}</p>
+							{/if}
+							{#if appealRequestTarget.rejectionNotes && appealRequestTarget.rejectionNotes !== appealRequestTarget.rejectionReason}
+								<div class="mt-2 rounded-lg border border-red-200/80 bg-red-100/50 p-2.5">
+									<p class="text-[10px] font-bold text-red-900 uppercase tracking-wider">Instructor Note</p>
+									<p class="mt-0.5 text-xs text-red-800 leading-relaxed whitespace-pre-wrap">{appealRequestTarget.rejectionNotes}</p>
+								</div>
+							{/if}
 						</div>
 					{/if}
 
