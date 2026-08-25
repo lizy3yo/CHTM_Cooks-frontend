@@ -1162,6 +1162,7 @@ const PAGE_LABELS: Record<string, string> = {
 	'/instructor/requests': 'Request Approvals',
 	'/instructor/inventory': 'Inventory',
 	'/instructor/history': 'History',
+	'/instructor/transactions': 'Alternative Transactions',
 	'/instructor/reports': 'Reports & Analytics',
 	'/custodian/dashboard': 'Dashboard',
 	'/custodian/requests': 'Requests',
