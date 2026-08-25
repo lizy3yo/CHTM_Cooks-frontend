@@ -277,7 +277,7 @@
 		currentPage = 1;
 		clearTimeout(searchTimeout);
 		searchTimeout = setTimeout(() => {
-			fetchCatalog();
+			fetchCatalog({ background: true, forceRefresh: true });
 		}, 300);
 	}
 
@@ -823,13 +823,11 @@
 				type="text"
 				id="search"
 				data-tour="student-catalog-search"
-				value={searchQuery}
-				onchange={(e) => handleSearch((e.target as HTMLInputElement).value)}
+				bind:value={searchQuery}
 				oninput={(e) => handleSearch((e.target as HTMLInputElement).value)}
 				placeholder="Search by name, description, or code…"
 				class="block w-full rounded-lg border border-gray-300 py-2 pr-3 pl-9 text-sm focus:border-pink-500 focus:ring-pink-500"
 				aria-label="Search equipment"
-				disabled={isLoading}
 			/>
 		</div>
 

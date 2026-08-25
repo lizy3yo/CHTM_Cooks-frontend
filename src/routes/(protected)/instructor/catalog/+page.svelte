@@ -240,7 +240,7 @@
 		searchQuery = query;
 		currentPage = 1;
 		clearTimeout(searchTimeout);
-		searchTimeout = setTimeout(() => fetchCatalog(), 300);
+		searchTimeout = setTimeout(() => fetchCatalog({ background: true, forceRefresh: true }), 300);
 	}
 
 	function handleFilterChange(): void {
@@ -634,13 +634,11 @@
 			<input
 				type="text"
 				id="search"
-				value={searchQuery}
-				onchange={(e) => handleSearch((e.target as HTMLInputElement).value)}
+				bind:value={searchQuery}
 				oninput={(e) => handleSearch((e.target as HTMLInputElement).value)}
 				placeholder="Search by name, category, or specification…"
 				class="block w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-pink-500 focus:ring-pink-500"
 				aria-label="Search equipment"
-				disabled={isLoading}
 			/>
 		</div>
 		<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">

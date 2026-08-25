@@ -61,7 +61,7 @@ interface CatalogCacheEntry {
 	expiresAt: number;
 }
 
-const CATALOG_CLIENT_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const CATALOG_CLIENT_CACHE_TTL_MS = 60 * 1000;
 const catalogResponseCache = new Map<string, CatalogCacheEntry>();
 const catalogInFlightRequests = new Map<string, Promise<CatalogResponse>>();
 
@@ -86,6 +86,8 @@ function buildCatalogCacheKey(filters: CatalogFilters = {}): string {
 
 function getFreshCatalogFromClientCache(filters: CatalogFilters = {}): CatalogResponse | null {
 	if (!browser) return null;
+	// Do not return long-cached results for active search queries to guarantee fresh search
+	if (filters.search && filters.search.trim() !== '') return null;
 
 	const cacheKey = buildCatalogCacheKey(filters);
 	const entry = catalogResponseCache.get(cacheKey);

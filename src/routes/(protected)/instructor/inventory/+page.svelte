@@ -1016,7 +1016,7 @@
 				(item.name || '').toLowerCase().includes(q) ||
 				(item.specification || '').toLowerCase().includes(q) ||
 				(item.description || '').toLowerCase().includes(q) ||
-				(item.id || '').toLowerCase().includes(q);
+				String(item.id ?? '').toLowerCase().includes(q);
 
 			// Required status filter
 			let matchesRequired = true;
@@ -1052,7 +1052,7 @@
 				(item.name || '').toLowerCase().includes(q) ||
 				(item.specification || '').toLowerCase().includes(q) ||
 				(item.description || '').toLowerCase().includes(q) ||
-				(item.id || '').toLowerCase().includes(q);
+				String(item.id ?? '').toLowerCase().includes(q);
 
 			let matchesStatus = true;
 			const itemStatus = getItemStatus(item);
@@ -1077,7 +1077,7 @@
 				(item.name || '').toLowerCase().includes(q) ||
 				(item.specification || '').toLowerCase().includes(q) ||
 				(item.description || '').toLowerCase().includes(q) ||
-				(item.id || '').toLowerCase().includes(q);
+				String(item.id ?? '').toLowerCase().includes(q);
 
 			let matchesStatus = true;
 			const itemStatus = getItemStatus(item);
