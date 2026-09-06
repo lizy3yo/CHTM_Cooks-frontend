@@ -132,7 +132,13 @@
 		);
 	});
 
-	let enrolledStudentIds = $derived(() => new Set(assignedClassDetail?.studentIds ?? []));
+	// Works for both populated (students[]) and non-populated (studentIds[]) responses
+	let enrolledStudentIds = $derived(() => {
+		if (assignedClassDetail?.students) {
+			return new Set(assignedClassDetail.students.map((s) => s.id));
+		}
+		return new Set(assignedClassDetail?.studentIds ?? []);
+	});
 
 	let _pollInterval: ReturnType<typeof setInterval> | null = null;
 	let refreshTimer: ReturnType<typeof setTimeout> | null = null;
