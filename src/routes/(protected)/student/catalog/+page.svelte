@@ -433,25 +433,6 @@
 		await updateSelectedItemQuantity(selectedItemRequestEntry.quantity + 1);
 	}
 
-	async function removeItemFromRequest(item: CatalogItem): Promise<void> {
-		if (hasPendingRequest || hasUnresolvedObligations) return;
-		try {
-			await requestCartStore.removeItem(item.id);
-			toastStore.info(`${item.name} removed from your request list.`, 'Item Removed');
-		} catch (error) {
-			console.error('Failed to remove item:', error);
-			toastStore.error('Failed to remove item. Please try again.', 'Error');
-		}
-	}
-
-	async function handleQuantityInput(
-		item: CatalogItem,
-		value: string,
-		element?: HTMLInputElement
-	): Promise<void> {
-		if (hasPendingRequest || hasUnresolvedObligations) return;
-	}
-
 	// Helper: find cart entry for an item
 	function cartEntryFor(itemId: string) {
 		return $requestCartItems.find((i) => i.itemId === itemId);
@@ -466,7 +447,7 @@
 	}
 
 	async function incrementItem(item: CatalogItem) {
-		if (hasPendingRequest) return;
+		if (hasPendingRequest || hasUnresolvedObligations) return;
 		const entry = cartEntryFor(item.id);
 		if (!entry) {
 			await requestItem(item);
@@ -488,7 +469,7 @@
 	}
 
 	async function decrementItem(item: CatalogItem) {
-		if (hasPendingRequest) return;
+		if (hasPendingRequest || hasUnresolvedObligations) return;
 		const entry = cartEntryFor(item.id);
 		if (!entry) return;
 		try {
@@ -511,7 +492,7 @@
 	}
 
 	async function removeItemFromRequest(item: CatalogItem): Promise<void> {
-		if (hasPendingRequest) return;
+		if (hasPendingRequest || hasUnresolvedObligations) return;
 		if (!cartEntryFor(item.id)) return;
 		try {
 			await requestCartStore.removeItem(item.id);
@@ -527,7 +508,7 @@
 		valueStr: string,
 		element?: HTMLInputElement
 	) {
-		if (hasPendingRequest) return;
+		if (hasPendingRequest || hasUnresolvedObligations) return;
 		let quantity = parseInt(valueStr, 10);
 		const maxQty = maxQuantityForItem(item);
 
