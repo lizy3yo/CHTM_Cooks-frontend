@@ -245,7 +245,8 @@
 					'approved_instructor',
 					'ready_for_pickup',
 					'pending_return',
-					'pending_appeal'
+					'pending_appeal',
+					'missing'
 				],
 				limit: 1
 			});
@@ -1082,6 +1083,22 @@
 			return;
 		}
 
+		if (hasUnresolvedObligations) {
+			toastStore.error(
+				'You have unresolved replacement obligations for missing or damaged items. Please settle all obligations before requesting new items.',
+				'Request Restricted'
+			);
+			return;
+		}
+
+		if (hasPendingRequest) {
+			toastStore.error(
+				'You already have an active pending borrow request awaiting action.',
+				'Request Restricted'
+			);
+			return;
+		}
+
 		requestCartStore.addItem({
 			itemId: item.id,
 			name: item.name,
@@ -1428,12 +1445,20 @@
 	 */
 	async function loadObligationStatus(): Promise<void> {
 		try {
-			const response = await replacementObligationsAPI.getObligations({
-				status: 'pending',
-				limit: 1
-			});
-			unresolvedObligationCount = response.total;
-			hasUnresolvedObligations = response.total > 0;
+			const [obResponse, reqResponse] = await Promise.all([
+				replacementObligationsAPI.getObligations({
+					status: 'pending',
+					limit: 1
+				}),
+				borrowRequestsAPI.list({
+					status: 'missing',
+					limit: 1
+				})
+			]);
+			const pendingObligations = obResponse.total || 0;
+			const missingRequests = reqResponse.total || 0;
+			unresolvedObligationCount = Math.max(pendingObligations, missingRequests);
+			hasUnresolvedObligations = unresolvedObligationCount > 0;
 		} catch {
 			// Fail open — don't block the student if the check itself errors
 			hasUnresolvedObligations = false;
@@ -1947,6 +1972,42 @@
 						</div>
 					{/if}
 
+					{#if hasUnresolvedObligations}
+						<div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm animate-fadeIn">
+							<div class="flex gap-3">
+								<div
+									class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white shadow-sm"
+								>
+									<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+										/>
+									</svg>
+								</div>
+								<div class="min-w-0 flex-1">
+									<div class="flex items-center justify-between gap-2">
+										<h3 class="text-sm font-bold text-rose-900">Replacement Obligation Pending</h3>
+										<a
+											href="/student/borrowed"
+											class="inline-flex items-center gap-1 text-xs font-semibold text-rose-700 hover:text-rose-900 underline"
+										>
+											View Obligations
+											<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+											</svg>
+										</a>
+									</div>
+									<p class="mt-1 text-xs leading-relaxed text-rose-700">
+										You have {unresolvedObligationCount} unresolved replacement obligation{unresolvedObligationCount === 1 ? '' : 's'} for missing or damaged equipment from a previous borrowing. New equipment requests are locked until all outstanding obligations are processed and settled.
+									</p>
+								</div>
+							</div>
+						</div>
+					{/if}
+
 					{#if hasPendingRequest}
 						<div class="mb-4 rounded-xl border border-pink-200 bg-pink-50 p-4">
 							<div class="flex gap-3">
@@ -1986,8 +2047,12 @@
 						<!-- Search Button -->
 						<div class="search-dropdown-container relative w-full sm:w-auto">
 							<button
-								disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasPendingRequest}
-								title={hasPendingRequest ? 'You already have a pending borrow request' : ''}
+								disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasPendingRequest || hasUnresolvedObligations}
+								title={hasUnresolvedObligations
+									? 'You have unresolved replacement obligations for missing or damaged items'
+									: hasPendingRequest
+										? 'You already have a pending borrow request'
+										: ''}
 								onclick={() => {
 									showItemSelector = !showItemSelector;
 									if (showItemSelector) {
@@ -2173,7 +2238,7 @@
 															selectedItems.find((i) => i.id === item.id) !== undefined}
 														<button
 															onclick={() => addItemToCart(item)}
-															disabled={isSelected}
+															disabled={isSelected || hasUnresolvedObligations || hasPendingRequest || hasNoEnrollment || availableClassCodes.length === 0}
 															class="group flex w-full items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-gray-50/80 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white"
 														>
 															<!-- Item Image -->
@@ -2480,7 +2545,8 @@
 															disabled={item.requestedQuantity <= 1 ||
 																hasNoEnrollment ||
 																availableClassCodes.length === 0 ||
-																hasPendingRequest}
+																hasPendingRequest ||
+																hasUnresolvedObligations}
 															class="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:border-pink-500 hover:bg-pink-50 hover:text-pink-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:bg-white disabled:hover:text-gray-700"
 															title="Decrease quantity"
 														>
@@ -2510,7 +2576,8 @@
 																value={item.requestedQuantity}
 																disabled={hasNoEnrollment ||
 																	availableClassCodes.length === 0 ||
-																	hasPendingRequest}
+																	hasPendingRequest ||
+																	hasUnresolvedObligations}
 																onchange={(e) =>
 																	updateItemQuantity(
 																		item.id,
@@ -2542,7 +2609,8 @@
 																	: item.available) ||
 																hasNoEnrollment ||
 																availableClassCodes.length === 0 ||
-																hasPendingRequest}
+																hasPendingRequest ||
+																hasUnresolvedObligations}
 															class="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:border-pink-500 hover:bg-pink-50 hover:text-pink-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:bg-white disabled:hover:text-gray-700"
 															title="Increase quantity"
 														>
@@ -2574,7 +2642,8 @@
 													<button
 														disabled={hasNoEnrollment ||
 															availableClassCodes.length === 0 ||
-															hasPendingRequest}
+															hasPendingRequest ||
+															hasUnresolvedObligations}
 														onclick={() => removeItemFromCart(item.id)}
 														class="flex h-7 w-7 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition-all hover:border-red-300 hover:bg-red-100 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
 														title="Remove item"
@@ -3841,7 +3910,14 @@
 			<button
 				type="button"
 				data-tour="student-request-continue"
-				disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasPendingRequest}
+				disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasPendingRequest || hasUnresolvedObligations}
+				title={hasUnresolvedObligations
+					? 'Resolve all outstanding obligations before continuing'
+					: hasPendingRequest
+						? 'You currently have a pending request awaiting action'
+						: hasNoEnrollment || availableClassCodes.length === 0
+							? 'You must be enrolled in a class to continue'
+							: ''}
 				onclick={handleStepNext}
 				class="inline-flex items-center gap-2 rounded-lg bg-pink-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-pink-600"
 			>

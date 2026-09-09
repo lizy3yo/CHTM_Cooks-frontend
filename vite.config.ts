@@ -98,7 +98,7 @@ export default defineConfig(({ mode }) => ({
 		})
 	],
 	server: {
-		port: 3000,
+		port: 5412,
 		warmup: {
 			clientFiles: [
 				'./src/routes/+layout.svelte',

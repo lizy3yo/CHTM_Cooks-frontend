@@ -424,6 +424,7 @@ function getAllowedOrigin(origin: string | null): string {
 	const allowedOrigins = [
 		'http://localhost:5173',
 		'http://localhost:3000',
+		'http://localhost:5412',
 		'https://chtmcooks.vercel.app',
 		'https://yourdomain.com',
 		'https://www.yourdomain.com'

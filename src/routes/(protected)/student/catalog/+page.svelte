@@ -9,6 +9,7 @@
 	} from '$lib/api/catalog';
 	import { subscribeToInventoryChanges } from '$lib/api/inventory';
 	import { borrowRequestsAPI } from '$lib/api/borrowRequests';
+	import { replacementObligationsAPI } from '$lib/api/replacementObligations';
 	import { requestCartCount, requestCartStore, requestCartItems } from '$lib/stores/requestCart';
 	import { toastStore } from '$lib/stores/toast';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
@@ -32,6 +33,8 @@
 	let loadingClassCodes = $state(false);
 	let availableClassCodes = $state<any[]>([]);
 	let hasPendingRequest = $state(false);
+	let hasUnresolvedObligations = $state(false);
+	let unresolvedObligationCount = $state(0);
 
 	async function loadStudentClassCodes() {
 		loadingClassCodes = true;
@@ -61,13 +64,35 @@
 	async function checkPendingRequest(): Promise<void> {
 		try {
 			const res = await borrowRequestsAPI.list({
-				statuses: ['pending_instructor', 'approved_instructor', 'ready_for_pickup', 'pending_return', 'pending_appeal'],
+				statuses: ['pending_instructor', 'approved_instructor', 'ready_for_pickup', 'pending_return', 'pending_appeal', 'missing'],
 				limit: 1
 			});
 			hasPendingRequest = res.total > 0;
 		} catch (err) {
 			hasPendingRequest = false;
 			console.error('[PENDING-CHECK] Failed to load pending request status:', err);
+		}
+	}
+
+	async function loadObligationStatus(): Promise<void> {
+		try {
+			const [obResponse, reqResponse] = await Promise.all([
+				replacementObligationsAPI.getObligations({
+					status: 'pending',
+					limit: 1
+				}),
+				borrowRequestsAPI.list({
+					status: 'missing',
+					limit: 1
+				})
+			]);
+			const pendingObligations = obResponse.total || 0;
+			const missingRequests = reqResponse.total || 0;
+			unresolvedObligationCount = Math.max(pendingObligations, missingRequests);
+			hasUnresolvedObligations = unresolvedObligationCount > 0;
+		} catch {
+			hasUnresolvedObligations = false;
+			unresolvedObligationCount = 0;
 		}
 	}
 
@@ -307,6 +332,13 @@
 	 * Add item to request cart (shop-style behavior without redirect).
 	 */
 	async function requestItem(item: CatalogItem): Promise<void> {
+		if (hasUnresolvedObligations) {
+			toastStore.error(
+				'You have unresolved replacement obligations for missing or damaged items. Please settle all obligations before requesting new items.',
+				'Request Restricted'
+			);
+			return;
+		}
 		if (hasPendingRequest) {
 			toastStore.error('You already have a pending borrow request awaiting action.', 'Restricted');
 			return;
@@ -357,27 +389,67 @@
 		quantity: number,
 		element?: HTMLInputElement
 	): Promise<void> {
-		if (hasPendingRequest) return;
-		if (!selectedItem || !selectedItemRequestEntry) return;
+		if (hasPendingRequest || hasUnresolvedObligations) return;
+		if (!selectedItem) return;
 
-		const maxQty = selectedItemRequestEntry.maxQuantity;
-		let finalQty = quantity;
-		if (isNaN(finalQty) || finalQty < 1) {
-			finalQty = 1;
-		} else if (finalQty > maxQty) {
-			finalQty = maxQty;
-		}
+		const currentQty = selectedItemRequestEntry?.quantity ?? 0;
+		const maxAllowed = availableQuantityForItem(selectedItem);
+		let finalQty = Math.max(1, Math.min(quantity, maxAllowed));
 
-		if (element) {
-			element.value = String(finalQty);
+		if (quantity > maxAllowed) {
+			toastStore.warning(
+				`Maximum available quantity for ${selectedItem.name} is ${maxAllowed}.`,
+				'Quantity Limit'
+			);
 		}
 
 		try {
 			await requestCartStore.setQuantity(selectedItem.id, finalQty);
+			if (element) {
+				element.value = String(finalQty);
+			}
 		} catch (error) {
-			console.error('Failed to update request quantity:', error);
-			toastStore.error('Unable to update the request quantity. Please try again.', 'Error');
+			console.error('Failed to update quantity:', error);
+			toastStore.error('Failed to update quantity. Please try again.', 'Error');
+			if (element) {
+				element.value = String(currentQty);
+			}
 		}
+	}
+
+	async function decrementSelectedItemQuantity(): Promise<void> {
+		if (hasPendingRequest || hasUnresolvedObligations) return;
+		if (!selectedItem || !selectedItemRequestEntry) return;
+		if (selectedItemRequestEntry.quantity <= 1) {
+			await removeItemFromRequest(selectedItem);
+			return;
+		}
+		await updateSelectedItemQuantity(selectedItemRequestEntry.quantity - 1);
+	}
+
+	async function incrementSelectedItemQuantity(): Promise<void> {
+		if (hasPendingRequest || hasUnresolvedObligations) return;
+		if (!selectedItem || !selectedItemRequestEntry) return;
+		await updateSelectedItemQuantity(selectedItemRequestEntry.quantity + 1);
+	}
+
+	async function removeItemFromRequest(item: CatalogItem): Promise<void> {
+		if (hasPendingRequest || hasUnresolvedObligations) return;
+		try {
+			await requestCartStore.removeItem(item.id);
+			toastStore.info(`${item.name} removed from your request list.`, 'Item Removed');
+		} catch (error) {
+			console.error('Failed to remove item:', error);
+			toastStore.error('Failed to remove item. Please try again.', 'Error');
+		}
+	}
+
+	async function handleQuantityInput(
+		item: CatalogItem,
+		value: string,
+		element?: HTMLInputElement
+	): Promise<void> {
+		if (hasPendingRequest || hasUnresolvedObligations) return;
 	}
 
 	// Helper: find cart entry for an item
@@ -485,6 +557,7 @@
 		// Load student's class codes
 		loadStudentClassCodes();
 		checkPendingRequest();
+		loadObligationStatus();
 
 		// Initialize cart from database
 		requestCartStore.init().catch((error) => {
@@ -636,7 +709,7 @@
 					{#if !selectedItem?.isrequired}
 						<button
 							type="button"
-							disabled={hasNoEnrollment || hasPendingRequest}
+							disabled={hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
 							onclick={() => selectedItem && removeItemFromRequest(selectedItem)}
 							class="inline-flex h-10 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 transition-colors hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
 							aria-label="Remove from request list"
@@ -661,7 +734,7 @@
 							type="button"
 							onclick={() =>
 								updateSelectedItemQuantity(Math.max(1, selectedItemRequestEntry.quantity - 1))}
-							disabled={selectedItemRequestEntry.quantity <= 1 || hasNoEnrollment || hasPendingRequest}
+							disabled={selectedItemRequestEntry.quantity <= 1 || hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
 							class="flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:border-pink-500 hover:bg-pink-50 hover:text-pink-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:bg-white disabled:hover:text-gray-700"
 							aria-label="Decrease requested quantity"
 							title="Decrease quantity"
@@ -682,7 +755,7 @@
 								min="1"
 								max={selectedItemRequestEntry.maxQuantity}
 								value={selectedItemRequestEntry.quantity}
-								disabled={hasNoEnrollment || hasPendingRequest}
+								disabled={hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
 								onchange={(e) =>
 									updateSelectedItemQuantity(
 										parseInt((e.target as HTMLInputElement).value, 10) || 1,
@@ -704,7 +777,7 @@
 										selectedItemRequestEntry.quantity + 1
 									)
 								)}
-							disabled={selectedItemRequestEntry.quantity >= selectedItemRequestEntry.maxQuantity || hasNoEnrollment || hasPendingRequest}
+							disabled={selectedItemRequestEntry.quantity >= selectedItemRequestEntry.maxQuantity || hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
 							class="flex h-8 w-8 items-center justify-center rounded-md bg-pink-600 text-white transition-all hover:bg-pink-700 disabled:cursor-not-allowed disabled:bg-pink-300"
 							aria-label="Increase requested quantity"
 							title="Increase quantity"
@@ -725,10 +798,10 @@
 					type="button"
 					data-tour="student-catalog-actions"
 					onclick={() => selectedItem && requestItem(selectedItem)}
-					disabled={availableQuantityForItem(selectedItem!) === 0 || hasNoEnrollment || hasPendingRequest}
+					disabled={availableQuantityForItem(selectedItem!) === 0 || hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
 					class="min-w-0 flex-1 rounded-lg bg-pink-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
 				>
-					{availableQuantityForItem(selectedItem!) === 0 ? 'Out of Stock' : hasPendingRequest ? 'Awaiting Processing' : hasNoEnrollment ? 'Enrollment Required' : 'Add to Request List'}
+					{availableQuantityForItem(selectedItem!) === 0 ? 'Out of Stock' : hasUnresolvedObligations ? 'Obligations Pending' : hasPendingRequest ? 'Awaiting Processing' : hasNoEnrollment ? 'Enrollment Required' : 'Add to Request List'}
 				</button>
 			{/if}
 		{/snippet}
@@ -898,6 +971,35 @@
 					<h3 class="text-sm font-bold text-red-900">Enrollment Required</h3>
 					<p class="mt-1 text-xs text-red-700 leading-relaxed">
 						You are not currently enrolled in any active class. You must be enrolled in at least one class to request equipment. Please contact your instructor or administrator to be added to a class.
+					</p>
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	{#if hasUnresolvedObligations}
+		<div class="rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm animate-fadeIn">
+			<div class="flex gap-3">
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white shadow-sm">
+					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+					</svg>
+				</div>
+				<div class="flex-1 min-w-0">
+					<div class="flex items-center justify-between gap-2">
+						<h3 class="text-sm font-bold text-rose-900">Replacement Obligation Pending</h3>
+						<a
+							href="/student/borrowed"
+							class="inline-flex items-center gap-1 text-xs font-semibold text-rose-700 hover:text-rose-900 underline"
+						>
+							View Obligations
+							<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+							</svg>
+						</a>
+					</div>
+					<p class="mt-1 text-xs text-rose-700 leading-relaxed">
+						You have {unresolvedObligationCount} unresolved replacement obligation{unresolvedObligationCount === 1 ? '' : 's'} for missing or damaged equipment. Requesting equipment is locked until outstanding items are processed and settled.
 					</p>
 				</div>
 			</div>
@@ -1099,7 +1201,7 @@
 									{@const entryQuantity = cartEntryFor(item.id)?.quantity ?? 0}
 									{#if !item.isrequired}
 										<button
-											disabled={hasNoEnrollment || hasPendingRequest}
+											disabled={hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
 											onclick={(e) => {
 												e.stopPropagation();
 												removeItemFromRequest(item);
@@ -1125,7 +1227,7 @@
 									{/if}
 
 									<button
-										disabled={hasNoEnrollment || hasPendingRequest}
+										disabled={hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
 										onclick={(e) => {
 											e.stopPropagation();
 											decrementItem(item);
@@ -1142,7 +1244,7 @@
 											min="1"
 											max={maxQuantityForItem(item)}
 											value={cartEntryFor(item.id)?.quantity ?? 1}
-											disabled={hasNoEnrollment || hasPendingRequest}
+											disabled={hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
 											onchange={(e) =>
 												handleQuantityInput(
 													item,
@@ -1161,7 +1263,7 @@
 											e.stopPropagation();
 											incrementItem(item);
 										}}
-										disabled={entryQuantity >= maxQuantityForItem(item) || hasNoEnrollment || hasPendingRequest}
+										disabled={entryQuantity >= maxQuantityForItem(item) || hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
 										title="Increase quantity"
 										class="rounded-md bg-pink-600 px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-40"
 									>
@@ -1173,11 +1275,11 @@
 											e.stopPropagation();
 											requestItem(item);
 										}}
-										disabled={item.status === 'Out of Stock' || hasNoEnrollment || hasPendingRequest}
-										title={hasPendingRequest ? 'You already have a pending borrow request' : hasNoEnrollment ? 'You must be enrolled in at least one class to request equipment' : ''}
+										disabled={item.status === 'Out of Stock' || hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
+										title={hasUnresolvedObligations ? 'You have unresolved replacement obligations for missing or damaged items' : hasPendingRequest ? 'You already have a pending borrow request' : hasNoEnrollment ? 'You must be enrolled in at least one class to request equipment' : ''}
 										class="flex-1 rounded-md bg-pink-600 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-45 sm:text-xs disabled:hover:bg-pink-600"
 									>
-										{hasPendingRequest || hasNoEnrollment ? 'Restricted' : 'Request'}
+										{hasUnresolvedObligations ? 'Obligations Pending' : hasPendingRequest || hasNoEnrollment ? 'Restricted' : 'Request'}
 									</button>
 								{/if}
 							</div>
@@ -1279,7 +1381,7 @@
 								<div class="inline-flex items-center gap-2">
 									{#if !item.isrequired}
 										<button
-											disabled={hasNoEnrollment || hasPendingRequest}
+											disabled={hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
 											onclick={(e) => {
 												e.stopPropagation();
 												removeItemFromRequest(item);
@@ -1305,7 +1407,7 @@
 									{/if}
 
 									<button
-										disabled={hasNoEnrollment || hasPendingRequest}
+										disabled={hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
 										onclick={(e) => {
 											e.stopPropagation();
 											decrementItem(item);
@@ -1320,7 +1422,7 @@
 											min="1"
 											max={maxQuantityForItem(item)}
 											value={cartEntryFor(item.id)?.quantity ?? 1}
-											disabled={hasNoEnrollment || hasPendingRequest}
+											disabled={hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
 											onchange={(e) =>
 												handleQuantityInput(
 													item,
@@ -1338,7 +1440,7 @@
 											e.stopPropagation();
 											incrementItem(item);
 										}}
-										disabled={entryQuantity >= maxQuantityForItem(item) || hasNoEnrollment || hasPendingRequest}
+										disabled={entryQuantity >= maxQuantityForItem(item) || hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
 										class="rounded-md bg-pink-600 px-2 py-1 text-sm font-semibold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-40"
 									>
 										+
@@ -1350,11 +1452,11 @@
 										e.stopPropagation();
 										requestItem(item);
 									}}
-									disabled={availableQuantityForItem(item) === 0 || hasNoEnrollment || hasPendingRequest}
-									title={hasPendingRequest ? 'You already have a pending borrow request' : hasNoEnrollment ? 'You must be enrolled in at least one class to request equipment' : ''}
+									disabled={availableQuantityForItem(item) === 0 || hasNoEnrollment || hasPendingRequest || hasUnresolvedObligations}
+									title={hasUnresolvedObligations ? 'You have unresolved replacement obligations for missing or damaged items' : hasPendingRequest ? 'You already have a pending borrow request' : hasNoEnrollment ? 'You must be enrolled in at least one class to request equipment' : ''}
 									class="rounded-md bg-pink-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-45 sm:text-xs disabled:hover:bg-pink-600"
 								>
-									{hasPendingRequest || hasNoEnrollment ? 'Restricted' : 'Request'}
+									{hasUnresolvedObligations ? 'Obligations Pending' : hasPendingRequest || hasNoEnrollment ? 'Restricted' : 'Request'}
 								</button>
 							{/if}
 						</div>
