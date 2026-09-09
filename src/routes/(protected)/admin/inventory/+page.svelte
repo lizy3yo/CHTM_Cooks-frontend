@@ -3748,12 +3748,12 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 					</div>
 				</button>
 
-				<!-- Card 2: Physical Available -->
+				<!-- Card 2: Available Physical Items -->
 				<button type="button" onclick={() => { stockModalMode = 'available'; showStockModal = true; }} class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:border-pink-300 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-pink-500/20 sm:p-5 w-full">
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
 							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">
-								Physical Available
+								Available Physical Items
 							</p>
 							<p class="mt-1 text-2xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">
 								{totalAvailable}
@@ -3793,11 +3793,11 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 					</div>
 				</button>
 
-				<!-- Card 3: Out / Released -->
+				<!-- Card 3: Items Released / Out -->
 				<button type="button" onclick={() => (showReleasedModal = true)} class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:border-pink-300 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-pink-500/20 sm:p-5 w-full">
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Released / Out</p>
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Items Released / Out</p>
 							<p class="mt-1 text-2xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">
 								{totalReleased}
 							</p>

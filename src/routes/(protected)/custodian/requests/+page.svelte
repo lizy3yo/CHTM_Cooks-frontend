@@ -1126,7 +1126,7 @@
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Total</p>
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Total Requests</p>
 							<p class="mt-1 text-xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">
 								{stats.totalRequests}
 							</p>
@@ -1158,7 +1158,7 @@
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Pending</p>
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Pending Requests</p>
 							<p class="mt-1 text-xl font-semibold text-amber-600 sm:mt-2 sm:text-3xl">
 								{stats.pendingCount}
 							</p>
@@ -1190,7 +1190,7 @@
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Ready</p>
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Ready for Pickup</p>
 							<p class="mt-1 text-xl font-semibold text-emerald-600 sm:mt-2 sm:text-3xl">
 								{stats.readyCount}
 							</p>
@@ -1254,7 +1254,7 @@
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Overdue</p>
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Overdue Returns</p>
 							<p class="mt-1 text-xl font-semibold text-red-600 sm:mt-2 sm:text-3xl">
 								{stats.overdueCount}
 							</p>

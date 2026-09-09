@@ -37,7 +37,7 @@
 	const totalOut = $derived(rows.reduce((s, i) => s + out(i), 0));
 
 	const heading = $derived(
-		mode === 'total' ? 'Total Lab Stock' : mode === 'available' ? 'Physical Available' : 'Stock Flow Balance'
+		mode === 'total' ? 'Total Lab Stock' : mode === 'available' ? 'Available Physical Items' : 'Stock Flow Balance'
 	);
 	const subtitle = $derived(
 		mode === 'total'

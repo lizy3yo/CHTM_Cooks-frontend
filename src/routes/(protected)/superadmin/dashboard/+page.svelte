@@ -541,7 +541,7 @@
 				<div class="flex items-center justify-between gap-2">
 					<div class="min-w-0">
 						<p class="truncate text-xs font-semibold tracking-wide text-yellow-700 uppercase">
-							Pending
+							Pending Requests
 						</p>
 						<p class="mt-1 text-2xl font-bold text-yellow-700 sm:mt-2 sm:text-3xl">
 							{pendingRequests}
@@ -587,7 +587,7 @@
 				<div class="flex items-center justify-between gap-2">
 					<div class="min-w-0">
 						<p class="truncate text-xs font-semibold tracking-wide text-red-700 uppercase">
-							Overdue
+							Overdue Returns
 						</p>
 						<p class="mt-1 text-2xl font-bold text-red-700 sm:mt-2 sm:text-3xl">
 							{overdueRequests}
@@ -802,11 +802,11 @@
 							</div>
 							<div class="rounded-lg border border-gray-100 bg-gray-50 p-4 text-center">
 								<p class="text-2xl font-bold text-blue-600">{classStats.avgClassSize.toFixed(1)}</p>
-								<p class="mt-1 text-xs text-gray-500">Avg Class Size</p>
+								<p class="mt-1 text-xs text-gray-500">Average Class Size</p>
 							</div>
 							<div class="rounded-lg border border-gray-100 bg-gray-50 p-4 text-center">
 								<p class="text-2xl font-bold text-purple-600">{classStats.totalInstructors}</p>
-								<p class="mt-1 text-xs text-gray-500">Instructors</p>
+								<p class="mt-1 text-xs text-gray-500">Assigned Instructors</p>
 							</div>
 						</div>
 					</div>
@@ -835,7 +835,7 @@
 						</div>
 						<div class="rounded-lg border border-gray-100 bg-gray-50 p-4 text-center">
 							<p class="text-2xl font-bold text-blue-600">{totalCategories}</p>
-							<p class="mt-1 text-xs text-gray-500">Categories</p>
+							<p class="mt-1 text-xs text-gray-500">Item Categories</p>
 						</div>
 					</div>
 				</div>

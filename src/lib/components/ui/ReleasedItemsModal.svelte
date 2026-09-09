@@ -88,11 +88,11 @@
 					<div class="flex gap-3">
 						<div class="rounded-xl bg-blue-50 px-4 py-2 text-center">
 							<p class="text-lg font-bold text-blue-700">{filtered.length}</p>
-							<p class="text-[10px] font-medium uppercase tracking-wide text-blue-600">Records</p>
+							<p class="text-[10px] font-medium uppercase tracking-wide text-blue-600">Release Records</p>
 						</div>
 						<div class="rounded-xl bg-gray-50 px-4 py-2 text-center">
 							<p class="text-lg font-bold text-gray-900">{totalQty}</p>
-							<p class="text-[10px] font-medium uppercase tracking-wide text-gray-500">Items out</p>
+							<p class="text-[10px] font-medium uppercase tracking-wide text-gray-500">Items Out</p>
 						</div>
 					</div>
 					<div class="relative max-w-xs flex-1">

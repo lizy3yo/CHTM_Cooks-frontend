@@ -366,7 +366,7 @@ const damageRateDisplay = $derived.by(() => {
 				class="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm hover:shadow-md hover:border-amber-300/60 hover:bg-amber-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-amber-500/20"
 			>
 				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700">
-					<Clock size={12} /> Pending
+					<Clock size={12} /> Pending Requests
 				</div>
 				<p class="mt-2 text-3xl font-bold text-amber-700">{pendingCount}</p>
 				<p class="mt-0.5 text-xs text-amber-500">Awaiting action</p>
@@ -378,7 +378,7 @@ const damageRateDisplay = $derived.by(() => {
 				class="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm hover:shadow-md hover:border-red-300/60 hover:bg-red-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-red-500/20"
 			>
 				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-red-800">
-					<TriangleAlert size={12} /> Overdue
+					<TriangleAlert size={12} /> Overdue Returns
 				</div>
 				<p class="mt-2 text-3xl font-bold text-red-700">{overdueCount}</p>
 				<p class="mt-0.5 text-xs text-red-600">Past return date</p>
@@ -390,7 +390,7 @@ const damageRateDisplay = $derived.by(() => {
 				class="rounded-xl border {pendingObligations > 0 ? 'border-rose-200 bg-rose-50 hover:border-rose-300/60 hover:bg-rose-100/30 focus:ring-rose-500/20' : 'border-gray-200 bg-gray-50 hover:border-gray-300/60 hover:bg-gray-100/30 focus:ring-gray-500/20'} p-4 shadow-sm transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2"
 			>
 				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide {pendingObligations > 0 ? 'text-rose-700' : 'text-gray-600'}">
-					<AlertCircle size={12} /> Replacements
+					<AlertCircle size={12} /> Replacement Cases
 				</div>
 				<p class="mt-2 text-3xl font-bold {pendingObligations > 0 ? 'text-rose-700' : 'text-gray-700'}">{pendingObligations}</p>
 				<p class="mt-0.5 text-xs {pendingObligations > 0 ? 'text-rose-500' : 'text-gray-500'}">Pending cases</p>
@@ -697,7 +697,7 @@ const damageRateDisplay = $derived.by(() => {
 						</div>
 						<div class="grid grid-cols-2 gap-2">
 							<div class="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2.5 text-center">
-								<p class="text-xs font-medium text-orange-600">Overdue</p>
+								<p class="text-xs font-medium text-orange-600">Overdue Students</p>
 								<p class="text-xl font-bold text-orange-700">{report.studentRisk.overdueStudents.length}</p>
 							</div>
 							<div class="rounded-lg border border-red-100 bg-red-50 px-3 py-2.5 text-center">

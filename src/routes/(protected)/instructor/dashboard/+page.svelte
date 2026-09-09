@@ -276,7 +276,7 @@
 				class="w-full text-left rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm hover:shadow-md hover:bg-red-100/50 hover:border-red-300 transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-red-500/20 cursor-pointer"
 			>
 				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-red-800">
-					<TriangleAlert size={12} /> Overdue
+					<TriangleAlert size={12} /> Overdue Returns
 				</div>
 				<p class="mt-2 text-3xl font-bold text-red-700">{overdueCount}</p>
 				<p class="mt-0.5 text-xs text-red-600">Past return date</p>

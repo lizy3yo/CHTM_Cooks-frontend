@@ -1313,7 +1313,7 @@
 			>
 				<div class="flex items-center justify-between gap-2">
 					<div class="min-w-0">
-						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Pending</p>
+						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Pending Replacements</p>
 						<p class="mt-1 text-2xl font-semibold text-orange-600 sm:mt-2 sm:text-3xl">
 							{obligationCounts.pending}
 						</p>
@@ -1335,7 +1335,7 @@
 			>
 				<div class="flex items-center justify-between gap-2">
 					<div class="min-w-0">
-						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Resolved</p>
+						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Resolved Replacements</p>
 						<p class="mt-1 text-2xl font-semibold text-green-600 sm:mt-2 sm:text-3xl">
 							{obligationCounts.replaced}
 						</p>

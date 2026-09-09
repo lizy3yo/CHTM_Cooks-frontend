@@ -703,7 +703,7 @@
 						class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-emerald-700 uppercase"
 					>
 						<CheckCircle2 size={12} />
-						<span>Completed</span>
+						<span>Completed Requests</span>
 					</div>
 					<p class="mt-2 text-3xl font-bold text-emerald-700 sm:text-4xl">{metrics.returnedCount}</p>
 					<p class="mt-0.5 text-xs text-emerald-500">Successfully returned</p>
@@ -717,7 +717,7 @@
 						class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-amber-700 uppercase"
 					>
 						<Clock size={12} />
-						<span>Pending</span>
+						<span>Pending Requests</span>
 					</div>
 					<p class="mt-2 text-3xl font-bold text-amber-700 sm:text-4xl">{metrics.pendingCount}</p>
 					<p class="mt-0.5 text-xs text-amber-500">Awaiting action</p>
@@ -736,7 +736,7 @@
 							: 'text-gray-600'}"
 					>
 						<TriangleAlert size={12} />
-						<span>Overdue</span>
+						<span>Overdue Returns</span>
 					</div>
 					<p
 						class="mt-2 text-3xl font-bold {metrics.overdueCount > 0

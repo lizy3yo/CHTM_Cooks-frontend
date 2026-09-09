@@ -735,7 +735,7 @@
 		>
 			<div class="flex items-center justify-between gap-2">
 				<div class="min-w-0">
-					<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Overdue</p>
+					<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Overdue Returns</p>
 					<p class="mt-1 text-2xl font-semibold text-red-600 sm:mt-2 sm:text-3xl">{metrics.overdue}</p>
 				</div>
 				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 sm:h-12 sm:w-12">

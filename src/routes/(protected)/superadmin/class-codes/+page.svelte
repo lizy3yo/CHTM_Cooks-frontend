@@ -1627,7 +1627,7 @@
 			>
 				<div class="flex items-center justify-between gap-2">
 					<div class="min-w-0">
-						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Avg Class Size</p>
+						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Average Class Size</p>
 						<p class="mt-1 text-2xl font-semibold text-purple-600 sm:mt-2 sm:text-3xl">{stats.avgClassSize}</p>
 						<p class="mt-0.5 text-xs text-gray-500">Students per class</p>
 					</div>
@@ -1644,7 +1644,7 @@
 			>
 				<div class="flex items-center justify-between gap-2">
 					<div class="min-w-0">
-						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Instructors</p>
+						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Assigned Instructors</p>
 						<p class="mt-1 text-2xl font-semibold text-blue-600 sm:mt-2 sm:text-3xl">{stats.totalInstructors}</p>
 						<p class="mt-0.5 text-xs text-gray-500">Teaching this semester</p>
 					</div>

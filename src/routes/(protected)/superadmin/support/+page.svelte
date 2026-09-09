@@ -318,15 +318,15 @@
 			<p class="mt-1 text-2xl font-bold text-gray-900">{stats.total}</p>
 		</div>
 		<div class="rounded-xl border border-blue-100 bg-blue-50 p-4 shadow-sm">
-			<p class="text-xs font-medium text-blue-600">Open</p>
+			<p class="text-xs font-medium text-blue-600">Open Tickets</p>
 			<p class="mt-1 text-2xl font-bold text-blue-700">{stats.open}</p>
 		</div>
 		<div class="rounded-xl border border-yellow-100 bg-yellow-50 p-4 shadow-sm">
-			<p class="text-xs font-medium text-yellow-600">In Progress</p>
+			<p class="text-xs font-medium text-yellow-600">Tickets In Progress</p>
 			<p class="mt-1 text-2xl font-bold text-yellow-700">{stats.inProgress}</p>
 		</div>
 		<div class="rounded-xl border border-green-100 bg-green-50 p-4 shadow-sm">
-			<p class="text-xs font-medium text-green-600">Resolved</p>
+			<p class="text-xs font-medium text-green-600">Resolved Tickets</p>
 			<p class="mt-1 text-2xl font-bold text-green-700">{stats.resolved}</p>
 		</div>
 	</div>
