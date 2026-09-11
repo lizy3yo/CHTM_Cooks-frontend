@@ -3230,7 +3230,7 @@
 			{@render detailSectionTitle('Checkout')}
 			<dl class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
 				{@render detailField('Checked out', fmtDateTime(tx.borrowDate))}
-				{@render detailField('Due back', fmtDate(tx.returnDate))}
+				{@render detailField('Return Date Deadline', fmtDate(tx.returnDate))}
 				{@render detailField('Returned', tx.status === 'borrowed' ? 'Not yet returned' : fmtDateTime(tx.returnedAt))}
 				{@render detailField('Used at', tx.usageLocation === 'outdoor' ? 'Outdoor' : 'School')}
 				{@render detailField('Purpose', tx.purpose)}
@@ -3324,7 +3324,7 @@
 			{@render detailSectionTitle('Schedule')}
 			<dl class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
 				{@render detailField('Needed from', fmtDate(req.borrowDate))}
-				{@render detailField('Due back', fmtDate(req.returnDate))}
+				{@render detailField('Return Date Deadline', fmtDate(req.returnDate))}
 				{@render detailField('Released', req.dispatchedAt ? fmtDateTime(req.dispatchedAt) : 'Not yet released')}
 				{@render detailField('Returned', req.resolvedAt ? fmtDateTime(req.resolvedAt) : 'Not yet returned')}
 			</dl>
