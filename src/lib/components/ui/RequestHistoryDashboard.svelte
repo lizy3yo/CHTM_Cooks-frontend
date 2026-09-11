@@ -505,7 +505,7 @@
 	// Helper for status formatting
 	function getStatusBadge(status: BorrowRequestStatus) {
 		const config: Record<BorrowRequestStatus, { text: string; class: string }> = {
-			pending_instructor: { text: 'Pending Approval', class: 'bg-yellow-50 text-yellow-800 border-yellow-200' },
+			pending_instructor: { text: 'Under Review', class: 'bg-yellow-50 text-yellow-800 border-yellow-200' },
 			approved_instructor: { text: 'Approved by Instructor', class: 'bg-blue-50 text-blue-800 border-blue-200' },
 			ready_for_pickup: { text: 'Ready for Pickup', class: 'bg-indigo-50 text-indigo-800 border-indigo-200' },
 			borrowed: { text: 'Borrowed', class: 'bg-purple-50 text-purple-800 border-purple-200' },
@@ -976,7 +976,7 @@
 								<option value="">All Statuses</option>
 								<option value="returned">Returned</option>
 								<option value="borrowed">Borrowed</option>
-								<option value="pending_instructor">Pending Approval</option>
+								<option value="pending_instructor">Under Review</option>
 								<option value="approved_instructor">Approved by Instructor</option>
 								<option value="ready_for_pickup">Ready for Pickup</option>
 								<option value="missing">Missing</option>

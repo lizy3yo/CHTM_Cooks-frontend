@@ -1,9 +1,9 @@
 /**
  * Borrow request statuses whose on-screen name differs from their stored key.
- * `pending_instructor` is shown as "Pending Approval" on every page.
+ * `pending_instructor` is shown as "Under Review" on every page.
  */
 const DISPLAY_KEYS: Record<string, string> = {
-	pending_instructor: 'pending_approval'
+	pending_instructor: 'under_review'
 };
 
 /**
