@@ -35,6 +35,7 @@
 	} from 'lucide-svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import ItemInspectionModal from '$lib/components/custodian/ItemInspectionModal.svelte';
+	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 
 	// ─── PROPS ───────────────────────────────────────────────────────────────
 	// Shared by instructor, custodian, admin and superadmin.
@@ -359,6 +360,45 @@
 		detailConfidentialId = null;
 		detailDonationId = null;
 	}
+
+	// ─── ITEM PHOTOS ─────────────────────────────────────────────────────────
+	// Walk-ins and donations arrive with their photo from the backend.
+	// Confidential requests live in localStorage with only an item id, so their
+	// photos are fetched from inventory when the details window opens.
+	let itemPictures = $state<Record<string, string | null>>({});
+	let brokenPictures = $state<Record<string, true>>({});
+
+	function pictureFor(itemId: string, known?: string | null): string | null {
+		const url = known ?? itemPictures[itemId] ?? null;
+		return url && !brokenPictures[url] ? url : null;
+	}
+
+	$effect(() => {
+		const req = detailConfidential;
+		if (!req) return;
+		const missing = req.items
+			.map((i) => i.itemId)
+			.filter((id) => id && !(id in itemPictures));
+		if (missing.length === 0) return;
+
+		// Use the inventory list if it's already loaded, then fetch the rest.
+		const found: Record<string, string | null> = {};
+		const toFetch: string[] = [];
+		for (const id of missing) {
+			const local = inventoryItems.find((inv) => inv.id === id);
+			if (local) found[id] = local.picture ?? null;
+			else toFetch.push(id);
+		}
+		if (Object.keys(found).length) itemPictures = { ...itemPictures, ...found };
+
+		for (const id of toFetch) {
+			itemPictures = { ...itemPictures, [id]: null }; // mark as requested
+			inventoryItemsAPI
+				.getById(id)
+				.then((inv) => (itemPictures = { ...itemPictures, [id]: inv?.picture ?? null }))
+				.catch(() => {});
+		}
+	});
 
 	// --- Confidential Request Form State ---
 	let selectedAdmin = $state<UserResponse | null>(null);
@@ -978,6 +1018,13 @@
 		selectedWalkIn = tx;
 		showReturnModal = true;
 	}
+
+	// Items for the return checklist, with each item's inventory photo.
+	const returnItems = $derived(
+		selectedWalkIn
+			? selectedWalkIn.items.map((i) => ({ ...i, picture: i.picture ?? undefined }))
+			: []
+	);
 
 	function closeReturnModal() {
 		showReturnModal = false;
@@ -3057,6 +3104,23 @@
 	</div>
 {/snippet}
 
+<!-- Item photo with the same grey placeholder student requests use -->
+{#snippet itemThumb(picture: string | null, name: string, size = 'h-10 w-10')}
+	{#if picture}
+		<img
+			src={picture}
+			alt={name}
+			loading="lazy"
+			class="{size} shrink-0 rounded-lg object-cover ring-1 ring-gray-200"
+			onerror={() => (brokenPictures = { ...brokenPictures, [picture]: true })}
+		/>
+	{:else}
+		<div class="{size} shrink-0 overflow-hidden rounded-lg ring-1 ring-gray-200">
+			<ItemImagePlaceholder size="sm" />
+		</div>
+	{/if}
+{/snippet}
+
 {#snippet detailSectionTitle(title: string, meta?: string)}
 	<div class="mb-3 flex items-baseline justify-between gap-3">
 		<h3 class="text-xs font-bold tracking-wider text-gray-700 uppercase">{title}</h3>
@@ -3184,8 +3248,9 @@
 					{@const insp = parseInspection(item.inspectionNotes)}
 					<li class="space-y-1.5 px-4 py-3">
 						<div class="flex items-start justify-between gap-3">
-							<div class="flex min-w-0 items-start gap-2.5">
+							<div class="flex min-w-0 items-center gap-3">
 								{@render rowNum(i + 1)}
+								{@render itemThumb(pictureFor(item.itemId, item.picture), item.name)}
 								<div class="min-w-0">
 									<p class="font-medium break-words text-gray-900">{item.name}</p>
 									{#if item.category}<p class="text-xs text-gray-500">{item.category}</p>{/if}
@@ -3197,16 +3262,16 @@
 							</div>
 						</div>
 						{#if insp && insp.good !== null}
-							<p class="pl-7 text-xs text-gray-600">
+							<p class="pl-21 text-xs text-gray-600">
 								Good {insp.good} · Damaged {insp.damaged} · Missing {insp.missing}
 								{#if item.additionalReturned}· <span class="text-blue-600">+{item.additionalReturned} over-returned</span>{/if}
 							</p>
 						{/if}
 						{#if insp?.remarks}
-							<p class="pl-7 text-xs text-gray-600"><span class="font-semibold">Remarks:</span> {insp.remarks}</p>
+							<p class="pl-21 text-xs text-gray-600"><span class="font-semibold">Remarks:</span> {insp.remarks}</p>
 						{/if}
 						{#if item.dueDate}
-							<p class="pl-7 text-xs text-rose-600">
+							<p class="pl-21 text-xs text-rose-600">
 								Replace {item.replacementQuantity ?? ''} by {fmtDate(item.dueDate)}
 							</p>
 						{/if}
@@ -3272,9 +3337,10 @@
 			)}
 			<ul class="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
 				{#each req.items as item, i}
-					<li class="flex items-start justify-between gap-3 px-4 py-3">
-						<div class="flex min-w-0 items-start gap-2.5">
+					<li class="flex items-center justify-between gap-3 px-4 py-3">
+						<div class="flex min-w-0 items-center gap-3">
 							{@render rowNum(i + 1)}
+							{@render itemThumb(pictureFor(item.itemId), item.name)}
 							<p class="font-medium break-words text-gray-900">{item.name}</p>
 						</div>
 						<span class="shrink-0 text-sm font-bold text-gray-900 tabular-nums">×{item.quantity}</span>
@@ -3303,6 +3369,15 @@
 	{#snippet donDetailStatus()}{@render donAction(d)}{/snippet}
 	{#snippet donDetailBody()}
 		<section>
+			<div class="mb-5 flex items-center gap-4 rounded-xl border border-gray-200 p-3">
+				{@render itemThumb(pictureFor(d.inventoryItemId ?? '', d.picture), d.itemName, 'h-16 w-16')}
+				<div class="min-w-0">
+					<p class="font-semibold break-words text-gray-900">{d.itemName}</p>
+					<p class="text-sm text-gray-600">
+						+{d.quantity} {d.unit || (d.quantity === 1 ? 'unit' : 'units')}
+					</p>
+				</div>
+			</div>
 			{@render detailSectionTitle('Donation')}
 			<dl class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
 				{@render detailField('Donor', d.donorName)}
@@ -3344,7 +3419,7 @@
 {#if showReturnModal && selectedWalkIn}
 	<!-- Same return inspection checklist as student borrow requests -->
 	<ItemInspectionModal
-		items={selectedWalkIn.items}
+		items={returnItems}
 		requestId={selectedWalkIn.id}
 		studentName={selectedWalkIn.studentName}
 		leaderName={hasClass(selectedWalkIn)

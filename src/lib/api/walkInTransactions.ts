@@ -15,6 +15,8 @@ export interface WalkInTransactionItem {
 	name: string;
 	quantity: number;
 	category: string;
+	/** Photo of the inventory item, if it has one. */
+	picture?: string | null;
 	inspectionStatus?: 'good' | 'damaged' | 'missing' | null;
 	/** Inspection details, set when the item is returned (same as student returns). */
 	inspectionNotes?: string | null;

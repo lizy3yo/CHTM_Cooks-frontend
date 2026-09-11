@@ -20,6 +20,8 @@ export interface DonationResponse {
 	notes?: string;
 	inventoryAction: 'new_item' | 'add_to_existing';
 	inventoryItemId?: string;
+	/** Photo of the donated inventory item, if it has one. */
+	picture?: string | null;
 	/** Name of the staff member who logged the donation. */
 	recordedBy?: string | null;
 	createdAt: string;
