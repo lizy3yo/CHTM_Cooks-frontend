@@ -65,7 +65,35 @@ function fmtStatus(s?: string): string {
 	return s ? displayStatusKey(s).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '';
 }
 
-async function loadLogo(wb: any, url: string): Promise<number | null> {
+// ── Header logos ────────────────────────────────────────────────────────────
+// The three seals are laid out as one evenly spaced group, centred across the
+// logo band (columns A–C) and vertically centred in the header rows (2–5), at a
+// common height with each image's own aspect ratio. Positions are computed in
+// real pixels and written as native EMU offsets: ExcelJS's fractional
+// `{ col, row }` anchors scale offsets by width × 10000 rather than real EMUs,
+// which is what left the logos hugging the left edge of uneven columns.
+const LOGO_MAX_PX = 74; // logo height (and max width)
+const LOGO_GAP_PX = 18; // space between neighbouring logos
+const LOGO_EDGE_PX = 8; // minimum space from the band's edges
+const EMU_PER_PX = 9525;
+const DEFAULT_COL_WIDTH = 18; // matches the column-width fallback in buildSheet
+
+interface Logo {
+	id: number;
+	width: number; // display size in px
+	height: number;
+}
+
+/** Width/height from the PNG IHDR chunk, or null if the data isn't a PNG. */
+function pngSize(bytes: Uint8Array): { width: number; height: number } | null {
+	if (bytes.length < 24 || bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4e || bytes[3] !== 0x47) {
+		return null;
+	}
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
+async function loadLogo(wb: any, url: string): Promise<Logo | null> {
 	try {
 		const res = await fetch(url);
 		if (!res.ok) return null;
@@ -74,16 +102,75 @@ async function loadLogo(wb: any, url: string): Promise<number | null> {
 		let bin = '';
 		for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
 		const base64 = 'data:image/png;base64,' + btoa(bin);
-		return wb.addImage({ base64, extension: 'png' });
+		const id = wb.addImage({ base64, extension: 'png' });
+
+		// Fit inside a LOGO_MAX_PX box without distorting the seal.
+		const size = pngSize(bytes);
+		const scale = size ? LOGO_MAX_PX / Math.max(size.width, size.height) : 1;
+		return {
+			id,
+			width: size ? Math.round(size.width * scale) : LOGO_MAX_PX,
+			height: size ? Math.round(size.height * scale) : LOGO_MAX_PX
+		};
 	} catch {
 		return null;
+	}
+}
+
+/** Excel column width (characters) → pixels, for the default Calibri 11 font. */
+function colWidthPx(chars: number): number {
+	const maxDigitWidth = 7;
+	return Math.trunc(((256 * chars + Math.trunc(128 / maxDigitWidth)) / 256) * maxDigitWidth);
+}
+
+/** Row height (points) → pixels at 96 DPI. */
+function rowHeightPx(points: number): number {
+	return (points * 96) / 72;
+}
+
+/** A pixel offset from the start of a run of cells → that cell's index + EMU offset. */
+function toNative(offsetPx: number, sizesPx: number[], firstIndex: number) {
+	let i = 0;
+	let rest = Math.max(0, offsetPx);
+	while (i < sizesPx.length - 1 && rest >= sizesPx[i]) {
+		rest -= sizesPx[i];
+		i++;
+	}
+	return { index: firstIndex + i, offset: Math.round(rest * EMU_PER_PX) };
+}
+
+function placeLogos(sheet: any, logos: (Logo | null)[], widths: number[]) {
+	const shown = logos.filter((l): l is Logo => l !== null);
+	if (shown.length === 0) return;
+
+	const colsPx = [0, 1, 2].map((c) => colWidthPx(widths[c] ?? DEFAULT_COL_WIDTH)); // A–C
+	const rowsPx = [2, 3, 4, 5].map((r) => rowHeightPx(sheet.getRow(r).height ?? 15)); // rows 2–5
+	const bandW = colsPx.reduce((a, b) => a + b, 0);
+	const bandH = rowsPx.reduce((a, b) => a + b, 0);
+
+	// Shrink the whole group evenly only if the band is too narrow for it.
+	const groupW = shown.reduce((sum, l) => sum + l.width, 0) + LOGO_GAP_PX * (shown.length - 1);
+	const scale = Math.min(1, (bandW - 2 * LOGO_EDGE_PX) / groupW);
+
+	let x = (bandW - groupW * scale) / 2;
+	for (const logo of shown) {
+		const w = logo.width * scale;
+		const h = logo.height * scale;
+		const col = toNative(x, colsPx, 0);
+		const row = toNative((bandH - h) / 2, rowsPx, 1); // row 2 is index 1
+		sheet.addImage(logo.id, {
+			tl: { nativeCol: col.index, nativeColOff: col.offset, nativeRow: row.index, nativeRowOff: row.offset },
+			ext: { width: Math.round(w), height: Math.round(h) },
+			editAs: 'oneCell'
+		});
+		x += w + LOGO_GAP_PX * scale;
 	}
 }
 
 function buildSheet(
 	wb: any,
 	spec: SectionSpec,
-	logoIds: (number | null)[],
+	logos: (Logo | null)[],
 	meta: { rangeLabel: string; reportType: string; userName: string }
 ) {
 	const sheet = wb.addWorksheet(spec.name, {
@@ -134,14 +221,8 @@ function buildSheet(
 		v.border = boxBorder;
 	});
 
-	// Logos anchored in columns A, B, C (do not resize the columns).
-	logoIds.forEach((id, i) => {
-		if (id == null) return;
-		sheet.addImage(id, {
-			tl: { col: i + 0.18, row: 1.35 },
-			ext: { width: 74, height: 74 }
-		});
-	});
+	// Logos: one centred, evenly spaced group across A–C (columns are not resized).
+	placeLogos(sheet, logos, widths);
 
 	// ── Section band (row 7) ──
 	sheet.getRow(6).height = 6;
@@ -206,7 +287,7 @@ export async function downloadAnalyticsExcel(opts: AnalyticsExcelOptions): Promi
 	wb.creator = 'CHTM-Cooks System';
 	wb.created = new Date();
 
-	const logoIds = await Promise.all(LOGO_URLS.map((u) => loadLogo(wb, u)));
+	const logos = await Promise.all(LOGO_URLS.map((u) => loadLogo(wb, u)));
 	const want = (id: string) => !opts.sections.length || opts.sections.includes(id);
 	const meta = {
 		rangeLabel: opts.rangeLabel,
@@ -228,20 +309,20 @@ export async function downloadAnalyticsExcel(opts: AnalyticsExcelOptions): Promi
 			['Avg quantity / request', br.borrowingAverages.avgQuantityPerRequest]
 		];
 		for (const sb of br.statusBreakdown) rows.push([`Status: ${fmtStatus(sb.status)}`, sb.count]);
-		buildSheet(wb, { name: 'Overview', band: `OVERVIEW — ${opts.rangeLabel}`, header: ['Metric', 'Value'], rows, widths: [30, 18] }, logoIds, meta);
+		buildSheet(wb, { name: 'Overview', band: `OVERVIEW — ${opts.rangeLabel}`, header: ['Metric', 'Value'], rows, widths: [30, 18] }, logos, meta);
 	}
 
 	if (want('borrowing')) {
 		const rows = br.itemEntries.map((e) => [e.name, e.category, e.studentName, e.studentEmail, e.quantity, fmtDate(e.requestDate, true), fmtStatus(e.requestStatus)]);
-		buildSheet(wb, { name: 'Borrowing', band: 'BORROWED ITEMS', header: ['Item', 'Category', 'Borrower', 'Email', 'Qty', 'Date', 'Status'], rows, widths: [26, 16, 20, 24, 8, 20, 16] }, logoIds, meta);
+		buildSheet(wb, { name: 'Borrowing', band: 'BORROWED ITEMS', header: ['Item', 'Category', 'Borrower', 'Email', 'Qty', 'Date', 'Status'], rows, widths: [26, 16, 20, 24, 8, 20, 16] }, logos, meta);
 	}
 
 	if (want('inventory')) {
 		const rows = inv.eomVariance.map((i) => [i.name, i.category, i.quantity, i.eomCount, i.variance]);
-		buildSheet(wb, { name: 'Inventory Variance', band: 'INVENTORY VARIANCE', header: ['Item', 'Category', 'Current', 'EOM', 'Variance'], rows, widths: [28, 18, 12, 12, 12] }, logoIds, meta);
+		buildSheet(wb, { name: 'Inventory Variance', band: 'INVENTORY VARIANCE', header: ['Item', 'Category', 'Current', 'EOM', 'Variance'], rows, widths: [28, 18, 12, 12, 12] }, logos, meta);
 		if (inv.stockAdjustments.length) {
 			const aRows = inv.stockAdjustments.map((a) => [a.itemName, a.quantity > 0 ? 'Restock' : 'Loss/Damage', a.quantity, a.purpose ?? '', a.notes ?? '', fmtDate(a.createdAt ?? a.date)]);
-			buildSheet(wb, { name: 'Stock Adjustments', band: 'STOCK ADJUSTMENTS', header: ['Item', 'Type', 'Qty', 'Reason', 'Notes', 'Date'], rows: aRows, widths: [26, 16, 8, 22, 24, 18] }, logoIds, meta);
+			buildSheet(wb, { name: 'Stock Adjustments', band: 'STOCK ADJUSTMENTS', header: ['Item', 'Type', 'Qty', 'Reason', 'Notes', 'Date'], rows: aRows, widths: [26, 16, 8, 22, 24, 18] }, logos, meta);
 		}
 		if (inv.donationRecords?.length) {
 			const dRows = inv.donationRecords.map((d) => [
@@ -253,23 +334,23 @@ export async function downloadAnalyticsExcel(opts: AnalyticsExcelOptions): Promi
 				d.receiptNumber ?? '',
 				fmtDate(d.date ?? d.createdAt)
 			]);
-			buildSheet(wb, { name: 'Donor Contributions', band: 'DONOR CONTRIBUTIONS', header: ['Donor', 'Item', 'Qty', 'Unit', 'Purpose', 'Receipt', 'Date'], rows: dRows, widths: [24, 26, 8, 12, 24, 18, 18] }, logoIds, meta);
+			buildSheet(wb, { name: 'Donor Contributions', band: 'DONOR CONTRIBUTIONS', header: ['Donor', 'Item', 'Qty', 'Unit', 'Purpose', 'Receipt', 'Date'], rows: dRows, widths: [24, 26, 8, 12, 24, 18, 18] }, logos, meta);
 		}
 	}
 
 	if (want('students')) {
 		const rows = opts.report.studentRisk.trustScores.map((s) => [s.studentName, s.studentEmail, s.trustScore ?? 0, s.trustTierLabel ?? '', s.requestsTotal ?? 0, s.requestsReturned ?? 0, s.activeObligations ?? 0]);
-		buildSheet(wb, { name: 'Student Risk', band: 'STUDENT RISK — TRUST SCORES', header: ['Student', 'Email', 'Trust Score', 'Tier', 'Requests', 'Returned', 'Obligations'], rows, widths: [24, 26, 12, 14, 12, 12, 14] }, logoIds, meta);
+		buildSheet(wb, { name: 'Student Risk', band: 'STUDENT RISK — TRUST SCORES', header: ['Student', 'Email', 'Trust Score', 'Tier', 'Requests', 'Returned', 'Obligations'], rows, widths: [24, 26, 12, 14, 12, 12, 14] }, logos, meta);
 	}
 
 	if (want('walk-in')) {
 		const rows = opts.report.walkIns.transactions.map((t) => [t.id, t.studentName, t.classCode, t.items.map((it) => `${it.name} x${it.quantity}`).join('; '), fmtDate(t.borrowDate, true), fmtDate(t.returnDate), t.status === 'borrowed' ? 'Out' : t.status === 'returned' ? 'Returned' : 'Issue']);
-		buildSheet(wb, { name: 'Walk-in Transactions', band: 'WALK-IN TRANSACTIONS', header: ['Reference', 'Borrower', 'Class', 'Items', 'Borrowed', 'Due', 'Status'], rows, widths: [16, 22, 14, 30, 20, 16, 12] }, logoIds, meta);
+		buildSheet(wb, { name: 'Walk-in Transactions', band: 'WALK-IN TRANSACTIONS', header: ['Reference', 'Borrower', 'Class', 'Items', 'Borrowed', 'Due', 'Status'], rows, widths: [16, 22, 14, 30, 20, 16, 12] }, logos, meta);
 	}
 
 	// Guarantee at least one sheet so ExcelJS can write a valid workbook.
 	if (wb.worksheets.length === 0) {
-		buildSheet(wb, { name: 'Report', band: 'ANALYTICS REPORT', header: ['Info'], rows: [['No sections selected.']], widths: [40] }, logoIds, meta);
+		buildSheet(wb, { name: 'Report', band: 'ANALYTICS REPORT', header: ['Info'], rows: [['No sections selected.']], widths: [40] }, logos, meta);
 	}
 
 	const buffer = await wb.xlsx.writeBuffer();
