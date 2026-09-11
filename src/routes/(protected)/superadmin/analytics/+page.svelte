@@ -586,7 +586,7 @@
 
 	const EXPORT_SECTIONS: ExportSection[] = [
 		{ id: 'overview', label: 'Overview', description: 'Totals, top items, status count, overdue list' },
-		{ id: 'borrowing', label: 'Borrowing Analytics', description: 'Time charts, borrower metrics, individual transactions' },
+		{ id: 'borrowing', label: 'Borrowing Analytics', description: 'Time charts, borrower metrics, individual transactions' },
 		{ id: 'inventory', label: 'Inventory', description: 'EOM Variance, damage rates, alert logs, required counts' },
 		{ id: 'students', label: 'Student Risk', description: 'Trust scores, risk tiers, repeat offender profiles' },
 		{ id: 'walk-in', label: 'Walk-in Transactions', description: 'Desk walk-in checkouts to students and guests' }
