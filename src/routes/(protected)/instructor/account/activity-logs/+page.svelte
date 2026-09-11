@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { displayStatusKey } from '$lib/utils/statusDisplay';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { toastStore } from '$lib/stores/toast';
@@ -1048,7 +1049,7 @@
 									</p>
 									<div class="mt-1 flex items-center gap-2">
 										<span class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none {getRequestStatusColor(request.status)}">
-											{request.status.replace('_', ' ')}
+											{displayStatusKey(request.status).replace('_', ' ')}
 										</span>
 										<span class="truncate text-xs text-gray-400">{formatTimestamp(request.createdAt)}</span>
 									</div>
@@ -1114,7 +1115,7 @@
 										</td>
 										<td class="px-4 py-3.5">
 											<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap {getRequestStatusColor(request.status)}">
-												{request.status.replace('_', ' ').toUpperCase()}
+												{displayStatusKey(request.status).replace('_', ' ').toUpperCase()}
 											</span>
 										</td>
 										<td class="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">{formatTimestamp(request.createdAt)}</td>
@@ -1308,7 +1309,7 @@
 								>
 									<span class="h-1.5 w-1.5 rounded-full bg-current"></span>
 									<span class="text-[10px] font-bold sm:text-xs"
-										>{selectedHistoryRequest.status.replace('_', ' ').toUpperCase()}</span
+										>{displayStatusKey(selectedHistoryRequest.status).replace('_', ' ').toUpperCase()}</span
 									>
 								</div>
 							</div>

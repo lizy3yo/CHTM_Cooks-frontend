@@ -71,6 +71,7 @@
 
 	function statusLabel(s: string): string {
 		const map: Record<string, string> = {
+			pending_instructor:  'Pending Approval',
 			approved_instructor: 'Pending Release',
 			ready_for_pickup: 'Ready for Pickup',
 			borrowed: 'Currently Borrowed',

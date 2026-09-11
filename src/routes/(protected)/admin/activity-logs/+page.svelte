@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { displayStatusKey } from '$lib/utils/statusDisplay';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { get } from 'svelte/store';
@@ -870,7 +871,7 @@
 										</td>
 										<td class="px-6 py-4">
 											<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {getRequestStatusColor(request.status)}">
-												{request.status.replace('_', ' ').toUpperCase()}
+												{displayStatusKey(request.status).replace('_', ' ').toUpperCase()}
 											</span>
 										</td>
 										<td class="px-6 py-4 text-sm text-gray-600">{formatTimestamp(request.createdAt)}</td>
@@ -950,7 +951,7 @@
 								>
 									<span class="h-1.5 w-1.5 rounded-full bg-current"></span>
 									<span class="text-[10px] font-bold sm:text-xs"
-										>{selectedHistoryRequest.status.replace('_', ' ').toUpperCase()}</span
+										>{displayStatusKey(selectedHistoryRequest.status).replace('_', ' ').toUpperCase()}</span
 									>
 								</div>
 							</div>

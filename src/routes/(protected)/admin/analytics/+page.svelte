@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { displayStatusKey } from '$lib/utils/statusDisplay';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { get } from 'svelte/store';
@@ -1185,7 +1186,7 @@
 														<span class="h-2.5 w-2.5 rounded-full" style={`background:${row.color}`}
 														></span>
 														<span class="text-sm font-medium text-gray-700 capitalize"
-															>{row.status.replace(/_/g, ' ')}</span
+															>{displayStatusKey(row.status).replace(/_/g, ' ')}</span
 														>
 													</div>
 													<span class="text-sm font-semibold text-gray-900"

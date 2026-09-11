@@ -8,7 +8,8 @@
 	import { inventoryActivityLogsAPI } from '$lib/api/inventoryActivityLogs';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
-	import { 
+	import { displayStatusKey } from '$lib/utils/statusDisplay';
+	import {
 		Search, 
 		Filter, 
 		User, 
@@ -504,7 +505,7 @@
 	// Helper for status formatting
 	function getStatusBadge(status: BorrowRequestStatus) {
 		const config: Record<BorrowRequestStatus, { text: string; class: string }> = {
-			pending_instructor: { text: 'Pending Instructor', class: 'bg-yellow-50 text-yellow-800 border-yellow-200' },
+			pending_instructor: { text: 'Pending Approval', class: 'bg-yellow-50 text-yellow-800 border-yellow-200' },
 			approved_instructor: { text: 'Approved by Instructor', class: 'bg-blue-50 text-blue-800 border-blue-200' },
 			ready_for_pickup: { text: 'Ready for Pickup', class: 'bg-indigo-50 text-indigo-800 border-indigo-200' },
 			borrowed: { text: 'Borrowed', class: 'bg-purple-50 text-purple-800 border-purple-200' },
@@ -648,7 +649,7 @@
 							<div class="space-y-2 mt-3">
 								{#each Object.entries(selectedStudent.statusBreakdown) as [status, count]}
 									<div class="flex items-center justify-between text-xs">
-										<span class="capitalize text-gray-600">{status.replace(/_/g, ' ')}</span>
+										<span class="capitalize text-gray-600">{displayStatusKey(status).replace(/_/g, ' ')}</span>
 										<span class="font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded-full">{count}</span>
 									</div>
 								{/each}
@@ -975,7 +976,7 @@
 								<option value="">All Statuses</option>
 								<option value="returned">Returned</option>
 								<option value="borrowed">Borrowed</option>
-								<option value="pending_instructor">Pending Instructor</option>
+								<option value="pending_instructor">Pending Approval</option>
 								<option value="approved_instructor">Approved by Instructor</option>
 								<option value="ready_for_pickup">Ready for Pickup</option>
 								<option value="missing">Missing</option>

@@ -16,6 +16,7 @@
 	import { fly } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { X, Package, User, Calendar, Hash, Layers } from 'lucide-svelte';
+	import { displayStatusKey } from '$lib/utils/statusDisplay';
 
 	interface Props {
 		open: boolean;
@@ -75,7 +76,7 @@
 			: dt.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 	}
 	function statusLabel(s: string | undefined): string {
-		return s ? s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '—';
+		return s ? displayStatusKey(s).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '—';
 	}
 	function statusClass(s: string | undefined): string {
 		if (s && ['returned', 'resolved'].includes(s)) return 'bg-emerald-50 text-emerald-700 ring-emerald-600/10';

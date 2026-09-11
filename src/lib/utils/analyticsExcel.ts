@@ -10,6 +10,7 @@
  * no server-side zip extension and produces a real .xlsx that opens in Excel.
  */
 import type { AnalyticsReport } from '$lib/api/analyticsReports';
+import { displayStatusKey } from '$lib/utils/statusDisplay';
 
 // ── CHTM brand palette ──────────────────────────────────────────────────────
 const PINK_HEADER = 'FFBE185D'; // header row / strong pink
@@ -61,7 +62,7 @@ function fmtDate(iso?: string | null, withTime = false): string {
 	});
 }
 function fmtStatus(s?: string): string {
-	return s ? s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '';
+	return s ? displayStatusKey(s).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '';
 }
 
 async function loadLogo(wb: any, url: string): Promise<number | null> {
