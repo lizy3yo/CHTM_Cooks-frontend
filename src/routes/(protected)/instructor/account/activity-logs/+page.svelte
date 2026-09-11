@@ -35,7 +35,7 @@
 	let activityLogs = $state<InventoryActivityLogEntry[]>([]);
 	let activityTotal = $state(0);
 	let activityPage = $state(1);
-	let activityLimit = $state(20); // Items per page
+	let activityLimit = $state(10); // Items per page
 	let activityLogsLoaded = $state(false);
 	let activityLogsRefreshing = $state(false);
 
@@ -56,7 +56,7 @@
 	let requestHistory = $state<any[]>([]);
 	let requestHistoryTotal = $state(0);
 	let requestHistoryPage = $state(1);
-	let requestHistoryLimit = $state(50);
+	let requestHistoryLimit = $state(10); // Items per page
 	let requestHistorySearch = $state('');
 	let requestHistoryLoaded = $state(false);
 	let requestHistoryFilterStatus = $state('');
