@@ -240,7 +240,7 @@
 				class="w-full text-left rounded-xl border border-yellow-200 bg-yellow-50 p-4 shadow-sm hover:shadow-md hover:bg-yellow-100/50 hover:border-yellow-300 transition-all duration-200 active:scale-98 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 cursor-pointer"
 			>
 				<div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-yellow-800">
-					<Clock size={12} /> Pending Approval
+					<Clock size={12} /> Under Review
 				</div>
 				<p class="mt-2 text-3xl font-bold text-yellow-700">{pendingApprovalCount}</p>
 				<p class="mt-0.5 text-xs text-yellow-600">Awaiting your review</p>
@@ -316,11 +316,11 @@
 			{:else}
 				<div class="grid grid-cols-1 divide-y divide-gray-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
 
-				<!-- Pending Approval -->
+				<!-- Under Review -->
 				<div class="p-4">
 					<div class="mb-3 flex items-center justify-between">
 						<span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
-							<Clock size={11} /> Pending Approval
+							<Clock size={11} /> Under Review
 						</span>
 						<span class="text-xs font-bold text-amber-700">{requestsPending.length}</span>
 					</div>

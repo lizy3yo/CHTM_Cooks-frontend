@@ -664,7 +664,7 @@
 		
 		switch (filter) {
 			case 'pending': 
-				return { label: 'Pending Approval Only', bg: 'bg-amber-50', text: 'text-amber-700', ring: 'ring-amber-600/10', btn: 'text-amber-500', btnHoverBg: 'hover:bg-amber-100', btnHoverText: 'hover:text-amber-700' };
+				return { label: 'Under Review Only', bg: 'bg-amber-50', text: 'text-amber-700', ring: 'ring-amber-600/10', btn: 'text-amber-500', btnHoverBg: 'hover:bg-amber-100', btnHoverText: 'hover:text-amber-700' };
 			case 'fulfillment': 
 				return { label: 'In Preparation Only', bg: 'bg-blue-50', text: 'text-blue-700', ring: 'ring-blue-600/10', btn: 'text-blue-500', btnHoverBg: 'hover:bg-blue-100', btnHoverText: 'hover:text-blue-700' };
 			case 'borrowed': 
@@ -1130,7 +1130,7 @@
 		switch (status) {
 			case 'pending':
 				return {
-					text: 'Pending Approval',
+					text: 'Under Review',
 					color: 'bg-yellow-100 text-yellow-800',
 					icon: 'Pending'
 				};
@@ -1447,7 +1447,7 @@
 							class="h-10 min-w-[180px] rounded-xl border border-gray-300 bg-white px-3 text-sm shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-100 focus:outline-none"
 						>
 							<option value="all">All Statuses</option>
-							<option value="pending">Pending Approval</option>
+							<option value="pending">Under Review</option>
 							<option value="fulfillment">Approved / Ready</option>
 							<option value="borrowed">Currently Borrowed</option>
 							<option value="overdue">Overdue Only</option>

@@ -186,7 +186,7 @@
 		if (filter === 'all') return null;
 		
 		switch (filter) {
-			case 'pending_approval': return { label: 'Pending Approval Only', bg: 'bg-yellow-50', text: 'text-yellow-700', ring: 'ring-yellow-600/10', btn: 'text-yellow-500', btnHoverBg: 'hover:bg-yellow-100', btnHoverText: 'hover:text-yellow-700' };
+			case 'pending_approval': return { label: 'Under Review Only', bg: 'bg-yellow-50', text: 'text-yellow-700', ring: 'ring-yellow-600/10', btn: 'text-yellow-500', btnHoverBg: 'hover:bg-yellow-100', btnHoverText: 'hover:text-yellow-700' };
 			case 'active_borrowings': return { label: 'Currently Borrowed Only', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
 			case 'ready_for_pickup': return { label: 'Ready for Pickup', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
 			case 'currently_borrowed': return { label: 'Currently Borrowed', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-600/10', btn: 'text-purple-500', btnHoverBg: 'hover:bg-purple-100', btnHoverText: 'hover:text-purple-700' };
@@ -258,7 +258,7 @@
 			return { text: 'Cancelled', color: 'bg-gray-100 text-gray-700' };
 		}
 		if (status === 'pending_instructor' || status === 'pending_approval') {
-			return { text: 'Pending Approval', color: 'bg-yellow-100 text-yellow-800' };
+			return { text: 'Under Review', color: 'bg-yellow-100 text-yellow-800' };
 		}
 		if (status === 'approved_instructor' || rawStatus === 'ready_for_pickup') {
 			return { text: custodianStatus === 'Ready for Pickup' ? 'Ready for Pickup' : 'With Custodian', color: 'bg-blue-100 text-blue-800' };
@@ -1030,7 +1030,7 @@
 				class="h-10 min-w-[180px] rounded-xl border border-gray-300 bg-white px-3 text-sm shadow-sm focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-100"
 			>
 				<option value="all">All Requests</option>
-				<option value="pending_approval">Pending Approval</option>
+				<option value="pending_approval">Under Review</option>
 				<optgroup label="Currently Borrowed">
 					<option value="active_borrowings">All Currently Borrowed</option>
 					<option value="ready_for_pickup">Ready for Pickup</option>
