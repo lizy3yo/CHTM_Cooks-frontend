@@ -16,6 +16,11 @@ export interface WalkInTransactionItem {
 	quantity: number;
 	category: string;
 	inspectionStatus?: 'good' | 'damaged' | 'missing' | null;
+	/** Inspection details, set when the item is returned (same as student returns). */
+	inspectionNotes?: string | null;
+	replacementQuantity?: number | null;
+	dueDate?: string | null;
+	additionalReturned?: number;
 }
 
 export interface WalkInTransactionRecord {
@@ -34,6 +39,8 @@ export interface WalkInTransactionRecord {
 	status: 'borrowed' | 'returned' | 'missing';
 	returnedAt?: string | null;
 	notes?: string | null;
+	/** Name of the staff member who recorded the walk-in. */
+	recordedBy?: string | null;
 	createdAt: string;
 }
 
@@ -55,7 +62,14 @@ export interface CreateWalkInInput {
 export interface ReturnWalkInInput {
 	status?: 'returned' | 'missing';
 	notes?: string;
-	items?: { itemId?: string; inspectionStatus?: 'good' | 'damaged' | 'missing' }[];
+	items?: {
+		itemId?: string;
+		inspectionStatus?: 'good' | 'damaged' | 'missing';
+		notes?: string;
+		replacementQuantity?: number;
+		dueDate?: string;
+		additionalReturned?: number;
+	}[];
 }
 
 export interface WalkInsListResponse {

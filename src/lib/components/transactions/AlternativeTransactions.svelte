@@ -34,6 +34,7 @@
 		Download
 	} from 'lucide-svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
+	import ItemInspectionModal from '$lib/components/custodian/ItemInspectionModal.svelte';
 
 	// ─── PROPS ───────────────────────────────────────────────────────────────
 	// Shared by instructor, custodian, admin and superadmin.
@@ -329,11 +330,35 @@
 	let walkInCategoryFilter = $state('all');
 	let walkInSortBy = $state<'name' | 'category' | 'availability'>('name');
 
-	// --- Return Form State ---
+	// --- Return Form State (uses the same inspection checklist as student returns) ---
 	let selectedWalkIn = $state<WalkInTransaction | null>(null);
-	let returnInspection = $state<
-		Record<string, { status: 'good' | 'damaged' | 'missing'; notes: string }>
-	>({});
+
+	type ItemInspectionResult = {
+		itemId: string;
+		status: 'good' | 'damaged' | 'missing';
+		notes: string;
+		replacementQuantity?: number;
+		dueDate?: string;
+		additionalReturned?: number;
+	};
+
+	// --- Detail modals (row click on any tab) ---
+	// Keep only the id and read the live record, so the window updates after an
+	// action taken inside it (e.g. Release, Return).
+	let detailWalkInId = $state<string | null>(null);
+	let detailConfidentialId = $state<string | null>(null);
+	let detailDonationId = $state<string | null>(null);
+	const detailWalkIn = $derived(walkIns.find((w) => w.id === detailWalkInId) ?? null);
+	const detailConfidential = $derived(
+		confidentialRequests.find((c) => c.id === detailConfidentialId) ?? null
+	);
+	const detailDonation = $derived(donations.find((d) => d.id === detailDonationId) ?? null);
+
+	function closeDetails() {
+		detailWalkInId = null;
+		detailConfidentialId = null;
+		detailDonationId = null;
+	}
 
 	// --- Confidential Request Form State ---
 	let selectedAdmin = $state<UserResponse | null>(null);
@@ -614,11 +639,28 @@
 
 	// Column widths, shared by each table and its loading skeleton so nothing
 	// jumps when the data arrives. Literal strings so Tailwind generates them.
-	const WALKIN_COLS = ['w-[15%]', 'w-[25%]', 'w-[10%]', 'w-[24%]', 'w-[14%]', 'w-[12%]'];
-	const WALKIN_COLS_READONLY = ['w-[16%]', 'w-[28%]', 'w-[11%]', 'w-[28%]', 'w-[17%]'];
-	const DONATION_COLS = ['w-[17%]', 'w-[20%]', 'w-[20%]', 'w-[9%]', 'w-[14%]', 'w-[20%]'];
+	// The first column of every table is the row number (#).
+	const WALKIN_COLS = ['w-[5%]', 'w-[14%]', 'w-[23%]', 'w-[10%]', 'w-[22%]', 'w-[14%]', 'w-[12%]'];
+	const WALKIN_COLS_READONLY = ['w-[5%]', 'w-[15%]', 'w-[26%]', 'w-[11%]', 'w-[26%]', 'w-[17%]'];
+	const CONF_COLS = ['w-[5%]', 'w-[20%]', 'w-[20%]', 'w-[18%]', 'w-[12%]', 'w-[12%]', 'w-[13%]'];
+	const CONF_COLS_READONLY = ['w-[5%]', 'w-[23%]', 'w-[24%]', 'w-[20%]', 'w-[14%]', 'w-[14%]'];
+	const DONATION_COLS = ['w-[5%]', 'w-[16%]', 'w-[19%]', 'w-[19%]', 'w-[9%]', 'w-[13%]', 'w-[19%]'];
 
 	const walkInCols = $derived(readOnly ? WALKIN_COLS_READONLY : WALKIN_COLS);
+	const confCols = $derived(readOnly ? CONF_COLS_READONLY : CONF_COLS);
+
+	// Row numbers keep counting across pages (page 2 starts at 11).
+	const rowNumber = (page: number, index: number) => (page - 1) * PAGE_SIZE + index + 1;
+
+	// Rows open their details window on click or Enter/Space.
+	function rowKeydown(e: KeyboardEvent, open: () => void) {
+		// Ignore keys pressed on a button inside the row (e.g. Return) so it keeps working.
+		if (e.target !== e.currentTarget) return;
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			open();
+		}
+	}
 
 	// Skeletons only while nothing is on screen yet; a background refresh keeps the table.
 	const showWalkInSkeleton = $derived(walkInsLoading && walkIns.length === 0);
@@ -653,6 +695,24 @@
 
 	function hasClass(tx: WalkInTransaction): boolean {
 		return Boolean(tx.classCode) && tx.classCode !== 'N/A (Guest)';
+	}
+
+	function fmtDateTime(value: string | null | undefined): string {
+		if (!value) return '—';
+		return `${fmtDate(value)} · ${fmtTime(value)}`;
+	}
+
+	/**
+	 * The inspection checklist stores each item's result as
+	 * "[Quantities - Good: 1, Damaged: 1, Missing: 0] Over-return: +1 | Remarks: cracked rim".
+	 * Split it back into parts for the details window.
+	 */
+	function parseInspection(notes: string | null | undefined) {
+		if (!notes) return null;
+		const q = notes.match(/Good:\s*(\d+),\s*Damaged:\s*(\d+),\s*Missing:\s*(\d+)/);
+		const remarks = notes.match(/\|\s*Remarks:\s*(.*)$/s)?.[1]?.trim() ?? '';
+		if (!q) return { good: null, damaged: null, missing: null, remarks: notes };
+		return { good: Number(q[1]), damaged: Number(q[2]), missing: Number(q[3]), remarks };
 	}
 
 	function itemsTooltip(items: { name: string; quantity: number }[]): string {
@@ -914,82 +974,87 @@
 
 	// ─── ACTIONS: RETURN & INSPECTION ────────────────────────────────────────
 	function openReturnModal(tx: WalkInTransaction) {
+		detailWalkInId = null; // opening the return from the details window closes it
 		selectedWalkIn = tx;
-		returnInspection = {};
-		tx.items.forEach((i) => {
-			returnInspection[i.itemId] = { status: 'good', notes: '' };
-		});
 		showReturnModal = true;
 	}
 
-	async function submitReturn() {
-		if (!selectedWalkIn) return;
+	function closeReturnModal() {
+		showReturnModal = false;
+		selectedWalkIn = null;
+	}
 
-		const ok = await confirmStore.confirm({
-			title: 'Complete Return Inspection',
-			message:
-				'Confirm all items are accounted for? This will immediately update stock levels based on inspection results.',
-			type: 'info',
-			confirmText: 'Submit Inspection',
-			cancelText: 'Cancel'
-		});
-
-		if (!ok) return;
+	/**
+	 * Submit handler for the shared return inspection checklist.
+	 * 1. Close the walk-in on the backend first (it refuses a second return, so
+	 *    stock can never be restocked twice).
+	 * 2. Put the good units (plus any over-returned units) back into stock.
+	 * Errors are re-thrown so the checklist can show them, like student returns.
+	 */
+	async function submitWalkInInspection(inspections: ItemInspectionResult[]): Promise<void> {
+		const tx = selectedWalkIn;
+		if (!tx) return;
 
 		try {
-			let missingOrDamagedDetected = false;
+			const updated = await walkInTransactionsAPI.markReturned(tx.id, {
+				items: inspections.map((i) => ({
+					itemId: i.itemId,
+					inspectionStatus: i.status,
+					notes: i.notes,
+					replacementQuantity: i.replacementQuantity,
+					dueDate: i.dueDate,
+					additionalReturned: i.additionalReturned ?? 0
+				}))
+			});
+			walkIns = walkIns.map((w) => (w.id === updated.id ? updated : w));
 
-			// Adjust inventory and obligations
-			for (const item of selectedWalkIn.items) {
-				const status = returnInspection[item.itemId].status;
-				const notes = returnInspection[item.itemId].notes;
-
-				if (status === 'good') {
-					// Add back to inventory
+			let restockFailed = false;
+			for (const insp of inspections) {
+				const item = tx.items.find((i) => i.itemId === insp.itemId);
+				if (!item || !item.itemId) continue; // item no longer in inventory
+				const damagedOrMissing = insp.status === 'good' ? 0 : (insp.replacementQuantity ?? 0);
+				const unitsBack = item.quantity - damagedOrMissing + (insp.additionalReturned ?? 0);
+				if (unitsBack <= 0) continue;
+				try {
 					await inventoryItemsAPI.update(item.itemId, {
 						adjustmentType: 'add',
-						quantity: item.quantity,
-						adjustmentReason: `Walk-in return: ${selectedWalkIn.studentName}`
+						quantity: unitsBack,
+						adjustmentReason: `Walk-in return ${tx.id}: ${tx.studentName}`
 					});
-				} else {
-					missingOrDamagedDetected = true;
-					// Stock is NOT returned for missing/damaged.
-					// Log the incident details in a professional way
-					console.log(`[INCIDENT LOGGER] Item ${item.name} returned as ${status}: ${notes}`);
+				} catch (restockErr) {
+					console.error(`Failed to restock ${item.name}:`, restockErr);
+					restockFailed = true;
 				}
 			}
 
-			// Persist the return / inspection outcome to the backend.
-			const updated = await walkInTransactionsAPI.markReturned(selectedWalkIn.id, {
-				status: missingOrDamagedDetected ? 'missing' : 'returned',
-				notes: Object.values(returnInspection)
-					.map((v) => v.notes)
-					.filter(Boolean)
-					.join('; '),
-				items: selectedWalkIn.items.map((i) => ({
-					itemId: i.itemId,
-					inspectionStatus: returnInspection[i.itemId]?.status ?? 'good'
-				}))
-			});
+			closeReturnModal();
 
-			walkIns = walkIns.map((w) => (w.id === updated.id ? updated : w));
+			const hasIssues = inspections.some((i) => i.status !== 'good');
+			if (restockFailed) {
+				toastStore.warning(
+					'Return recorded, but some items could not be restocked. Please adjust them in Inventory.',
+					'Check Inventory'
+				);
+			} else {
+				toastStore.success(
+					hasIssues
+						? 'Return recorded. Good units were restocked; damaged or missing units are noted on the walk-in.'
+						: 'All items returned in good condition. Stock restored.',
+					'Return Logged'
+				);
+			}
 
-			// Refresh local inventory cache
-			const freshInv = await inventoryItemsAPI.getAll({ limit: 100 });
-			inventoryItems = freshInv.items || [];
-
-			toastStore.success(
-				missingOrDamagedDetected
-					? 'Return processed. Incidents logged for missing/damaged items.'
-					: 'All items returned in good condition. Stock restored.',
-				'Return Logged'
-			);
-
-			showReturnModal = false;
-			selectedWalkIn = null;
+			// Refresh the local inventory list used by the checkout form.
+			if (!readOnly) {
+				inventoryItemsAPI
+					.getAll({ limit: 100 })
+					.then((res) => (inventoryItems = res.items || []))
+					.catch(() => {});
+			}
 		} catch (err) {
-			console.error(err);
-			toastStore.error('Failed to submit return records.');
+			console.error('Failed to submit walk-in return:', err);
+			toastStore.error(err instanceof Error ? err.message : 'Failed to submit return records.');
+			throw err;
 		}
 	}
 
@@ -1235,6 +1300,28 @@
 	{/if}
 {/snippet}
 
+{#snippet rowNum(n: number)}
+	<span
+		class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gray-100 px-1.5 text-[10px] font-semibold text-gray-500 tabular-nums"
+		>{n}</span
+	>
+{/snippet}
+
+<!-- "6 walk-in transactions", or "2 of 6 walk-in transactions" when filtered -->
+{#snippet countBar(shown: number, total: number, singular: string, plural: string, loadingNow: boolean)}
+	<div class="text-sm text-gray-600" aria-live="polite">
+		{#if loadingNow}
+			<Skeleton class="h-4 w-44" aria-hidden="true" />
+		{:else if shown === total}
+			<span class="font-semibold text-gray-900">{total}</span>
+			{total === 1 ? singular : plural}
+		{:else}
+			<span class="font-semibold text-gray-900">{shown}</span> of {total}
+			{total === 1 ? singular : plural}
+		{/if}
+	</div>
+{/snippet}
+
 {#snippet tableSkeleton(cols: string[], rows = 5)}
 	<div role="status" aria-live="polite" aria-label="Loading records">
 		<span class="sr-only">Loading records…</span>
@@ -1280,6 +1367,209 @@
 			{/each}
 		</ul>
 	</div>
+{/snippet}
+
+<!-- ── Cell blocks shared by the tables, stacked cards and details windows ── -->
+{#snippet walkInRef(tx: WalkInTransaction)}
+	<p class="font-mono text-xs font-bold text-gray-900">{tx.id}</p>
+	<p class="mt-1 text-xs text-gray-600">{fmtDate(tx.borrowDate)}</p>
+	<p class="text-xs text-gray-400">{fmtTime(tx.borrowDate)}</p>
+{/snippet}
+
+{#snippet walkInBorrower(tx: WalkInTransaction)}
+	<p class="truncate font-medium text-gray-900" title={tx.studentName}>{tx.studentName}</p>
+	<p class="truncate text-xs text-gray-500" title={borrowerLine(tx)}>{borrowerLine(tx)}</p>
+{/snippet}
+
+{#snippet walkInClass(tx: WalkInTransaction)}
+	{#if hasClass(tx)}
+		<span
+			class="inline-block max-w-full truncate rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs font-semibold text-gray-700"
+			title={tx.classCode}>{tx.classCode}</span
+		>
+	{:else if !isRegisteredBorrower(tx)}
+		<span
+			class="inline-block rounded-md border border-dashed border-gray-300 px-2 py-0.5 text-xs font-medium text-gray-500"
+			>Guest</span
+		>
+	{:else}
+		<span class="text-xs text-gray-400">—</span>
+	{/if}
+{/snippet}
+
+{#snippet walkInStatus(tx: WalkInTransaction)}
+	{@const overdue = tx.status === 'borrowed' && new Date(tx.returnDate) < new Date()}
+	<div class="flex flex-col items-start gap-1">
+		{#if tx.status === 'borrowed' && overdue}
+			<span
+				class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-rose-700"
+			>
+				<AlertCircle size={11} /> Overdue
+			</span>
+			<span class="text-xs text-rose-600">Due {fmtDate(tx.returnDate)}</span>
+		{:else if tx.status === 'borrowed'}
+			<span
+				class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-amber-700"
+			>
+				<Clock size={11} /> Borrowed
+			</span>
+			<span class="text-xs text-gray-500">Due {fmtDate(tx.returnDate)}</span>
+		{:else if tx.status === 'returned'}
+			<span
+				class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-emerald-700"
+			>
+				<CheckCircle2 size={11} /> Returned
+			</span>
+			<span class="text-xs text-gray-500">{fmtDate(tx.returnedAt)}</span>
+		{:else}
+			<span
+				class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-rose-700"
+			>
+				<AlertCircle size={11} /> Issues
+			</span>
+			<span class="text-xs text-gray-500">{fmtDate(tx.returnedAt)}</span>
+		{/if}
+	</div>
+{/snippet}
+
+{#snippet walkInAction(tx: WalkInTransaction)}
+	{#if tx.status === 'borrowed'}
+		<button
+			type="button"
+			onclick={(e) => {
+				e.stopPropagation();
+				openReturnModal(tx);
+			}}
+			title="Process return for {tx.id}"
+			class="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-pink-200 bg-white px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-pink-600 transition-colors hover:bg-pink-50"
+		>
+			<RotateCcw size={12} /> Return
+		</button>
+	{:else}
+		<span class="text-xs text-gray-300" aria-label="No action needed">—</span>
+	{/if}
+{/snippet}
+
+{#snippet confRequest(req: ConfidentialRequest)}
+	<p class="truncate font-medium text-gray-900" title={req.requesterName}>{req.requesterName}</p>
+	<p class="truncate font-mono text-xs text-gray-500" title={req.id}>{req.id}</p>
+{/snippet}
+
+{#snippet confPurpose(req: ConfidentialRequest)}
+	<p class="line-clamp-2 text-sm font-medium text-gray-900" title={req.purpose}>{req.purpose}</p>
+	<p class="mt-0.5 text-xs text-gray-500">Due {fmtDate(req.returnDate)}</p>
+{/snippet}
+
+{#snippet confPriority(req: ConfidentialRequest)}
+	<div class="flex flex-col items-start gap-1">
+		<span
+			class="rounded px-2 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase
+			{req.priority === 'Critical'
+				? 'bg-red-100 text-red-700'
+				: req.priority === 'High'
+					? 'bg-orange-100 text-orange-700'
+					: req.priority === 'Medium'
+						? 'bg-blue-100 text-blue-700'
+						: 'bg-gray-100 text-gray-700'}"
+		>
+			{req.priority}
+		</span>
+		<span class="inline-flex items-center gap-1 text-xs text-gray-500">
+			<Lock size={10} class="shrink-0" />
+			<span class="truncate">{req.confidentialityLevel}</span>
+		</span>
+	</div>
+{/snippet}
+
+{#snippet confStatus(req: ConfidentialRequest)}
+	{#if req.status === 'preparing'}
+		<span
+			class="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-slate-700"
+			>Preparing</span
+		>
+	{:else if req.status === 'prepared'}
+		<span
+			class="inline-flex rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-blue-700"
+			title="Ready to release">Ready</span
+		>
+	{:else if req.status === 'dispatched'}
+		<span
+			class="inline-flex rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-amber-700"
+			>Dispatched</span
+		>
+	{:else}
+		<span
+			class="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-emerald-700"
+			>Resolved</span
+		>
+	{/if}
+{/snippet}
+
+{#snippet confAction(req: ConfidentialRequest)}
+	{#if req.status === 'preparing'}
+		<button
+			type="button"
+			onclick={(e) => { e.stopPropagation(); transitionConfidential(req, 'prepared'); }}
+			class="cursor-pointer rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-white transition-colors hover:bg-blue-700"
+		>
+			Mark Ready
+		</button>
+	{:else if req.status === 'prepared'}
+		<button
+			type="button"
+			onclick={(e) => { e.stopPropagation(); transitionConfidential(req, 'dispatched'); }}
+			class="cursor-pointer rounded-lg bg-pink-600 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-white transition-colors hover:bg-pink-700"
+		>
+			Release
+		</button>
+	{:else if req.status === 'dispatched'}
+		<button
+			type="button"
+			onclick={(e) => { e.stopPropagation(); transitionConfidential(req, 'resolved'); }}
+			class="cursor-pointer rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-gray-700 transition-colors hover:bg-gray-50"
+		>
+			Confirm Return
+		</button>
+	{:else}
+		<span class="text-xs text-gray-300" aria-label="No action needed">—</span>
+	{/if}
+{/snippet}
+
+{#snippet donReceipt(d: DonationResponse)}
+	<p class="font-mono text-xs font-bold break-all text-red-600">
+		{d.receiptNumber || `DON-${d.id.slice(0, 6).toUpperCase()}`}
+	</p>
+	<p class="mt-1 text-xs text-gray-500">{fmtDate(d.date || d.createdAt)}</p>
+{/snippet}
+
+{#snippet donItem(d: DonationResponse)}
+	<div class="flex min-w-0 items-center gap-2">
+		<Package size={15} class="shrink-0 text-gray-400" />
+		<span class="truncate font-medium text-gray-900" title={d.itemName}>{d.itemName}</span>
+	</div>
+{/snippet}
+
+{#snippet donAction(d: DonationResponse)}
+	{#if d.inventoryAction === 'add_to_existing'}
+		<span
+			class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-emerald-700"
+			>Added to stock</span
+		>
+	{:else}
+		<span
+			class="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-blue-700"
+			>New item</span
+		>
+	{/if}
+{/snippet}
+
+{#snippet donPurpose(d: DonationResponse)}
+	<p class="line-clamp-1 text-xs font-medium text-gray-700" title={d.purpose || 'Item donation'}>
+		{d.purpose || 'Item donation'}
+	</p>
+	{#if d.notes}
+		<p class="line-clamp-1 text-xs text-gray-400" title={d.notes}>{d.notes}</p>
+	{/if}
 {/snippet}
 
 {#snippet itemList(items: { name: string; quantity: number }[])}
@@ -1514,83 +1804,18 @@
 				</div>
 			</div>
 
-			<!-- ── Walk-in cells, shared by the table and the stacked cards ── -->
-			{#snippet walkInRef(tx: WalkInTransaction)}
-				<p class="font-mono text-xs font-bold text-gray-900">{tx.id}</p>
-				<p class="mt-1 text-xs text-gray-600">{fmtDate(tx.borrowDate)}</p>
-				<p class="text-xs text-gray-400">{fmtTime(tx.borrowDate)}</p>
-			{/snippet}
 
-			{#snippet walkInBorrower(tx: WalkInTransaction)}
-				<p class="truncate font-medium text-gray-900" title={tx.studentName}>{tx.studentName}</p>
-				<p class="truncate text-xs text-gray-500" title={borrowerLine(tx)}>{borrowerLine(tx)}</p>
-			{/snippet}
 
-			{#snippet walkInClass(tx: WalkInTransaction)}
-				{#if hasClass(tx)}
-					<span
-						class="inline-block max-w-full truncate rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs font-semibold text-gray-700"
-						title={tx.classCode}>{tx.classCode}</span
-					>
-				{:else if !isRegisteredBorrower(tx)}
-					<span
-						class="inline-block rounded-md border border-dashed border-gray-300 px-2 py-0.5 text-xs font-medium text-gray-500"
-						>Guest</span
-					>
-				{:else}
-					<span class="text-xs text-gray-400">—</span>
-				{/if}
-			{/snippet}
 
-			{#snippet walkInStatus(tx: WalkInTransaction)}
-				{@const overdue = tx.status === 'borrowed' && new Date(tx.returnDate) < new Date()}
-				<div class="flex flex-col items-start gap-1">
-					{#if tx.status === 'borrowed' && overdue}
-						<span
-							class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-rose-700"
-						>
-							<AlertCircle size={11} /> Overdue
-						</span>
-						<span class="text-xs text-rose-600">Due {fmtDate(tx.returnDate)}</span>
-					{:else if tx.status === 'borrowed'}
-						<span
-							class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-amber-700"
-						>
-							<Clock size={11} /> Borrowed
-						</span>
-						<span class="text-xs text-gray-500">Due {fmtDate(tx.returnDate)}</span>
-					{:else if tx.status === 'returned'}
-						<span
-							class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-emerald-700"
-						>
-							<CheckCircle2 size={11} /> Returned
-						</span>
-						<span class="text-xs text-gray-500">{fmtDate(tx.returnedAt)}</span>
-					{:else}
-						<span
-							class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-rose-700"
-						>
-							<AlertCircle size={11} /> Issues
-						</span>
-						<span class="text-xs text-gray-500">{fmtDate(tx.returnedAt)}</span>
-					{/if}
-				</div>
-			{/snippet}
 
-			{#snippet walkInAction(tx: WalkInTransaction)}
-				{#if tx.status === 'borrowed'}
-					<button
-						type="button"
-						onclick={() => openReturnModal(tx)}
-						title="Process return for {tx.id}"
-						class="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-pink-200 bg-white px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-pink-600 transition-colors hover:bg-pink-50"
-					>
-						<RotateCcw size={12} /> Return
-					</button>
-				{:else}
-					<span class="text-xs text-gray-300" aria-label="No action needed">—</span>
-				{/if}
-			{/snippet}
+
+			{@render countBar(
+				displayWalkIns.length,
+				walkIns.length,
+				'walk-in transaction',
+				'walk-in transactions',
+				showWalkInSkeleton
+			)}
 
 			<!-- Main list: fixed-width table on wide cards, stacked cards on narrow ones -->
 			<div class="@container overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs">
@@ -1610,6 +1835,7 @@
 							class="border-b border-gray-200 bg-gray-50 text-[11px] font-semibold tracking-wider text-gray-500 uppercase"
 						>
 							<tr>
+								<th class="px-3 py-3 text-center">#</th>
 								<th class="px-4 py-3">Transaction</th>
 								<th class="px-4 py-3">Borrower</th>
 								<th class="px-4 py-3">Class</th>
@@ -1619,8 +1845,15 @@
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-gray-100 text-sm text-gray-700">
-							{#each pagedWalkIns as tx (tx.id)}
-								<tr class="align-top transition-colors hover:bg-gray-50/60">
+							{#each pagedWalkIns as tx, i (tx.id)}
+								<tr
+									class="cursor-pointer align-top transition-colors hover:bg-pink-50/40 focus-visible:bg-pink-50/60 focus-visible:outline-none"
+									tabindex="0"
+									aria-label="View details for {tx.id}"
+									onclick={() => (detailWalkInId = tx.id)}
+									onkeydown={(e) => rowKeydown(e, () => (detailWalkInId = tx.id))}
+								>
+									<td class="px-3 py-3.5 text-center">{@render rowNum(rowNumber(walkInPage, i))}</td>
 									<td class="px-4 py-3.5">{@render walkInRef(tx)}</td>
 									<td class="px-4 py-3.5">{@render walkInBorrower(tx)}</td>
 									<td class="px-4 py-3.5">{@render walkInClass(tx)}</td>
@@ -1634,11 +1867,21 @@
 						</tbody>
 					</table>
 
-					<ul class="divide-y divide-gray-100 @4xl:hidden">
-						{#each pagedWalkIns as tx (tx.id)}
-							<li class="space-y-3 p-4">
+					<div class="divide-y divide-gray-100 @4xl:hidden">
+						{#each pagedWalkIns as tx, i (tx.id)}
+							<div
+								role="button"
+								class="cursor-pointer space-y-3 p-4 transition-colors hover:bg-pink-50/40 focus-visible:bg-pink-50/60 focus-visible:outline-none"
+								tabindex="0"
+								aria-label="View details for {tx.id}"
+								onclick={() => (detailWalkInId = tx.id)}
+								onkeydown={(e) => rowKeydown(e, () => (detailWalkInId = tx.id))}
+							>
 								<div class="flex items-start justify-between gap-3">
-									<div class="min-w-0">{@render walkInBorrower(tx)}</div>
+									<div class="flex min-w-0 items-start gap-2.5">
+										{@render rowNum(rowNumber(walkInPage, i))}
+										<div class="min-w-0">{@render walkInBorrower(tx)}</div>
+									</div>
 									<div class="shrink-0">{@render walkInStatus(tx)}</div>
 								</div>
 								<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
@@ -1650,9 +1893,9 @@
 								{#if !readOnly && tx.status === 'borrowed'}
 									<div class="flex justify-end">{@render walkInAction(tx)}</div>
 								{/if}
-							</li>
+							</div>
 						{/each}
-					</ul>
+					</div>
 				{/if}
 			</div>
 
@@ -1695,91 +1938,18 @@
 				</div>
 			</div>
 
-			<!-- ── Confidential cells, shared by the table and the stacked cards ── -->
-			{#snippet confRequest(req: ConfidentialRequest)}
-				<p class="truncate font-medium text-gray-900" title={req.requesterName}>{req.requesterName}</p>
-				<p class="truncate font-mono text-xs text-gray-500" title={req.id}>{req.id}</p>
-			{/snippet}
 
-			{#snippet confPurpose(req: ConfidentialRequest)}
-				<p class="line-clamp-2 text-sm font-medium text-gray-900" title={req.purpose}>{req.purpose}</p>
-				<p class="mt-0.5 text-xs text-gray-500">Due {fmtDate(req.returnDate)}</p>
-			{/snippet}
 
-			{#snippet confPriority(req: ConfidentialRequest)}
-				<div class="flex flex-col items-start gap-1">
-					<span
-						class="rounded px-2 py-0.5 text-[10px] font-bold tracking-wider whitespace-nowrap uppercase
-						{req.priority === 'Critical'
-							? 'bg-red-100 text-red-700'
-							: req.priority === 'High'
-								? 'bg-orange-100 text-orange-700'
-								: req.priority === 'Medium'
-									? 'bg-blue-100 text-blue-700'
-									: 'bg-gray-100 text-gray-700'}"
-					>
-						{req.priority}
-					</span>
-					<span class="inline-flex items-center gap-1 text-xs text-gray-500">
-						<Lock size={10} class="shrink-0" />
-						<span class="truncate">{req.confidentialityLevel}</span>
-					</span>
-				</div>
-			{/snippet}
 
-			{#snippet confStatus(req: ConfidentialRequest)}
-				{#if req.status === 'preparing'}
-					<span
-						class="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-slate-700"
-						>Preparing</span
-					>
-				{:else if req.status === 'prepared'}
-					<span
-						class="inline-flex rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-blue-700"
-						title="Ready to release">Ready</span
-					>
-				{:else if req.status === 'dispatched'}
-					<span
-						class="inline-flex rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-amber-700"
-						>Dispatched</span
-					>
-				{:else}
-					<span
-						class="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-emerald-700"
-						>Resolved</span
-					>
-				{/if}
-			{/snippet}
 
-			{#snippet confAction(req: ConfidentialRequest)}
-				{#if req.status === 'preparing'}
-					<button
-						type="button"
-						onclick={() => transitionConfidential(req, 'prepared')}
-						class="cursor-pointer rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-white transition-colors hover:bg-blue-700"
-					>
-						Mark Ready
-					</button>
-				{:else if req.status === 'prepared'}
-					<button
-						type="button"
-						onclick={() => transitionConfidential(req, 'dispatched')}
-						class="cursor-pointer rounded-lg bg-pink-600 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-white transition-colors hover:bg-pink-700"
-					>
-						Release
-					</button>
-				{:else if req.status === 'dispatched'}
-					<button
-						type="button"
-						onclick={() => transitionConfidential(req, 'resolved')}
-						class="cursor-pointer rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-gray-700 transition-colors hover:bg-gray-50"
-					>
-						Confirm Return
-					</button>
-				{:else}
-					<span class="text-xs text-gray-300" aria-label="No action needed">—</span>
-				{/if}
-			{/snippet}
+
+			{@render countBar(
+				displayConfidentialRequests.length,
+				confidentialRequests.length,
+				'confidential request',
+				'confidential requests',
+				false
+			)}
 
 			<!-- Main list: fixed-width table on wide cards, stacked cards on narrow ones -->
 			<div class="@container overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs">
@@ -1791,18 +1961,13 @@
 				{:else}
 					<table class="hidden w-full table-fixed text-left @4xl:table">
 						<colgroup>
-							{#if readOnly}
-								<col class="w-[24%]" /><col class="w-[25%]" /><col class="w-[22%]" />
-								<col class="w-[15%]" /><col class="w-[14%]" />
-							{:else}
-								<col class="w-[21%]" /><col class="w-[21%]" /><col class="w-[19%]" />
-								<col class="w-[13%]" /><col class="w-[12%]" /><col class="w-[14%]" />
-							{/if}
+							{#each confCols as width}<col class={width} />{/each}
 						</colgroup>
 						<thead
 							class="border-b border-gray-200 bg-gray-50 text-[11px] font-semibold tracking-wider text-gray-500 uppercase"
 						>
 							<tr>
+								<th class="px-3 py-3 text-center">#</th>
 								<th class="px-4 py-3">Requester</th>
 								<th class="px-4 py-3">Purpose</th>
 								<th class="px-4 py-3">Assets</th>
@@ -1812,8 +1977,17 @@
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-gray-100 text-sm text-gray-700">
-							{#each pagedConfidential as req (req.id)}
-								<tr class="align-top transition-colors hover:bg-gray-50/60">
+							{#each pagedConfidential as req, i (req.id)}
+								<tr
+									class="cursor-pointer align-top transition-colors hover:bg-pink-50/40 focus-visible:bg-pink-50/60 focus-visible:outline-none"
+									tabindex="0"
+									aria-label="View details for {req.id}"
+									onclick={() => (detailConfidentialId = req.id)}
+									onkeydown={(e) => rowKeydown(e, () => (detailConfidentialId = req.id))}
+								>
+									<td class="px-3 py-3.5 text-center">
+										{@render rowNum(rowNumber(confidentialPage, i))}
+									</td>
 									<td class="px-4 py-3.5">{@render confRequest(req)}</td>
 									<td class="px-4 py-3.5">{@render confPurpose(req)}</td>
 									<td class="px-4 py-3.5">{@render itemList(req.items)}</td>
@@ -1827,11 +2001,21 @@
 						</tbody>
 					</table>
 
-					<ul class="divide-y divide-gray-100 @4xl:hidden">
-						{#each pagedConfidential as req (req.id)}
-							<li class="space-y-3 p-4">
+					<div class="divide-y divide-gray-100 @4xl:hidden">
+						{#each pagedConfidential as req, i (req.id)}
+							<div
+								role="button"
+								class="cursor-pointer space-y-3 p-4 transition-colors hover:bg-pink-50/40 focus-visible:bg-pink-50/60 focus-visible:outline-none"
+								tabindex="0"
+								aria-label="View details for {req.id}"
+								onclick={() => (detailConfidentialId = req.id)}
+								onkeydown={(e) => rowKeydown(e, () => (detailConfidentialId = req.id))}
+							>
 								<div class="flex items-start justify-between gap-3">
-									<div class="min-w-0">{@render confRequest(req)}</div>
+									<div class="flex min-w-0 items-start gap-2.5">
+										{@render rowNum(rowNumber(confidentialPage, i))}
+										<div class="min-w-0">{@render confRequest(req)}</div>
+									</div>
 									<div class="shrink-0">{@render confStatus(req)}</div>
 								</div>
 								<div>{@render confPurpose(req)}</div>
@@ -1840,9 +2024,9 @@
 									{@render confPriority(req)}
 									{#if !readOnly && req.status !== 'resolved'}{@render confAction(req)}{/if}
 								</div>
-							</li>
+							</div>
 						{/each}
-					</ul>
+					</div>
 				{/if}
 			</div>
 
@@ -1873,43 +2057,17 @@
 				</div>
 			</div>
 
-			<!-- ── Donation cells, shared by the table and the stacked cards ── -->
-			{#snippet donReceipt(d: DonationResponse)}
-				<p class="font-mono text-xs font-bold break-all text-red-600">
-					{d.receiptNumber || `DON-${d.id.slice(0, 6).toUpperCase()}`}
-				</p>
-				<p class="mt-1 text-xs text-gray-500">{fmtDate(d.date || d.createdAt)}</p>
-			{/snippet}
 
-			{#snippet donItem(d: DonationResponse)}
-				<div class="flex min-w-0 items-center gap-2">
-					<Package size={15} class="shrink-0 text-gray-400" />
-					<span class="truncate font-medium text-gray-900" title={d.itemName}>{d.itemName}</span>
-				</div>
-			{/snippet}
 
-			{#snippet donAction(d: DonationResponse)}
-				{#if d.inventoryAction === 'add_to_existing'}
-					<span
-						class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-emerald-700"
-						>Added to stock</span
-					>
-				{:else}
-					<span
-						class="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-blue-700"
-						>New item</span
-					>
-				{/if}
-			{/snippet}
 
-			{#snippet donPurpose(d: DonationResponse)}
-				<p class="line-clamp-1 text-xs font-medium text-gray-700" title={d.purpose || 'Item donation'}>
-					{d.purpose || 'Item donation'}
-				</p>
-				{#if d.notes}
-					<p class="line-clamp-1 text-xs text-gray-400" title={d.notes}>{d.notes}</p>
-				{/if}
-			{/snippet}
+
+			{@render countBar(
+				filteredDonations.length,
+				donations.length,
+				'donation',
+				'donations',
+				showDonationSkeleton
+			)}
 
 			<!-- Main list: fixed-width table on wide cards, stacked cards on narrow ones -->
 			<div class="@container overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs">
@@ -1934,6 +2092,7 @@
 							class="border-b border-gray-200 bg-gray-50 text-[11px] font-semibold tracking-wider text-gray-500 uppercase"
 						>
 							<tr>
+								<th class="px-3 py-3 text-center">#</th>
 								<th class="px-4 py-3">Receipt</th>
 								<th class="px-4 py-3">Donor</th>
 								<th class="px-4 py-3">Item</th>
@@ -1943,8 +2102,15 @@
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-gray-100">
-							{#each pagedDonations as d (d.id)}
-								<tr class="align-top transition-colors hover:bg-gray-50/60">
+							{#each pagedDonations as d, i (d.id)}
+								<tr
+									class="cursor-pointer align-top transition-colors hover:bg-pink-50/40 focus-visible:bg-pink-50/60 focus-visible:outline-none"
+									tabindex="0"
+									aria-label="View details for donation {d.receiptNumber || d.id}"
+									onclick={() => (detailDonationId = d.id)}
+									onkeydown={(e) => rowKeydown(e, () => (detailDonationId = d.id))}
+								>
+									<td class="px-3 py-3.5 text-center">{@render rowNum(rowNumber(donationPage, i))}</td>
 									<td class="px-4 py-3.5">{@render donReceipt(d)}</td>
 									<td class="px-4 py-3.5">
 										<p class="line-clamp-2 font-semibold text-gray-900" title={d.donorName}>{d.donorName}</p>
@@ -1961,13 +2127,23 @@
 						</tbody>
 					</table>
 
-					<ul class="divide-y divide-gray-100 @4xl:hidden">
-						{#each pagedDonations as d (d.id)}
-							<li class="space-y-2.5 p-4">
+					<div class="divide-y divide-gray-100 @4xl:hidden">
+						{#each pagedDonations as d, i (d.id)}
+							<div
+								role="button"
+								class="cursor-pointer space-y-2.5 p-4 transition-colors hover:bg-pink-50/40 focus-visible:bg-pink-50/60 focus-visible:outline-none"
+								tabindex="0"
+								aria-label="View details for donation {d.receiptNumber || d.id}"
+								onclick={() => (detailDonationId = d.id)}
+								onkeydown={(e) => rowKeydown(e, () => (detailDonationId = d.id))}
+							>
 								<div class="flex items-start justify-between gap-3">
-									<div class="min-w-0">
-										<p class="truncate font-semibold text-gray-900" title={d.donorName}>{d.donorName}</p>
-										<div class="mt-1">{@render donItem(d)}</div>
+									<div class="flex min-w-0 items-start gap-2.5">
+										{@render rowNum(rowNumber(donationPage, i))}
+										<div class="min-w-0">
+											<p class="truncate font-semibold text-gray-900" title={d.donorName}>{d.donorName}</p>
+											<div class="mt-1">{@render donItem(d)}</div>
+										</div>
 									</div>
 									<p class="shrink-0 text-right tabular-nums">
 										<span class="font-bold text-gray-900">+{d.quantity}</span>
@@ -1979,9 +2155,9 @@
 									{@render donAction(d)}
 								</div>
 								{@render donPurpose(d)}
-							</li>
+							</div>
 						{/each}
-					</ul>
+					</div>
 				{/if}
 			</div>
 
@@ -2867,105 +3043,322 @@
 	</div>
 {/if}
 
-<!-- ─── MODAL: WALK-IN RETURN / INSPECTION FORM ─────────────────────────── -->
-{#if showReturnModal && selectedWalkIn}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-		<div
-			class="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
-		>
-			<div class="flex items-center justify-between border-b border-gray-100 pb-4">
-				<div class="flex items-center gap-2">
-					<RotateCcw class="text-pink-600" size={20} />
-					<h2 class="text-lg font-bold text-gray-900">Return Inspection Desk</h2>
-				</div>
-				<button
-					onclick={() => {
-						showReturnModal = false;
-						selectedWalkIn = null;
-					}}
-					class="text-gray-400 hover:text-gray-500"
-				>
-					<X size={20} />
-				</button>
-			</div>
+<!-- ─── DETAILS WINDOWS (row click on any tab) ─────────────────────────────── -->
+<svelte:window
+	onkeydown={(e) => {
+		if (e.key === 'Escape' && !showReturnModal) closeDetails();
+	}}
+/>
 
-			<div class="mt-6 space-y-4">
-				<div class="rounded-lg bg-gray-50 p-3 text-xs">
-					<p class="font-bold text-gray-700">Transaction ID: {selectedWalkIn.id}</p>
-					<p class="mt-1 text-gray-600">
-						Borrower: {selectedWalkIn.studentName} · ID: {selectedWalkIn.studentId}
-					</p>
-					<p class="text-gray-500">
-						Class: {selectedWalkIn.classCode} · Checked out: {new Date(
-							selectedWalkIn.borrowDate
-						).toLocaleDateString()}
-					</p>
-				</div>
+{#snippet detailField(label: string, value: string | null | undefined)}
+	<div class="min-w-0">
+		<dt class="text-[11px] font-semibold tracking-wider text-gray-500 uppercase">{label}</dt>
+		<dd class="mt-0.5 text-sm break-words text-gray-900">{value || '—'}</dd>
+	</div>
+{/snippet}
 
-				<div class="space-y-3">
-					<span class="block text-xs font-bold tracking-wider text-gray-400 uppercase"
-						>Items Return Inspection Checklist</span
-					>
-					{#each selectedWalkIn.items as item}
-						<div class="border-gray-150 space-y-3 rounded-xl border bg-white p-4">
-							<div class="flex items-center justify-between">
-								<p class="text-sm font-semibold text-gray-900">{item.name}</p>
-								<span class="rounded bg-pink-100 px-2.5 py-0.5 text-xs font-bold text-pink-700"
-									>{item.quantity} borrowed</span
-								>
-							</div>
+{#snippet detailSectionTitle(title: string, meta?: string)}
+	<div class="mb-3 flex items-baseline justify-between gap-3">
+		<h3 class="text-xs font-bold tracking-wider text-gray-700 uppercase">{title}</h3>
+		{#if meta}<span class="text-xs text-gray-500">{meta}</span>{/if}
+	</div>
+{/snippet}
 
-							<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-								<!-- Selection status -->
-								<div>
-									<span class="mb-1 block text-xs text-gray-500">Return Status</span>
-									<select
-										bind:value={returnInspection[item.itemId].status}
-										class="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-900 focus:border-pink-500 focus:outline-none"
-									>
-										<option value="good">Returned Good / Clean</option>
-										<option value="damaged">Returned Damaged</option>
-										<option value="missing">Not Returned (Missing)</option>
-									</select>
-								</div>
+{#snippet inspectionPill(status: 'good' | 'damaged' | 'missing' | null | undefined)}
+	{#if status === 'good'}
+		<span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Good</span>
+	{:else if status === 'damaged'}
+		<span class="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Damaged</span>
+	{:else if status === 'missing'}
+		<span class="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">Missing</span>
+	{/if}
+{/snippet}
 
-								<!-- Notes -->
-								<div>
-									<span class="mb-1 block text-xs text-gray-500">Inspection Notes</span>
-									<input
-										type="text"
-										bind:value={returnInspection[item.itemId].notes}
-										placeholder="e.g. Scratched handle, no box, clean"
-										class="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-900 focus:border-pink-500 focus:outline-none"
-									/>
-								</div>
-							</div>
+{#snippet detailShell(
+	icon: typeof Users,
+	title: string,
+	reference: string,
+	status: import('svelte').Snippet,
+	body: import('svelte').Snippet,
+	footer: import('svelte').Snippet
+)}
+	{@const Icon = icon}
+	<div class="fixed inset-0 z-50 overflow-y-auto">
+		<button
+			type="button"
+			class="fixed inset-0 bg-black/40 backdrop-blur-sm"
+			onclick={closeDetails}
+			aria-label="Close details"
+			tabindex="-1"
+		></button>
+		<div class="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4">
+			<div
+				class="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="detail-title"
+			>
+				<!-- Header -->
+				<div class="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4 sm:px-6">
+					<div class="flex min-w-0 items-center gap-3">
+						<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-50 text-pink-600">
+							<Icon size={20} />
 						</div>
-					{/each}
+						<div class="min-w-0">
+							<h2 id="detail-title" class="text-base font-bold text-gray-900 sm:text-lg">{title}</h2>
+							<p class="truncate font-mono text-xs text-gray-500">{reference}</p>
+						</div>
+					</div>
+					<div class="flex shrink-0 items-start gap-3">
+						{@render status()}
+						<button
+							type="button"
+							onclick={closeDetails}
+							class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+							aria-label="Close"
+						>
+							<X size={18} />
+						</button>
+					</div>
 				</div>
-			</div>
 
-			<div class="mt-8 flex justify-end gap-3 border-t border-gray-100 pt-4">
-				<button
-					type="button"
-					onclick={() => {
-						showReturnModal = false;
-						selectedWalkIn = null;
-					}}
-					class="cursor-pointer rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-				>
-					Cancel
-				</button>
-				<button
-					type="button"
-					onclick={submitReturn}
-					class="cursor-pointer rounded-lg bg-pink-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
-				>
-					Record Return & Restock
-				</button>
+				<!-- Body -->
+				<div class="flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+					{@render body()}
+				</div>
+
+				<!-- Footer -->
+				<div class="flex items-center justify-end gap-2 border-t border-gray-200 bg-gray-50/60 px-5 py-3.5 sm:px-6">
+					{@render footer()}
+				</div>
 			</div>
 		</div>
 	</div>
+{/snippet}
+
+{#snippet closeButton()}
+	<button
+		type="button"
+		onclick={closeDetails}
+		class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+	>
+		Close
+	</button>
+{/snippet}
+
+<!-- Walk-in details -->
+{#if detailWalkIn}
+	{@const tx = detailWalkIn}
+	{@const units = tx.items.reduce((sum, i) => sum + i.quantity, 0)}
+	{#snippet walkInDetailStatus()}{@render walkInStatus(tx)}{/snippet}
+	{#snippet walkInDetailBody()}
+		<section>
+			{@render detailSectionTitle('Borrower')}
+			<dl class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+				{@render detailField('Name', tx.studentName)}
+				{@render detailField('Type', isRegisteredBorrower(tx) ? 'Registered student' : 'Guest')}
+				{@render detailField(isRegisteredBorrower(tx) ? 'Email' : 'Guest ID / Email', borrowerLine(tx).replace(/^Guest(\s·\s)?/, ''))}
+				{@render detailField('Class', hasClass(tx) ? tx.classCode : isRegisteredBorrower(tx) ? '' : 'Guest')}
+			</dl>
+		</section>
+
+		<section>
+			{@render detailSectionTitle('Checkout')}
+			<dl class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+				{@render detailField('Checked out', fmtDateTime(tx.borrowDate))}
+				{@render detailField('Due back', fmtDate(tx.returnDate))}
+				{@render detailField('Returned', tx.status === 'borrowed' ? 'Not yet returned' : fmtDateTime(tx.returnedAt))}
+				{@render detailField('Used at', tx.usageLocation === 'outdoor' ? 'Outdoor' : 'School')}
+				{@render detailField('Purpose', tx.purpose)}
+				{@render detailField('Recorded by', tx.recordedBy)}
+			</dl>
+		</section>
+
+		<section>
+			{@render detailSectionTitle(
+				'Items',
+				`${tx.items.length} ${tx.items.length === 1 ? 'item' : 'items'} · ${units} ${units === 1 ? 'unit' : 'units'}`
+			)}
+			<ul class="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
+				{#each tx.items as item, i}
+					{@const insp = parseInspection(item.inspectionNotes)}
+					<li class="space-y-1.5 px-4 py-3">
+						<div class="flex items-start justify-between gap-3">
+							<div class="flex min-w-0 items-start gap-2.5">
+								{@render rowNum(i + 1)}
+								<div class="min-w-0">
+									<p class="font-medium break-words text-gray-900">{item.name}</p>
+									{#if item.category}<p class="text-xs text-gray-500">{item.category}</p>{/if}
+								</div>
+							</div>
+							<div class="flex shrink-0 items-center gap-2">
+								{@render inspectionPill(item.inspectionStatus)}
+								<span class="text-sm font-bold text-gray-900 tabular-nums">×{item.quantity}</span>
+							</div>
+						</div>
+						{#if insp && insp.good !== null}
+							<p class="pl-7 text-xs text-gray-600">
+								Good {insp.good} · Damaged {insp.damaged} · Missing {insp.missing}
+								{#if item.additionalReturned}· <span class="text-blue-600">+{item.additionalReturned} over-returned</span>{/if}
+							</p>
+						{/if}
+						{#if insp?.remarks}
+							<p class="pl-7 text-xs text-gray-600"><span class="font-semibold">Remarks:</span> {insp.remarks}</p>
+						{/if}
+						{#if item.dueDate}
+							<p class="pl-7 text-xs text-rose-600">
+								Replace {item.replacementQuantity ?? ''} by {fmtDate(item.dueDate)}
+							</p>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		</section>
+
+		{#if tx.notes}
+			<section>
+				{@render detailSectionTitle('Notes')}
+				<p class="rounded-xl bg-gray-50 px-4 py-3 text-sm whitespace-pre-line text-gray-700">{tx.notes}</p>
+			</section>
+		{/if}
+	{/snippet}
+	{#snippet walkInDetailFooter()}
+		{@render closeButton()}
+		{#if !readOnly && tx.status === 'borrowed'}
+			<button
+				type="button"
+				onclick={() => openReturnModal(tx)}
+				class="inline-flex items-center gap-1.5 rounded-lg bg-pink-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-pink-700"
+			>
+				<RotateCcw size={15} /> Process Return
+			</button>
+		{/if}
+	{/snippet}
+	{@render detailShell(Users, 'Walk-in Transaction', tx.id, walkInDetailStatus, walkInDetailBody, walkInDetailFooter)}
+{/if}
+
+<!-- Confidential request details -->
+{#if detailConfidential}
+	{@const req = detailConfidential}
+	{@const units = req.items.reduce((sum, i) => sum + i.quantity, 0)}
+	{#snippet confDetailStatus()}{@render confStatus(req)}{/snippet}
+	{#snippet confDetailBody()}
+		<section>
+			{@render detailSectionTitle('Request')}
+			<dl class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+				{@render detailField('Requester', req.requesterName)}
+				<div class="min-w-0">
+					<dt class="text-[11px] font-semibold tracking-wider text-gray-500 uppercase">Priority</dt>
+					<dd class="mt-1">{@render confPriority(req)}</dd>
+				</div>
+				<div class="sm:col-span-2">{@render detailField('Purpose', req.purpose)}</div>
+			</dl>
+		</section>
+
+		<section>
+			{@render detailSectionTitle('Schedule')}
+			<dl class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+				{@render detailField('Needed from', fmtDate(req.borrowDate))}
+				{@render detailField('Due back', fmtDate(req.returnDate))}
+				{@render detailField('Released', req.dispatchedAt ? fmtDateTime(req.dispatchedAt) : 'Not yet released')}
+				{@render detailField('Returned', req.resolvedAt ? fmtDateTime(req.resolvedAt) : 'Not yet returned')}
+			</dl>
+		</section>
+
+		<section>
+			{@render detailSectionTitle(
+				'Requested assets',
+				`${req.items.length} ${req.items.length === 1 ? 'item' : 'items'} · ${units} ${units === 1 ? 'unit' : 'units'}`
+			)}
+			<ul class="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
+				{#each req.items as item, i}
+					<li class="flex items-start justify-between gap-3 px-4 py-3">
+						<div class="flex min-w-0 items-start gap-2.5">
+							{@render rowNum(i + 1)}
+							<p class="font-medium break-words text-gray-900">{item.name}</p>
+						</div>
+						<span class="shrink-0 text-sm font-bold text-gray-900 tabular-nums">×{item.quantity}</span>
+					</li>
+				{/each}
+			</ul>
+		</section>
+
+		{#if req.notes}
+			<section>
+				{@render detailSectionTitle('Notes')}
+				<p class="rounded-xl bg-gray-50 px-4 py-3 text-sm whitespace-pre-line text-gray-700">{req.notes}</p>
+			</section>
+		{/if}
+	{/snippet}
+	{#snippet confDetailFooter()}
+		{@render closeButton()}
+		{#if !readOnly && req.status !== 'resolved'}{@render confAction(req)}{/if}
+	{/snippet}
+	{@render detailShell(Lock, 'Confidential Admin Request', req.id, confDetailStatus, confDetailBody, confDetailFooter)}
+{/if}
+
+<!-- Donation details -->
+{#if detailDonation}
+	{@const d = detailDonation}
+	{#snippet donDetailStatus()}{@render donAction(d)}{/snippet}
+	{#snippet donDetailBody()}
+		<section>
+			{@render detailSectionTitle('Donation')}
+			<dl class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+				{@render detailField('Donor', d.donorName)}
+				{@render detailField('Date received', fmtDate(d.date || d.createdAt))}
+				{@render detailField('Item', d.itemName)}
+				{@render detailField('Quantity', `+${d.quantity} ${d.unit || (d.quantity === 1 ? 'unit' : 'units')}`)}
+				{@render detailField(
+					'Stock action',
+					d.inventoryAction === 'add_to_existing' ? 'Added to an existing inventory item' : 'Created a new inventory item'
+				)}
+				{@render detailField('Recorded by', d.recordedBy)}
+			</dl>
+		</section>
+
+		<section>
+			{@render detailSectionTitle('Purpose')}
+			<p class="text-sm text-gray-700">{d.purpose || 'Item donation'}</p>
+		</section>
+
+		{#if d.notes}
+			<section>
+				{@render detailSectionTitle('Notes')}
+				<p class="rounded-xl bg-gray-50 px-4 py-3 text-sm whitespace-pre-line text-gray-700">{d.notes}</p>
+			</section>
+		{/if}
+	{/snippet}
+	{#snippet donDetailFooter()}{@render closeButton()}{/snippet}
+	{@render detailShell(
+		Heart,
+		'Item Donation',
+		d.receiptNumber || `DON-${d.id.slice(0, 6).toUpperCase()}`,
+		donDetailStatus,
+		donDetailBody,
+		donDetailFooter
+	)}
+{/if}
+
+<!-- ─── MODAL: WALK-IN RETURN / INSPECTION FORM ─────────────────────────── -->
+{#if showReturnModal && selectedWalkIn}
+	<!-- Same return inspection checklist as student borrow requests -->
+	<ItemInspectionModal
+		items={selectedWalkIn.items}
+		requestId={selectedWalkIn.id}
+		studentName={selectedWalkIn.studentName}
+		leaderName={hasClass(selectedWalkIn)
+			? selectedWalkIn.classCode
+			: isRegisteredBorrower(selectedWalkIn)
+				? '—'
+				: 'Walk-in (Guest)'}
+		sessionDate={selectedWalkIn.borrowDate}
+		borrowerLabel="Borrower"
+		leaderLabel="Class"
+		dateLabel="Checkout Date"
+		onSubmit={submitWalkInInspection}
+		onCancel={closeReturnModal}
+	/>
 {/if}
 
 <!-- ─── MODAL: CONFIDENTIAL REQUEST FORM ────────────────────────────────── -->

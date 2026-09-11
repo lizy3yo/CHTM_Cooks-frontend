@@ -20,9 +20,24 @@
 		studentName?: string;
 		leaderName?: string;
 		sessionDate?: string;
+		/** Banner labels. Defaults describe a student lab session; walk-ins override them. */
+		borrowerLabel?: string;
+		leaderLabel?: string;
+		dateLabel?: string;
 	}
 
-	let { items, requestId, onSubmit, onCancel, studentName = 'N/A', leaderName = 'N/A', sessionDate }: Props = $props();
+	let {
+		items,
+		requestId,
+		onSubmit,
+		onCancel,
+		studentName = 'N/A',
+		leaderName = 'N/A',
+		sessionDate,
+		borrowerLabel = 'Borrower Student',
+		leaderLabel = 'Lab Leader/Instructor',
+		dateLabel = 'Lab Session Date'
+	}: Props = $props();
 
 	interface ItemInspection {
 		itemId: string;
@@ -271,21 +286,21 @@
 					<div class="flex items-center gap-2 text-gray-700">
 						<User class="h-4 w-4 shrink-0 text-pink-500" />
 						<div class="truncate">
-							<span class="font-semibold text-gray-500 block uppercase tracking-wider text-[9px]">Borrower Student</span>
+							<span class="font-semibold text-gray-500 block uppercase tracking-wider text-[9px]">{borrowerLabel}</span>
 							<span class="font-bold text-gray-900">{studentName}</span>
 						</div>
 					</div>
 					<div class="flex items-center gap-2 text-gray-700 border-t border-gray-100 pt-2 sm:border-t-0 sm:border-l sm:border-pink-100 sm:pt-0 sm:pl-4">
 						<User class="h-4 w-4 shrink-0 text-pink-500" />
 						<div class="truncate">
-							<span class="font-semibold text-gray-500 block uppercase tracking-wider text-[9px]">Lab Leader/Instructor</span>
+							<span class="font-semibold text-gray-500 block uppercase tracking-wider text-[9px]">{leaderLabel}</span>
 							<span class="font-bold text-gray-900">{leaderName}</span>
 						</div>
 					</div>
 					<div class="flex items-center gap-2 text-gray-700 border-t border-gray-100 pt-2 sm:border-t-0 sm:border-l sm:border-pink-100 sm:pt-0 sm:pl-4">
 						<Calendar class="h-4 w-4 shrink-0 text-pink-500" />
 						<div>
-							<span class="font-semibold text-gray-500 block uppercase tracking-wider text-[9px]">Lab Session Date</span>
+							<span class="font-semibold text-gray-500 block uppercase tracking-wider text-[9px]">{dateLabel}</span>
 							<span class="font-bold text-gray-900">{formatSessionDate(sessionDate)}</span>
 						</div>
 					</div>
