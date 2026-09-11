@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Users, Search } from 'lucide-svelte';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import type { WalkInSummary, WalkInReportTransaction } from '$lib/api/analyticsReports';
 
 	interface Props {
@@ -26,8 +27,47 @@
 		);
 	});
 
-	function fmt(d: string | null | undefined): string {
-		return d ? (d ?? '').slice(0, 10) : '—';
+	// ─── Pagination (10 per page) ───
+	const PAGE_SIZE = 10;
+	let page = $state(1);
+	const totalPages = $derived(Math.max(1, Math.ceil(rows.length / PAGE_SIZE)));
+	const pagedRows = $derived(rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
+
+	// Back to page 1 when the search or the report data changes.
+	$effect(() => {
+		search;
+		data;
+		page = 1;
+	});
+
+	// ─── Display helpers ───
+	// Registered students are stored with their numeric account id and their school email.
+	function isRegistered(w: WalkInReportTransaction): boolean {
+		return /^\d+$/.test(w.studentId) && Boolean(w.email);
+	}
+
+	// School email for students; guest ID and email for guests. Never the internal account id.
+	function personLine(w: WalkInReportTransaction): string {
+		if (isRegistered(w)) return w.email;
+		const guestId = w.studentId && w.studentId !== 'GUEST' ? w.studentId : '';
+		return ['Guest', guestId, w.email].filter(Boolean).join(' · ');
+	}
+
+	function classLabel(w: WalkInReportTransaction): string {
+		if (w.classCode && w.classCode !== 'N/A (Guest)') return w.classCode;
+		return isRegistered(w) ? '—' : 'Guest';
+	}
+
+	// "Sep 11 – Sep 13, 2026", or both years when the range crosses a year.
+	function dateRange(from: string | null | undefined, to: string | null | undefined): string {
+		if (!from && !to) return '—';
+		const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+		if (!from || !to) return new Date((from || to) as string).toLocaleDateString('en-US', opts);
+		const a = new Date(from);
+		const b = new Date(to);
+		const sameYear = a.getFullYear() === b.getFullYear();
+		const start = a.toLocaleDateString('en-US', sameYear ? { month: 'short', day: 'numeric' } : opts);
+		return `${start} – ${b.toLocaleDateString('en-US', opts)}`;
 	}
 </script>
 
@@ -91,18 +131,27 @@
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-gray-100 bg-white">
-					{#each rows as w (w.id)}
-						<tr class="hover:bg-gray-50/60">
+					{#each pagedRows as w (w.id)}
+						<tr class="align-top hover:bg-gray-50/60">
 							<td class="px-4 py-3">
 								<div class="font-medium text-gray-900">{w.studentName || 'Unknown'}</div>
-								<div class="text-xs text-gray-500">{w.studentId || '—'}</div>
+								<div class="text-xs text-gray-500">{personLine(w)}</div>
 							</td>
-							<td class="px-4 py-3 text-gray-700">{w.classCode || '—'}</td>
+							<td class="px-4 py-3">
+								{#if classLabel(w) === 'Guest'}
+									<span
+										class="inline-block rounded-md border border-dashed border-gray-300 px-2 py-0.5 text-xs font-medium text-gray-500"
+										>Guest</span
+									>
+								{:else}
+									<span class="font-mono text-xs font-semibold text-gray-700">{classLabel(w)}</span>
+								{/if}
+							</td>
 							<td class="px-4 py-3 text-xs text-gray-600">
 								{w.items.map((i) => `${i.name} ×${i.quantity}`).join(', ')}
 							</td>
-							<td class="px-4 py-3 text-xs text-gray-600">
-								{fmt(w.borrowDate)} → {fmt(w.returnDate)}
+							<td class="px-4 py-3 text-xs whitespace-nowrap text-gray-600">
+								{dateRange(w.borrowDate, w.returnDate)}
 							</td>
 							<td class="px-4 py-3">
 								<span
@@ -125,5 +174,15 @@
 				</tbody>
 			</table>
 		</div>
+
+		{#if totalPages > 1}
+			<Pagination
+				currentPage={page}
+				{totalPages}
+				totalItems={rows.length}
+				itemsPerPage={PAGE_SIZE}
+				onPageChange={(p) => (page = p)}
+			/>
+		{/if}
 	{/if}
 </div>

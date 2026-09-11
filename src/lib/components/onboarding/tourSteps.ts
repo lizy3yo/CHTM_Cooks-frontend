@@ -1174,6 +1174,7 @@ const PAGE_LABELS: Record<string, string> = {
 	'/admin/inventory': 'Inventory Catalog',
 	'/admin/requests': 'Borrow Transactions',
 	'/admin/history': 'History',
+	'/admin/transactions': 'Alternative Transactions',
 	'/admin/analytics': 'Reports & Analytics'
 };
 
