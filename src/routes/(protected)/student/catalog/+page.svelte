@@ -21,6 +21,13 @@
 	// UI State Management
 	let viewMode = $state<'grid' | 'list'>('grid');
 	let isLoading = $state(true);
+	// True from the moment the student types until results for that text arrive.
+	let isSearching = $state(false);
+	// Bumped on every keystroke; a fetch only ends "searching" if it started
+	// after the latest keystroke (so an older/background fetch can't end it early).
+	let searchVersion = 0;
+	// Results area shows placeholders during the first load and while searching.
+	const showSkeleton = $derived(isLoading || isSearching);
 	let error = $state<string | null>(null);
 	let selectedItem = $state<CatalogItem | null>(null);
 	const selectedItemRequestEntry = $derived.by(() => {
@@ -181,6 +188,7 @@
 	): Promise<void> {
 		const background = options.background === true;
 		const loadId = ++inFlightLoadId;
+		const searchVersionAtStart = searchVersion;
 
 		try {
 			if (!background) {
@@ -208,6 +216,10 @@
 
 			if (!background) {
 				isLoading = false;
+			}
+			// Results for the latest typed text are on screen.
+			if (searchVersionAtStart === searchVersion) {
+				isSearching = false;
 			}
 
 			// Load required items into cart as soon as page 1 resolves
@@ -265,6 +277,10 @@
 			if (loadId === inFlightLoadId && !background) {
 				isLoading = false;
 			}
+			// Also stop the searching state if this search failed.
+			if (loadId === inFlightLoadId && searchVersionAtStart === searchVersion) {
+				isSearching = false;
+			}
 		}
 	}
 
@@ -300,6 +316,8 @@
 	function handleSearch(query: string): void {
 		searchQuery = query;
 		currentPage = 1;
+		searchVersion++;
+		isSearching = true;
 		clearTimeout(searchTimeout);
 		searchTimeout = setTimeout(() => {
 			fetchCatalog({ background: true, forceRefresh: true });
@@ -880,9 +898,16 @@
 				bind:value={searchQuery}
 				oninput={(e) => handleSearch((e.target as HTMLInputElement).value)}
 				placeholder="Search by name, description, or code…"
-				class="block w-full rounded-lg border border-gray-300 py-2 pr-3 pl-9 text-sm focus:border-pink-500 focus:ring-pink-500"
+				class="block w-full rounded-lg border border-gray-300 py-2 pr-9 pl-9 text-sm focus:border-pink-500 focus:ring-pink-500"
 				aria-label="Search equipment"
+				aria-busy={isSearching}
 			/>
+			{#if isSearching}
+				<!-- Shown from the first keystroke until the matching items arrive -->
+				<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3" aria-hidden="true">
+					<span class="h-4 w-4 animate-spin rounded-full border-2 border-pink-200 border-t-pink-600"></span>
+				</div>
+			{/if}
 		</div>
 
 		<!-- Filters — 2 cols on mobile, 3 on sm+ -->
@@ -1030,10 +1055,21 @@
 	<!-- Results Info and Clear Filters -->
 	{#if !isLoading}
 		<div class="flex items-center justify-between">
-			<p class="text-sm text-gray-700">
-				Showing <span class="font-medium">{allItems.length}</span>
-				{allItems.length === 1 ? 'item' : 'items'}
-			</p>
+			{#if isSearching}
+				<p class="flex items-center gap-2 text-sm text-gray-700" role="status" aria-live="polite">
+					<span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-pink-200 border-t-pink-600" aria-hidden="true"></span>
+					{#if searchQuery.trim()}
+						Searching for <span class="font-medium">“{searchQuery.trim()}”</span>…
+					{:else}
+						Loading all items…
+					{/if}
+				</p>
+			{:else}
+				<p class="text-sm text-gray-700">
+					Showing <span class="font-medium">{allItems.length}</span>
+					{allItems.length === 1 ? 'item' : 'items'}
+				</p>
+			{/if}
 			{#if
 				searchQuery ||
 				selectedCategory !== 'all' ||
@@ -1053,7 +1089,7 @@
 	{/if}
 
 	<!-- Loading State -->
-	{#if isLoading}
+	{#if showSkeleton}
 		<div class="animate-pulse">
 			{#if viewMode === 'grid'}
 				<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 lg:gap-3">
@@ -1086,7 +1122,7 @@
 	{/if}
 
 	<!-- Equipment Grid View -->
-	{#if !isLoading && viewMode === 'grid' && filteredItems.length > 0}
+	{#if !showSkeleton && viewMode === 'grid' && filteredItems.length > 0}
 		<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 lg:gap-3">
 			{#each filteredItems as item (item.id)}
 				{#if item.isPlaceholder}
@@ -1272,7 +1308,7 @@
 	{/if}
 
 	<!-- Equipment List View -->
-	{#if !isLoading && viewMode === 'list' && filteredItems.length > 0}
+	{#if !showSkeleton && viewMode === 'list' && filteredItems.length > 0}
 		<div class="divide-y divide-gray-100 overflow-hidden rounded-lg bg-white shadow">
 			{#each filteredItems as item, i (item.id)}
 				{#if item.isPlaceholder}
@@ -1448,7 +1484,7 @@
 	{/if}
 
 	<!-- Empty State -->
-	{#if !isLoading && allItems.length === 0}
+	{#if !showSkeleton && allItems.length === 0}
 		<div class="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center sm:p-12">
 			<svg
 				class="mx-auto h-10 w-10 text-pink-600"
@@ -1477,7 +1513,7 @@
 	{/if}
 
 	<!-- Pagination -->
-	{#if !isLoading && allItems.length > itemsPerPage}
+	{#if !showSkeleton && allItems.length > itemsPerPage}
 		<Pagination
 			{currentPage}
 			{totalPages}
