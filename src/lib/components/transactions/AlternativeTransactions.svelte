@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import { usersAPI, type UserResponse } from '$lib/api/users';
 	import { inventoryItemsAPI, inventoryCategoriesAPI, type InventoryItem, type InventoryCategory } from '$lib/api/inventory';
 	import { classCodesAPI, type ClassCodeResponse } from '$lib/api/classCodes';
@@ -77,7 +79,6 @@
 
 	// ─── STATE ───────────────────────────────────────────────────────────────
 	let activeTab = $state<'walk-in' | 'confidential' | 'donations'>('walk-in');
-	let loading = $state(true);
 
 	// Collections loaded from APIs
 	let studentsList = $state<UserResponse[]>([]);
@@ -85,9 +86,23 @@
 	let inventoryItems = $state<InventoryItem[]>([]);
 	let classCodesList = $state<ClassCodeResponse[]>([]);
 
-	// Alternative Transactions stored in localStorage / API
-	let walkIns = $state<WalkInTransaction[]>([]);
-	let confidentialRequests = $state<ConfidentialRequest[]>([]);
+	// Walk-ins: render the last known list instantly (if this session has one),
+	// then refresh in the background. Skeletons show only when nothing is known yet.
+	const WALKIN_PARAMS = { limit: 500 };
+	const cachedWalkIns = browser ? walkInTransactionsAPI.peekCachedList(WALKIN_PARAMS) : null;
+	let walkIns = $state<WalkInTransaction[]>(cachedWalkIns?.walkIns ?? []);
+	let walkInsLoading = $state(!cachedWalkIns);
+
+	// Confidential requests live in this browser's localStorage, so read them synchronously.
+	function readSavedConfidential(): ConfidentialRequest[] {
+		if (!browser) return [];
+		try {
+			return JSON.parse(localStorage.getItem('chtm_confidential_requests') || '[]');
+		} catch {
+			return [];
+		}
+	}
+	let confidentialRequests = $state<ConfidentialRequest[]>(readSavedConfidential());
 	let donations = $state<DonationResponse[]>([]);
 
 	// Filters
@@ -103,7 +118,8 @@
 	let showReturnModal = $state(false);
 	let showConfidentialModal = $state(false);
 	let showDonationModal = $state(false);
-	let donationsLoading = $state(false);
+	// Donations load on page open, so start in the loading state (no "0" flash).
+	let donationsLoading = $state(true);
 	let donationsLoaded = $state(false);
 
 	// --- Item Donation Form State ---
@@ -596,6 +612,18 @@
 	// ─── DISPLAY HELPERS ─────────────────────────────────────────────────────
 	const MAX_ITEMS_SHOWN = 3;
 
+	// Column widths, shared by each table and its loading skeleton so nothing
+	// jumps when the data arrives. Literal strings so Tailwind generates them.
+	const WALKIN_COLS = ['w-[15%]', 'w-[25%]', 'w-[10%]', 'w-[24%]', 'w-[14%]', 'w-[12%]'];
+	const WALKIN_COLS_READONLY = ['w-[16%]', 'w-[28%]', 'w-[11%]', 'w-[28%]', 'w-[17%]'];
+	const DONATION_COLS = ['w-[17%]', 'w-[20%]', 'w-[20%]', 'w-[9%]', 'w-[14%]', 'w-[20%]'];
+
+	const walkInCols = $derived(readOnly ? WALKIN_COLS_READONLY : WALKIN_COLS);
+
+	// Skeletons only while nothing is on screen yet; a background refresh keeps the table.
+	const showWalkInSkeleton = $derived(walkInsLoading && walkIns.length === 0);
+	const showDonationSkeleton = $derived(donationsLoading && donations.length === 0);
+
 	function fmtDate(value: string | null | undefined): string {
 		if (!value) return '—';
 		return new Date(value).toLocaleDateString('en-US', {
@@ -633,28 +661,29 @@
 
 	// ─── INITIALIZATION ──────────────────────────────────────────────────────
 	onMount(async () => {
-		// Walk-ins load on their own so a failed reference list can never blank the table.
-		const walkInsLoad = walkInTransactionsAPI
-			.list({ limit: 500 })
-			.then((walkInRes) => {
-				walkIns = walkInRes.walkIns || [];
-			})
-			.catch((walkInErr) => {
-				console.error('Failed to load walk-in transactions:', walkInErr);
-			});
+		// 1. What's on screen first, together (the backend is small, so extra
+		//    requests would queue ahead of the table).
+		await Promise.allSettled([refreshWalkIns(), fetchDonations()]);
 
-		const savedConfidential = localStorage.getItem('chtm_confidential_requests');
-		if (savedConfidential) {
-			confidentialRequests = JSON.parse(savedConfidential);
+		// 2. Lists the create/process forms need, in the background.
+		//    View-only roles never open those forms, so they skip this.
+		if (!readOnly) await loadFormReferences();
+	});
+
+	async function refreshWalkIns(): Promise<void> {
+		try {
+			const res = await walkInTransactionsAPI.list(WALKIN_PARAMS);
+			walkIns = res.walkIns || [];
+		} catch (err) {
+			console.error('Failed to load walk-in transactions:', err);
+			// Keep showing a remembered list if we have one; only warn when there is nothing.
+			if (walkIns.length === 0) toastStore.error('Failed to load walk-in transactions.');
+		} finally {
+			walkInsLoading = false;
 		}
+	}
 
-		// View-only roles never open the create/process forms, so they skip the form references.
-		if (readOnly) {
-			await walkInsLoad;
-			loading = false;
-			return;
-		}
-
+	async function loadFormReferences(): Promise<void> {
 		try {
 			// Load data from APIs
 			const [studentsRes, adminsRes, instructorsRes, inventoryRes, classesRes, categoriesRes] = await Promise.all([
@@ -684,11 +713,8 @@
 		} catch (error) {
 			console.error('Failed to load transaction data sources', error);
 			toastStore.error('Could not load some references. Fallbacks enabled.', 'Warning');
-		} finally {
-			await walkInsLoad;
-			loading = false;
 		}
-	});
+	}
 
 	function saveConfidential() {
 		localStorage.setItem('chtm_confidential_requests', JSON.stringify(confidentialRequests));
@@ -1209,6 +1235,53 @@
 	{/if}
 {/snippet}
 
+{#snippet tableSkeleton(cols: string[], rows = 5)}
+	<div role="status" aria-live="polite" aria-label="Loading records">
+		<span class="sr-only">Loading records…</span>
+		<!-- Wide card: placeholder rows with the real column widths -->
+		<table class="hidden w-full table-fixed @4xl:table" aria-hidden="true">
+			<colgroup>
+				{#each cols as width}<col class={width} />{/each}
+			</colgroup>
+			<thead class="border-b border-gray-200 bg-gray-50">
+				<tr>
+					{#each cols as _}
+						<th class="px-4 py-3.5"><Skeleton class="h-2.5 w-16" /></th>
+					{/each}
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-gray-100">
+				{#each Array(rows) as _}
+					<tr>
+						{#each cols as _, c}
+							<td class="px-4 py-4 align-top">
+								<Skeleton class="h-3.5 {c === 1 ? 'w-4/5' : 'w-3/4'}" />
+								{#if c < 2 || c === 3}<Skeleton class="mt-2 h-3 w-1/2" />{/if}
+							</td>
+						{/each}
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+		<!-- Narrow card: placeholder cards -->
+		<ul class="divide-y divide-gray-100 @4xl:hidden" aria-hidden="true">
+			{#each Array(3) as _}
+				<li class="space-y-2.5 p-4">
+					<div class="flex items-start justify-between gap-3">
+						<div class="flex-1 space-y-2">
+							<Skeleton class="h-4 w-1/2" />
+							<Skeleton class="h-3 w-3/4" />
+						</div>
+						<Skeleton class="h-5 w-20 rounded-full" />
+					</div>
+					<Skeleton class="h-3 w-2/3" />
+					<Skeleton class="h-3 w-1/3" />
+				</li>
+			{/each}
+		</ul>
+	</div>
+{/snippet}
+
 {#snippet itemList(items: { name: string; quantity: number }[])}
 	<ul class="space-y-0.5" title={itemsTooltip(items)}>
 		{#each items.slice(0, MAX_ITEMS_SHOWN) as item}
@@ -1289,7 +1362,11 @@
 			<div class="flex items-center justify-between gap-2">
 				<div class="min-w-0">
 					<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Total Walk-ins</p>
-					<p class="mt-1 text-xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">{walkInStats.total}</p>
+					{#if showWalkInSkeleton}
+						<Skeleton class="mt-2 h-7 w-12 sm:mt-3 sm:h-8" aria-hidden="true" />
+					{:else}
+						<p class="mt-1 text-xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">{walkInStats.total}</p>
+					{/if}
 				</div>
 				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 sm:h-12 sm:w-12">
 					<Users class="h-5 w-5 sm:h-6 sm:w-6" />
@@ -1309,7 +1386,11 @@
 			<div class="flex items-center justify-between gap-2">
 				<div class="min-w-0">
 					<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Active Walk-in Borrows</p>
-					<p class="mt-1 text-xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">{walkInStats.active}</p>
+					{#if showWalkInSkeleton}
+						<Skeleton class="mt-2 h-7 w-12 sm:mt-3 sm:h-8" aria-hidden="true" />
+					{:else}
+						<p class="mt-1 text-xl font-semibold text-gray-900 sm:mt-2 sm:text-3xl">{walkInStats.active}</p>
+					{/if}
 				</div>
 				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 sm:h-12 sm:w-12">
 					<Clock class="h-5 w-5 sm:h-6 sm:w-6" />
@@ -1368,7 +1449,14 @@
 					? 'border-red-600 text-red-600'
 					: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
 			>
-				Item Donations ({donations.length})
+				<span class="inline-flex items-center gap-1.5">
+					Item Donations
+					{#if showDonationSkeleton}
+						<Skeleton class="h-3.5 w-5" aria-hidden="true" />
+					{:else}
+						({donations.length})
+					{/if}
+				</span>
 			</button>
 		</nav>
 	</div>
@@ -1506,7 +1594,9 @@
 
 			<!-- Main list: fixed-width table on wide cards, stacked cards on narrow ones -->
 			<div class="@container overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs">
-				{#if displayWalkIns.length === 0}
+				{#if showWalkInSkeleton}
+					{@render tableSkeleton(walkInCols)}
+				{:else if displayWalkIns.length === 0}
 					<div class="py-12 text-center text-gray-400">
 						<Users size={32} class="mx-auto mb-2 text-gray-300" />
 						<p class="text-sm font-medium">No walk-in transactions found.</p>
@@ -1514,13 +1604,7 @@
 				{:else}
 					<table class="hidden w-full table-fixed text-left @4xl:table">
 						<colgroup>
-							{#if readOnly}
-								<col class="w-[16%]" /><col class="w-[28%]" /><col class="w-[11%]" />
-								<col class="w-[28%]" /><col class="w-[17%]" />
-							{:else}
-								<col class="w-[15%]" /><col class="w-[25%]" /><col class="w-[10%]" />
-								<col class="w-[24%]" /><col class="w-[14%]" /><col class="w-[12%]" />
-							{/if}
+							{#each walkInCols as width}<col class={width} />{/each}
 						</colgroup>
 						<thead
 							class="border-b border-gray-200 bg-gray-50 text-[11px] font-semibold tracking-wider text-gray-500 uppercase"
@@ -1829,13 +1913,8 @@
 
 			<!-- Main list: fixed-width table on wide cards, stacked cards on narrow ones -->
 			<div class="@container overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs">
-				{#if donationsLoading}
-					<div class="flex h-48 items-center justify-center">
-						<div class="flex flex-col items-center gap-2">
-							<div class="h-8 w-8 animate-spin rounded-full border-4 border-red-200 border-t-red-600"></div>
-							<p class="text-xs font-medium text-gray-500">Loading item donations...</p>
-						</div>
-					</div>
+				{#if showDonationSkeleton}
+					{@render tableSkeleton(DONATION_COLS)}
 				{:else if filteredDonations.length === 0}
 					<div class="py-16 text-center">
 						<Heart class="mx-auto h-12 w-12 text-red-500 fill-red-100" />
@@ -1849,8 +1928,7 @@
 				{:else}
 					<table class="hidden w-full table-fixed text-left text-sm text-gray-700 @4xl:table">
 						<colgroup>
-							<col class="w-[17%]" /><col class="w-[20%]" /><col class="w-[20%]" />
-							<col class="w-[9%]" /><col class="w-[14%]" /><col class="w-[20%]" />
+							{#each DONATION_COLS as width}<col class={width} />{/each}
 						</colgroup>
 						<thead
 							class="border-b border-gray-200 bg-gray-50 text-[11px] font-semibold tracking-wider text-gray-500 uppercase"

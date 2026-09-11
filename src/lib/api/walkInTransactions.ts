@@ -92,13 +92,35 @@ async function handleResponse<T>(response: Response): Promise<T> {
 	return payload;
 }
 
+// ─── In-memory list cache (stale-while-revalidate) ──────────────────────────
+// Lets the page render the last known list instantly on revisit while it
+// refreshes in the background. Lives until a full page reload.
+
+type ListParams = { status?: string; search?: string; limit?: number };
+
+let listCache: { key: string; unfiltered: boolean; data: WalkInsListResponse } | null = null;
+
+function listKey(params: ListParams): string {
+	return JSON.stringify({ status: params.status ?? '', search: params.search ?? '', limit: params.limit ?? 0 });
+}
+
+// Keep the remembered list in step with a local change. Filtered lists can't be
+// patched safely, so those are dropped and refetched next time.
+function patchCache(update: (list: WalkInTransactionRecord[]) => WalkInTransactionRecord[]): void {
+	if (!listCache) return;
+	if (!listCache.unfiltered) {
+		listCache = null;
+		return;
+	}
+	const walkIns = update(listCache.data.walkIns);
+	listCache = { ...listCache, data: { walkIns, total: walkIns.length } };
+}
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 export const walkInTransactionsAPI = {
 	/** List walk-in transactions (most recent first). */
-	async list(
-		params: { status?: string; search?: string; limit?: number } = {}
-	): Promise<WalkInsListResponse> {
+	async list(params: ListParams = {}): Promise<WalkInsListResponse> {
 		const searchParams = new URLSearchParams();
 		if (params.status) searchParams.set('status', params.status);
 		if (params.search) searchParams.set('search', params.search);
@@ -108,13 +130,22 @@ export const walkInTransactionsAPI = {
 			`/api/walk-in-transactions${query ? `?${query}` : ''}`,
 			getFetchOptions('GET')
 		);
-		return handleResponse<WalkInsListResponse>(res);
+		const data = await handleResponse<WalkInsListResponse>(res);
+		listCache = { key: listKey(params), unfiltered: !params.status && !params.search, data };
+		return data;
+	},
+
+	/** Last list fetched with these exact params, or null. Never hits the network. */
+	peekCachedList(params: ListParams = {}): WalkInsListResponse | null {
+		return listCache && listCache.key === listKey(params) ? listCache.data : null;
 	},
 
 	/** Record a new walk-in checkout. */
 	async create(payload: CreateWalkInInput): Promise<WalkInTransactionRecord> {
 		const res = await fetch('/api/walk-in-transactions', getFetchOptions('POST', payload));
-		return handleResponse<WalkInTransactionRecord>(res);
+		const created = await handleResponse<WalkInTransactionRecord>(res);
+		patchCache((list) => [created, ...list]);
+		return created;
 	},
 
 	/** Process a return / inspection for a walk-in transaction (by reference). */
@@ -126,6 +157,8 @@ export const walkInTransactionsAPI = {
 			`/api/walk-in-transactions/${encodeURIComponent(reference)}/return`,
 			getFetchOptions('POST', payload)
 		);
-		return handleResponse<WalkInTransactionRecord>(res);
+		const updated = await handleResponse<WalkInTransactionRecord>(res);
+		patchCache((list) => list.map((w) => (w.id === updated.id ? updated : w)));
+		return updated;
 	}
 };
