@@ -11,7 +11,13 @@
  * header row are skipped by the importer's header detection.
  */
 import type { InventoryItem } from '$lib/api/inventory';
-import { buildBrandedSheet, loadBrandLogos, saveWorkbook, type SectionSpec } from '$lib/utils/brandedExcel';
+import {
+	buildBrandedSheet,
+	loadBrandLogos,
+	saveWorkbook,
+	withFullSizeLogoBand,
+	type SectionSpec
+} from '$lib/utils/brandedExcel';
 
 export type InventorySheet = 'all-items' | 'items-tab' | 'required-tab';
 export type InventoryOptionalColumn = 'category' | 'specification' | 'tools' | 'image';
@@ -58,7 +64,11 @@ function columnsFor(optional: Set<string>, extra: ColumnDef[] = []): ColumnDef[]
 
 function toSpec(name: string, band: string, items: InventoryItem[], cols: ColumnDef[]): SectionSpec {
 	const all: ColumnDef[] = [{ header: '#', width: 6, value: () => '' }, ...cols];
-	const widths = all.map((c) => c.width);
+	// Widen Item Name (column B) if needed so the header seals show at full size.
+	const widths = withFullSizeLogoBand(
+		all.map((c) => c.width),
+		1
+	);
 	// The letterhead spans A–G (title in D–E, meta box in F–G): keep those
 	// columns wide enough for it even when few optional columns are selected.
 	for (let c = 3; c <= 6; c++) widths[c] = Math.max(widths[c] ?? 18, 17);

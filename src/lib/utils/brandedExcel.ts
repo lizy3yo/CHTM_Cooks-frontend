@@ -115,6 +115,19 @@ function colWidthPx(chars: number): number {
 	return Math.trunc(((256 * chars + Math.trunc(128 / maxDigitWidth)) / 256) * maxDigitWidth);
 }
 
+/**
+ * Widen `widths[growIndex]` (one of columns A–C) just enough that the three
+ * seals fit the logo band at full size instead of being shrunk to fit.
+ * Returns a new array; other columns are untouched.
+ */
+export function withFullSizeLogoBand(widths: number[], growIndex: number): number[] {
+	const out = [...widths];
+	const needPx = 3 * LOGO_MAX_PX + 2 * LOGO_GAP_PX + 2 * LOGO_EDGE_PX;
+	const bandPx = () => [0, 1, 2].reduce((sum, c) => sum + colWidthPx(out[c] ?? DEFAULT_COL_WIDTH), 0);
+	while (bandPx() < needPx) out[growIndex] = (out[growIndex] ?? DEFAULT_COL_WIDTH) + 1;
+	return out;
+}
+
 /** Row height (points) → pixels at 96 DPI. */
 function rowHeightPx(points: number): number {
 	return (points * 96) / 72;
