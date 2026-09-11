@@ -47,7 +47,7 @@
 	
 	// Pagination state
 	let currentPage = $state(1);
-	let itemsPerPage = $state(15);
+	const itemsPerPage = 10;
 
 	// Detailed student profile modal/drilldown state
 	let selectedStudentId = $state<string | null>(null);
@@ -479,6 +479,19 @@
 	const paginatedAdjustments = $derived(
 		filteredAdjustments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 	);
+
+	// Back to page 1 whenever the search or filters change.
+	$effect(() => {
+		searchQuery;
+		statusFilter;
+		locationFilter;
+		currentPage = 1;
+	});
+
+	// Keep the page in range if the data shrinks after a refresh.
+	$effect(() => {
+		if (currentPage > totalPages) currentPage = totalPages;
+	});
 
 	// Tabs for main view
 	type MainTab = 'requests' | 'items' | 'students' | 'adjustments';
