@@ -32,6 +32,7 @@
 	} from 'lucide-svelte';
 	import ActionMenu from '$lib/components/ui/ActionMenu.svelte';
 	import ExportModal from '$lib/components/custodian/ExportModal.svelte';
+	import { exportInventoryWorkbook } from '$lib/utils/inventoryExport';
 	import ItemBorrowersModal from '$lib/components/ui/ItemBorrowersModal.svelte';
 	import ReleasedItemsModal from '$lib/components/ui/ReleasedItemsModal.svelte';
 	import InventoryStockModal from '$lib/components/ui/InventoryStockModal.svelte';
@@ -1254,36 +1255,7 @@
 		exportAbortController = controller;
 		isExporting = true;
 		try {
-			const params = new URLSearchParams();
-			params.append('sheets', selections.sheets.join(','));
-			params.append('columns', selections.columns.join(','));
-			if (selections.categories.length > 0) {
-				params.append('categories', selections.categories.join(','));
-			}
-			if (selections.specifications.length > 0) {
-				params.append('specifications', selections.specifications.join(','));
-			}
-			if (selections.tools.length > 0) {
-				params.append('tools', selections.tools.join(','));
-			}
-
-			const response = await fetch(`/api/inventory/export?${params.toString()}`, {
-				signal: controller.signal
-			});
-
-			if (!response.ok) {
-				throw new Error('Failed to generate export');
-			}
-
-			const blob = await response.blob();
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = `chtm-cooks-inventory-${new Date().toISOString().slice(0, 10)}.xlsx`;
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
-			URL.revokeObjectURL(url);
+			await exportInventoryWorkbook(selections, controller.signal);
 
 			toastStore.success('Inventory export completed');
 			showExportModal = false;
