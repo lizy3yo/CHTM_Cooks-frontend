@@ -41,14 +41,14 @@
 	let activityLogs = $state<InventoryActivityLogEntry[]>(hasCachedData ? cachedStore!.activityLogs : []);
 	let activityTotal = $state(hasCachedData ? cachedStore!.activityTotal : 0);
 	let activityPage = $state(1);
-	let activityLimit = $state(50);
+	let activityLimit = $state(10); // Items per page
 	let activityLogsLoaded = $state(hasCachedData); // Track if activity logs have been loaded
 	
 	// Archived Items state
 	let archivedItems = $state<any[]>([]);
 	let archivedTotal = $state(0);
 	let archivedPage = $state(1);
-	let archivedLimit = $state(50);
+	let archivedLimit = $state(10); // Items per page
 	let archivedSearch = $state('');
 	let archivedLoaded = $state(false); // Track if archived items have been loaded
 	
@@ -56,7 +56,7 @@
 	let deletedItems = $state<DeletedItem[]>([]);
 	let deletedTotal = $state(0);
 	let deletedPage = $state(1);
-	let deletedLimit = $state(50);
+	let deletedLimit = $state(10); // Items per page
 	let deletedSearch = $state('');
 	let deletedLoaded = $state(false); // Track if deleted items have been loaded
 

@@ -55,7 +55,7 @@
 	const REQUESTS_PER_PAGE = 20;
 
 	// ─── Pagination ───────────────────────────────────────────────────────────
-	const ITEMS_PER_PAGE = 20;
+	const ITEMS_PER_PAGE = 10;
 	const SESSIONS_PER_PAGE = 10;
 	let currentPage = $state(1);
 

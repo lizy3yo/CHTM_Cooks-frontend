@@ -38,7 +38,7 @@
 	let activityLogs = $state<InventoryActivityLogEntry[]>(hasCachedData ? cachedStore!.activityLogs : []);
 	let activityTotal = $state(hasCachedData ? cachedStore!.activityTotal : 0);
 	let activityPage = $state(1);
-	let activityLimit = $state(50);
+	let activityLimit = $state(10); // Items per page
 	let activityLogsLoaded = $state(hasCachedData); // Track if activity logs have been loaded
 
 	// Filters for activity logs
@@ -53,7 +53,7 @@
 	let requestHistory = $state<any[]>([]);
 	let requestHistoryTotal = $state(0);
 	let requestHistoryPage = $state(1);
-	let requestHistoryLimit = $state(50);
+	let requestHistoryLimit = $state(10); // Items per page
 	let requestHistorySearch = $state('');
 	let requestHistoryLoaded = $state(false); // Track if request history has been loaded
 	let requestHistoryFilterStatus = $state('');
