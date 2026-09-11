@@ -9,6 +9,7 @@
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import { displayStatusKey } from '$lib/utils/statusDisplay';
+	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import {
 		Search, 
 		Filter, 
@@ -570,6 +571,63 @@
 	<title>Request & Borrow History - CHTM Cooks</title>
 </svelte:head>
 
+<!-- Row number badge (continues across pages) -->
+{#snippet rowNum(n: number)}
+	<span
+		class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gray-100 px-1.5 text-[10px] font-semibold text-gray-500 tabular-nums"
+		>{n}</span
+	>
+{/snippet}
+
+<!-- "46 request logs", or "12 of 46 request logs" when a search or filter is on -->
+{#snippet countBar(shown: number, total: number, singular: string, plural: string)}
+	<p class="text-sm text-gray-600" aria-live="polite">
+		{#if shown === total}
+			<span class="font-semibold text-gray-900">{total}</span>
+			{total === 1 ? singular : plural}
+		{:else}
+			<span class="font-semibold text-gray-900">{shown}</span> of {total}
+			{total === 1 ? singular : plural}
+		{/if}
+	</p>
+{/snippet}
+
+<!-- Placeholder rows shown while records load -->
+{#snippet tableSkeleton(cols: number, rows = 10)}
+	<div role="status" aria-label="Loading records">
+		<span class="sr-only">Loading records…</span>
+		<div class="flex h-12 items-center gap-6 border-b border-gray-200 bg-gray-50 px-6" aria-hidden="true">
+			{#each Array(cols) as _, c}
+				<Skeleton class="h-2.5 {c === 0 ? 'w-6' : 'w-20'}" />
+			{/each}
+		</div>
+		<div class="divide-y divide-gray-100" aria-hidden="true">
+			{#each Array(rows) as _}
+				<div class="flex items-center gap-6 px-6 py-4">
+					<Skeleton variant="circle" class="h-5 w-5 shrink-0" />
+					<div class="w-28 shrink-0 space-y-2">
+						<Skeleton class="h-3.5 w-20" />
+						<Skeleton class="h-2.5 w-24" />
+					</div>
+					<div class="flex min-w-0 flex-1 items-center gap-3">
+						<Skeleton variant="circle" class="h-9 w-9 shrink-0" />
+						<div class="min-w-0 flex-1 space-y-2">
+							<Skeleton class="h-3.5 w-2/5" />
+							<Skeleton class="h-2.5 w-3/5" />
+						</div>
+					</div>
+					<div class="hidden w-40 shrink-0 space-y-2 md:block">
+						<Skeleton class="h-3 w-32" />
+						<Skeleton class="h-3 w-24" />
+					</div>
+					<Skeleton class="hidden h-5 w-24 shrink-0 rounded-full sm:block" />
+					<Skeleton class="hidden h-3.5 w-20 shrink-0 lg:block" />
+				</div>
+			{/each}
+		</div>
+	</div>
+{/snippet}
+
 <div class="space-y-6">
 	<!-- Top Navigation Header -->
 	<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -600,10 +658,33 @@
 	</div>
 
 	{#if loading}
-		<div class="flex h-64 items-center justify-center rounded-xl bg-white shadow-sm">
-			<div class="flex flex-col items-center gap-3">
-				<div class="h-10 w-10 animate-spin rounded-full border-4 border-pink-200 border-t-pink-600"></div>
-				<p class="text-sm font-semibold text-gray-500">Loading history logs...</p>
+		<!-- Skeleton of the tabs, filters and table while history loads -->
+		<div class="space-y-6">
+			<div class="border-b border-gray-200">
+				<nav class="-mb-px flex gap-6" aria-hidden="true">
+					{#each ['Request Logs', 'Requested Items', 'Students Directory', 'Item Adjustments'] as label, i}
+						<span
+							class="inline-flex items-center gap-1.5 border-b-2 pb-4 text-sm font-semibold {i === 0
+								? 'border-pink-500 text-pink-600'
+								: 'border-transparent text-gray-400'}"
+						>
+							{label}
+							<Skeleton class="h-3.5 w-6" />
+						</span>
+					{/each}
+				</nav>
+			</div>
+
+			<div class="grid grid-cols-1 gap-4 md:grid-cols-12" aria-hidden="true">
+				<Skeleton class="h-10 rounded-lg md:col-span-6" />
+				<Skeleton class="h-10 rounded-lg md:col-span-3" />
+				<Skeleton class="h-10 rounded-lg md:col-span-3" />
+			</div>
+
+			<Skeleton class="h-4 w-40" aria-hidden="true" />
+
+			<div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xs">
+				{@render tableSkeleton(6)}
 			</div>
 		</div>
 	{:else}
@@ -694,6 +775,7 @@
 										<table class="w-full text-sm">
 											<thead>
 												<tr class="border-b border-gray-200 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">
+													<th class="w-10 pb-3 pl-2 text-center">#</th>
 													<th class="pb-3 pl-2">Item</th>
 													<th class="pb-3">Category</th>
 													<th class="pb-3 text-center">Total Quantity Requested</th>
@@ -701,8 +783,9 @@
 												</tr>
 											</thead>
 											<tbody class="divide-y divide-gray-100">
-												{#each studentAllItemsList as item}
+												{#each studentAllItemsList as item, i}
 													<tr class="hover:bg-gray-50/50 transition-colors">
+														<td class="py-3.5 pl-2 text-center">{@render rowNum(i + 1)}</td>
 														<td class="py-3.5 pl-2">
 															<div class="flex items-center gap-3">
 																{#if item.picture}
@@ -730,12 +813,13 @@
 									<p class="text-center text-sm text-gray-500 py-12">No requests logged.</p>
 								{:else}
 									<div class="space-y-4">
-										{#each selectedStudent.requests as req}
+										{#each selectedStudent.requests as req, i}
 											<div class="rounded-xl border border-gray-100 bg-gray-50 p-4 transition-all hover:bg-gray-100/50">
 												<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-													<div>
+													<div class="flex items-center gap-2">
+														{@render rowNum(i + 1)}
 														<span class="font-mono text-xs font-bold text-pink-600">REQ-{req.id.slice(-6).toUpperCase()}</span>
-														<span class="ml-2 text-xs text-gray-500">{formatTimestamp(req.createdAt)}</span>
+														<span class="text-xs text-gray-500">{formatTimestamp(req.createdAt)}</span>
 													</div>
 													<div>
 														{@html getStatusBadge(req.status)}
@@ -936,11 +1020,16 @@
 						</button>
 						<button
 							onclick={() => { activeMainTab = 'adjustments'; currentPage = 1; void fetchAdjustments(); }}
-							class="border-b-2 pb-4 text-sm font-semibold transition-all {activeMainTab === 'adjustments'
+							class="inline-flex items-center gap-1.5 border-b-2 pb-4 text-sm font-semibold transition-all {activeMainTab === 'adjustments'
 								? 'border-pink-500 text-pink-600'
 								: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}"
 						>
-							Item Adjustments ({adjustments.length})
+							Item Adjustments
+							{#if adjustmentsLoading && adjustments.length === 0}
+								<Skeleton class="h-3.5 w-6" aria-hidden="true" />
+							{:else}
+								({adjustments.length})
+							{/if}
 						</button>
 					</nav>
 				</div>
@@ -999,6 +1088,19 @@
 					{/if}
 				</div>
 
+				<!-- Total for the active tab -->
+				{#if activeMainTab === 'requests'}
+					{@render countBar(filteredRequests.length, requests.length, 'request log', 'request logs')}
+				{:else if activeMainTab === 'items'}
+					{@render countBar(filteredRequestedItems.length, itemsDirectory.length, 'requested item', 'requested items')}
+				{:else if activeMainTab === 'students'}
+					{@render countBar(filteredStudents.length, studentDirectory.length, 'student', 'students')}
+				{:else if adjustmentsLoading && adjustments.length === 0}
+					<Skeleton class="h-4 w-40" aria-hidden="true" />
+				{:else}
+					{@render countBar(filteredAdjustments.length, adjustments.length, 'adjustment log', 'adjustment logs')}
+				{/if}
+
 				<!-- Content Card -->
 				<div class="rounded-2xl border border-gray-200 bg-white shadow-xs overflow-hidden" data-tour="history-table">
 					{#if activeMainTab === 'requests'}
@@ -1014,6 +1116,7 @@
 								<table class="w-full text-sm">
 									<thead>
 										<tr class="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+											<th class="w-12 py-4 pl-6 pr-2 text-center">#</th>
 											<th class="px-6 py-4">Request ID</th>
 											<th class="px-6 py-4">Student</th>
 											<th class="px-6 py-4">Items Requested</th>
@@ -1023,8 +1126,9 @@
 										</tr>
 									</thead>
 									<tbody class="divide-y divide-gray-100">
-										{#each paginatedRequests as req}
+										{#each paginatedRequests as req, i}
 											<tr class="hover:bg-gray-50/50 transition-colors">
+												<td class="py-4 pl-6 pr-2 text-center">{@render rowNum((currentPage - 1) * itemsPerPage + i + 1)}</td>
 												<!-- ID -->
 												<td class="px-6 py-4 whitespace-nowrap">
 													<span class="font-mono text-xs font-bold text-pink-600">REQ-{req.id.slice(-6).toUpperCase()}</span>
@@ -1108,6 +1212,7 @@
 								<table class="w-full text-sm">
 									<thead>
 										<tr class="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+											<th class="w-12 py-4 pl-6 pr-2 text-center">#</th>
 											<th class="px-6 py-4">Item</th>
 											<th class="px-6 py-4">Category</th>
 											<th class="px-6 py-4 text-center">Total Quantity Requested</th>
@@ -1117,8 +1222,9 @@
 										</tr>
 									</thead>
 									<tbody class="divide-y divide-gray-100">
-										{#each paginatedItems as item}
+										{#each paginatedItems as item, i}
 											<tr class="hover:bg-gray-50/50 transition-colors">
+												<td class="py-4 pl-6 pr-2 text-center">{@render rowNum((currentPage - 1) * itemsPerPage + i + 1)}</td>
 												<td class="px-6 py-4 whitespace-nowrap">
 													<button 
 														onclick={() => viewItemDetail(item.itemId)}
@@ -1168,6 +1274,7 @@
 								<table class="w-full text-sm">
 									<thead>
 										<tr class="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+											<th class="w-12 py-4 pl-6 pr-2 text-center">#</th>
 											<th class="px-6 py-4">Student</th>
 											<th class="px-6 py-4">Year & Block</th>
 											<th class="px-6 py-4 text-center">Total Requests</th>
@@ -1176,8 +1283,9 @@
 										</tr>
 									</thead>
 									<tbody class="divide-y divide-gray-100">
-										{#each paginatedStudents as s}
+										{#each paginatedStudents as s, i}
 											<tr class="hover:bg-gray-50/50 transition-colors">
+												<td class="py-4 pl-6 pr-2 text-center">{@render rowNum((currentPage - 1) * itemsPerPage + i + 1)}</td>
 												<!-- Student info -->
 												<td class="px-6 py-4 whitespace-nowrap">
 													<div class="flex items-center gap-3">
@@ -1229,7 +1337,9 @@
 						{/if}
 					{:else if activeMainTab === 'adjustments'}
 						<!-- ITEM ADJUSTMENTS AUDIT TRAIL TAB -->
-						{#if paginatedAdjustments.length === 0}
+						{#if adjustmentsLoading && adjustments.length === 0}
+							{@render tableSkeleton(8)}
+						{:else if paginatedAdjustments.length === 0}
 							<div class="rounded-xl border border-gray-200 bg-white p-12 text-center shadow-xs">
 								<Sliders size={36} class="mx-auto mb-3 text-gray-300" />
 								<h3 class="text-sm font-semibold text-gray-900">No Item Adjustment Logs</h3>
@@ -1240,6 +1350,7 @@
 								<table class="w-full text-left text-sm text-gray-700">
 									<thead class="bg-gray-50 text-xs font-semibold tracking-wider text-gray-500 uppercase border-b border-gray-200">
 										<tr>
+											<th class="w-12 py-3.5 pl-6 pr-2 text-center">#</th>
 											<th class="px-6 py-3.5">Log ID / Ref</th>
 											<th class="px-6 py-3.5">Equipment / Item</th>
 											<th class="px-6 py-3.5">Adjustment Type</th>
@@ -1250,8 +1361,9 @@
 										</tr>
 									</thead>
 									<tbody class="divide-y divide-gray-100">
-										{#each paginatedAdjustments as adj}
+										{#each paginatedAdjustments as adj, i}
 											<tr class="transition-colors hover:bg-gray-50/50">
+												<td class="py-4 pl-6 pr-2 text-center">{@render rowNum((currentPage - 1) * itemsPerPage + i + 1)}</td>
 												<td class="px-6 py-4 font-mono text-xs font-bold text-pink-600">
 													{adj.id.slice(0, 10).toUpperCase()}
 												</td>
