@@ -60,7 +60,7 @@
 	let actionInFlightById = $state<Record<string, boolean>>({});
 
 	let requests = $state<any[]>([]);
-	let pagination = $state({ page: 1, limit: 20, total: 0, totalPages: 1 });
+	let pagination = $state({ page: 1, limit: 10, total: 0, totalPages: 1 });
 	let loading = $state(true);
 	let cardsLoading = $state(true);
 	let allLoading = $state(true);

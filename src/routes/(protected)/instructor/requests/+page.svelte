@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { replaceState, afterNavigate } from '$app/navigation';
@@ -16,6 +16,7 @@
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import ActionMenu from '$lib/components/ui/ActionMenu.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import { CheckCircle2 as ApproveIcon, XCircle as RejectIcon } from 'lucide-svelte';
 	import RequestDetailModal from '$lib/components/instructor/RequestDetailModal.svelte';
 	import {
@@ -48,7 +49,14 @@
 	let searchQuery = $state('');
 	let sortBy = $state<'date' | 'student' | 'status'>('date');
 	let viewMode = $state<'list' | 'card'>('list');
-	const cachedRequests = browser ? borrowRequestsAPI.peekCachedList({}) : null;
+
+	// Filtering and paging happen client-side, so fetch every request.
+	// Without an explicit limit the API returns only the newest 20.
+	const LIST_PARAMS = { limit: 1000 };
+	const PAGE_SIZE = 10;
+	let currentPage = $state(1);
+
+	const cachedRequests = browser ? borrowRequestsAPI.peekCachedList(LIST_PARAMS) : null;
 	const hasCachedData = cachedRequests && cachedRequests.requests.length > 0;
 
 	let requests = $state<any[]>([]);
@@ -66,7 +74,7 @@
 		const loadId = ++inFlightLoadId;
 		try {
 			// Step 1: Load cards (and parallel fetch classCodes, catalog items)
-			const listPromise = borrowRequestsAPI.list({}, { forceRefresh });
+			const listPromise = borrowRequestsAPI.list(LIST_PARAMS, { forceRefresh });
 			const catalogPromise = catalogAPI.getCatalog({ availability: 'all', limit: 300 });
 
 			const results = await Promise.allSettled([listPromise, catalogPromise]);
@@ -343,7 +351,7 @@
 	async function loadRequests(forceRefresh = false, background = false): Promise<void> {
 		if (background) {
 			try {
-				const response = await borrowRequestsAPI.list({}, { forceRefresh });
+				const response = await borrowRequestsAPI.list(LIST_PARAMS, { forceRefresh });
 				requests = response.requests.map(mapRequest);
 				await backfillItemPictures();
 				await backfillClassCodes();
@@ -422,7 +430,13 @@
 		activeTab = target.status;
 		highlightedRequestId = rawId;
 
-		setTimeout(() => {
+		setTimeout(async () => {
+			// The tab switch resets to page 1; jump to the page that holds this row.
+			const index = filteredRequests.findIndex((r) => r.rawId === rawId);
+			if (index >= 0) {
+				currentPage = Math.floor(index / PAGE_SIZE) + 1;
+				await tick();
+			}
 			const el = document.querySelector(`[data-request-id="${rawId}"]`);
 			if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 			setTimeout(() => {
@@ -488,7 +502,7 @@
 		}
 
 		// Cache-first: render instantly from cache if available, then revalidate in background.
-		const cached = borrowRequestsAPI.peekCachedList({});
+		const cached = borrowRequestsAPI.peekCachedList(LIST_PARAMS);
 		if (cached) {
 			requests = cached.requests.map(mapRequest);
 			loading = false;
@@ -567,6 +581,29 @@
 				return a.status.localeCompare(b.status);
 			})
 	);
+
+	const totalPages = $derived(Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE)));
+
+	const paginatedRequests = $derived(
+		filteredRequests.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+	);
+
+	// Back to page 1 whenever the filters, search, sort, or view change.
+	$effect(() => {
+		activeTab;
+		historySubTab;
+		overdueOnly;
+		searchQuery;
+		sortBy;
+		viewMode;
+		currentPage = 1;
+	});
+
+	// Keep the page in range when requests disappear (approved, rejected, refreshed).
+	$effect(() => {
+		if (currentPage > totalPages) currentPage = totalPages;
+		if (currentPage < 1) currentPage = 1;
+	});
 
 	type WorkflowFilter = 'all' | 'pending' | 'fulfillment' | 'borrowed' | 'overdue' | 'unresolved' | 'resolved_completed' | 'cancelled';
 	
@@ -696,7 +733,8 @@
 	}
 
 	function toggleSelectAllVisiblePendingRequests(): void {
-		const visiblePendingIds = filteredRequests.map((request) => request.rawId);
+		// "Visible" means the rows on the current page.
+		const visiblePendingIds = paginatedRequests.map((request) => request.rawId);
 		const allSelected =
 			visiblePendingIds.length > 0 &&
 			visiblePendingIds.every((id) => selectedRequests.includes(id));
@@ -1358,8 +1396,8 @@
 					{#if activeTab === 'pending'}
 						<input
 							type="checkbox"
-							checked={filteredRequests.length > 0 &&
-								filteredRequests.every((r) => selectedRequests.includes(r.rawId))}
+							checked={paginatedRequests.length > 0 &&
+								paginatedRequests.every((r) => selectedRequests.includes(r.rawId))}
 							onchange={toggleSelectAllVisiblePendingRequests}
 							class="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-600"
 							aria-label="Select all"
@@ -1595,7 +1633,7 @@
 				{#if viewMode === 'card'}
 					<div style="min-height: 600px;">
 						<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" style="align-content: start;">
-							{#each filteredRequests as request}
+							{#each paginatedRequests as request}
 								<!-- svelte-ignore a11y_click_events_have_key_events -->
 								<!-- svelte-ignore a11y_no_static_element_interactions -->
 								<div
@@ -1762,8 +1800,8 @@
 									{#if activeTab === 'pending'}
 										<input
 											type="checkbox"
-											checked={filteredRequests.length > 0 &&
-												filteredRequests.every((r) => selectedRequests.includes(r.rawId))}
+											checked={paginatedRequests.length > 0 &&
+												paginatedRequests.every((r) => selectedRequests.includes(r.rawId))}
 											onchange={toggleSelectAllVisiblePendingRequests}
 											class="h-4 w-4 rounded border-gray-300 text-pink-600 shadow-sm focus:border-pink-500 focus:ring-pink-500"
 											aria-label="Select all"
@@ -1778,7 +1816,7 @@
 								<span class="text-right">Actions</span>
 							</div>
 							<div class="divide-y divide-gray-100">
-								{#each filteredRequests as request, i}
+								{#each paginatedRequests as request, i}
 									<!-- svelte-ignore a11y_click_events_have_key_events -->
 									<!-- svelte-ignore a11y_no_static_element_interactions -->
 									<div
@@ -1811,7 +1849,7 @@
 										<div class="hidden items-center justify-center pt-0.5 md:flex">
 											<span
 												class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-500"
-												>{i + 1}</span
+												>{(currentPage - 1) * PAGE_SIZE + i + 1}</span
 											>
 										</div>
 
@@ -1947,6 +1985,19 @@
 							</div>
 						</div>
 					</div>
+				{/if}
+
+				{#if totalPages > 1}
+					<Pagination
+						{currentPage}
+						{totalPages}
+						totalItems={filteredRequests.length}
+						itemsPerPage={PAGE_SIZE}
+						onPageChange={(p) => {
+							currentPage = p;
+						}}
+						class="mt-4"
+					/>
 				{/if}
 			{:else}
 				<!-- Completely empty state -->

@@ -39,8 +39,12 @@
 	let showObligationModal = $state(false);
 	let resolvingRequestId = $state<string | null>(null);
 
+	// Filtering and paging happen client-side, so fetch every request.
+	// Without an explicit limit the API returns only the newest 20.
+	const LIST_PARAMS = { limit: 1000 };
+
 	// Check for cached data before mounting to avoid unnecessary loading states
-	const cachedRequests = browser ? borrowRequestsAPI.peekCachedList({}) : null;
+	const cachedRequests = browser ? borrowRequestsAPI.peekCachedList(LIST_PARAMS) : null;
 	const hasCachedData = cachedRequests && cachedRequests.requests.length > 0;
 
 	let requests = $state<any[]>([]);
@@ -61,7 +65,7 @@
 		const loadId = ++inFlightLoadId;
 		try {
 			// Step 1: Load cards (and parallel fetch classCodes, reconcile replacement obligations, catalog items)
-			const listPromise = borrowRequestsAPI.list({}, { forceRefresh });
+			const listPromise = borrowRequestsAPI.list(LIST_PARAMS, { forceRefresh });
 			const catalogPromise = catalogAPI.getCatalog({ availability: 'all', limit: 300 });
 			const reconcilePromise = replacementObligationsAPI.reconcile();
 
@@ -145,7 +149,7 @@
 			}
 		}
 	}
-	const PAGE_SIZE_CARD = 5; // Card view - max 5 cards
+	const PAGE_SIZE_CARD = 10; // Card view - max 10 cards
 	const PAGE_SIZE_LIST = 10; // List view - max 10 items
 	const PAGE_SIZE = $derived(viewMode === 'card' ? PAGE_SIZE_CARD : PAGE_SIZE_LIST);
 	let currentPage = $state(1);
