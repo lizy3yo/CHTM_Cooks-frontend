@@ -64,9 +64,9 @@ export function fmtDate(iso?: string | null, withTime = false): string {
 // real pixels and written as native EMU offsets: ExcelJS's fractional
 // `{ col, row }` anchors scale offsets by width × 10000 rather than real EMUs,
 // which is what left the logos hugging the left edge of uneven columns.
-const LOGO_MAX_PX = 74; // logo height (and max width)
-const LOGO_GAP_PX = 18; // space between neighbouring logos
-const LOGO_EDGE_PX = 8; // minimum space from the band's edges
+const LOGO_MAX_PX = 124; // logo height (and max width); header rows 2–5 are ~181px tall
+const LOGO_GAP_PX = 20; // space between neighbouring logos
+const LOGO_EDGE_PX = 14; // minimum space from the band's edges
 const EMU_PER_PX = 9525;
 const DEFAULT_COL_WIDTH = 18; // matches the column-width fallback in buildSheet
 
