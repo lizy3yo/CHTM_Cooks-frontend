@@ -23,6 +23,11 @@ export interface CatalogFilters {
 	sortBy?: 'name' | 'category' | 'availability' | 'recent' | 'updated';
 	page?: number;
 	limit?: number;
+	/**
+	 * Calendar days (YYYY-MM-DD) to compute per-date availability for. Each item
+	 * comes back with an `availability` map keyed by these days.
+	 */
+	dates?: string[];
 }
 
 export interface CatalogResponse {
@@ -75,6 +80,7 @@ function buildCatalogQuery(filters: CatalogFilters = {}): string {
 	if (filters.sortBy) params.set('sortBy', filters.sortBy);
 	if (filters.page) params.set('page', filters.page.toString());
 	if (filters.limit) params.set('limit', filters.limit.toString());
+	if (filters.dates && filters.dates.length > 0) params.set('dates', filters.dates.join(','));
 
 	return params.toString();
 }

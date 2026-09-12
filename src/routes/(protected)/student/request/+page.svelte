@@ -4,7 +4,11 @@
 	import { page } from '$app/stores';
 	import { get } from 'svelte/store';
 	import { catalogAPI, type CatalogItem } from '$lib/api/catalog';
-	import { subscribeToInventoryChanges, type InventoryRealtimeEvent } from '$lib/api/inventory';
+	import {
+		subscribeToInventoryChanges,
+		type InventoryRealtimeEvent,
+		type DayAvailability
+	} from '$lib/api/inventory';
 	import { subscribeToCartUpdates } from '$lib/api/cartStream';
 	import { borrowRequestsAPI } from '$lib/api/borrowRequests';
 	import { replacementObligationsAPI } from '$lib/api/replacementObligations';
@@ -35,6 +39,12 @@
 		location?: string;
 		isrequired?: boolean;
 		maxQuantityPerRequest?: number;
+		/**
+		 * Free/delayed counts for each bookable day, keyed YYYY-MM-DD. `available`
+		 * above is the best of these days, so an item still shows up when it is
+		 * free on one of them.
+		 */
+		availability?: Record<string, DayAvailability>;
 	}
 
 	interface SelectedRequestItem extends RequestItemOption {
@@ -463,6 +473,21 @@
 					'Same-day requests are not allowed — choose a date from tomorrow onward';
 			else if (borrowDate > maximumBorrowDate)
 				stepErrors.borrowDate = 'Borrow date must be within the next 2 days';
+			else {
+				// Stock was picked against the best of both days; now that a day is
+				// chosen, re-check every line against that day specifically.
+				const shortfalls = selectedItems.filter(
+					(item) => !item.isrequired && item.requestedQuantity > freeOn(item, borrowDate)
+				);
+
+				if (shortfalls.length > 0) {
+					stepErrors.borrowDate =
+						`Not enough stock on ${shortDayLabel(borrowDate)}: ` +
+						shortfalls
+							.map((i) => `${i.name} (${freeOn(i, borrowDate)} free, you need ${i.requestedQuantity})`)
+							.join(', ');
+				}
+			}
 			if (!borrowTime) stepErrors.borrowTime = 'Borrow time is required';
 			if (!returnTime) stepErrors.returnTime = 'Return time is required';
 			if (borrowTime && returnTime) {
@@ -551,6 +576,44 @@
 	// borrow date is tomorrow.
 	const minimumBorrowDate = addDaysToDateInput(today, 1);
 	const maximumBorrowDate = addDaysToDateInput(today, 2);
+
+	/** The only two days a student can book, oldest first. */
+	const bookableDates = [minimumBorrowDate, maximumBorrowDate];
+
+	/**
+	 * Best free count across the bookable days. Used as the selection ceiling so
+	 * an item still appears when it is free on one day but taken on the other;
+	 * the exact day is checked again once the student picks a date.
+	 */
+	function bestAvailability(
+		availability: Record<string, DayAvailability> | undefined,
+		fallback: number
+	): number {
+		if (!availability) return fallback;
+
+		const counts = bookableDates.map((date) => availability[date]?.free ?? 0);
+		return counts.length > 0 ? Math.max(...counts) : fallback;
+	}
+
+	/** Free units of an item on one specific day. */
+	function freeOn(item: { availability?: Record<string, DayAvailability>; available: number }, date: string): number {
+		if (!item.availability) return item.available;
+		return item.availability[date]?.free ?? 0;
+	}
+
+	/** Units overdue from an earlier booking that may not return in time. */
+	function delayedFor(item: { availability?: Record<string, DayAvailability> }, date: string): number {
+		return item.availability?.[date]?.delayed ?? 0;
+	}
+
+	function shortDayLabel(dateValue: string): string {
+		const [year, month, day] = dateValue.split('-').map(Number);
+		return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+			weekday: 'short',
+			month: 'short',
+			day: 'numeric'
+		});
+	}
 
 	let showDatePicker = $state(false);
 	let currentCalendarMonth = $state(new Date());
@@ -876,7 +939,10 @@
 					availability: 'all',
 					sortBy: 'name',
 					page: 1,
-					limit: 1000
+					limit: 1000,
+					// Only two days can ever be booked, so ask for both up front and
+					// show the student each one before they commit to a date.
+					dates: bookableDates
 				},
 				{
 					forceRefresh: options?.forceRefresh ?? false
@@ -884,20 +950,25 @@
 			);
 
 			// Separate required items from regular items
-			const allItems = response.items.map((item) => ({
-				id: item.id,
-				name: item.name,
-				code: buildItemCode(item),
-				image: inferItemIcon(item.name),
-				picture: item.picture,
-				category: item.category || 'Uncategorized',
-				available: availableQuantityForItem(item),
-				specification: item.specification || 'No specification provided',
-				status: item.status,
-				location: (item as any).location,
-				isrequired: (item as any).isrequired || false,
-				maxQuantityPerRequest: item.maxQuantityPerRequest
-			}));
+			const allItems = response.items.map((item) => {
+				const availability = item.availability ?? undefined;
+
+				return {
+					id: item.id,
+					name: item.name,
+					code: buildItemCode(item),
+					image: inferItemIcon(item.name),
+					picture: item.picture,
+					category: item.category || 'Uncategorized',
+					available: bestAvailability(availability, availableQuantityForItem(item)),
+					specification: item.specification || 'No specification provided',
+					status: item.status,
+					location: (item as any).location,
+					isrequired: (item as any).isrequired || false,
+					maxQuantityPerRequest: item.maxQuantityPerRequest,
+					availability
+				};
+			});
 
 			// Filter required items (always show, even if quantity is 0)
 			requiredItems = allItems.filter((item) => item.isrequired === true);
@@ -2300,6 +2371,27 @@
 																		</span>
 																	{/if}
 																</div>
+																<!-- Per-day availability: stock differs between the two bookable
+																     days, so show both before a date is chosen. -->
+																{#if item.availability}
+																	<div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+																		{#each bookableDates as day}
+																			{@const free = freeOn(item, day)}
+																			{@const delayed = delayedFor(item, day)}
+																			<span class="text-[10px] font-medium text-gray-600">
+																				{shortDayLabel(day)}
+																				<span class={free > 0 ? "font-bold text-emerald-700" : "font-bold text-red-600"}>
+																					{free} free
+																				</span>
+																				{#if delayed > 0}
+																					<span class="font-semibold text-amber-600">
+																						· {delayed} may be delayed
+																					</span>
+																				{/if}
+																			</span>
+																		{/each}
+																	</div>
+																{/if}
 															</div>
 
 															<!-- Add Icon -->

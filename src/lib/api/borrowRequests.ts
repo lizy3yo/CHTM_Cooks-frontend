@@ -114,6 +114,27 @@ export interface BorrowRequestRecord {
 	updatedAt: string;
 }
 
+/** One line of a request, measured against its booked day. */
+export interface RequestAvailabilityLine {
+	itemId: string;
+	name: string;
+	/** How many this request asks for. */
+	requested: number;
+	/** How many are still free that day, excluding this request. */
+	free: number;
+	/** Total units the school owns. */
+	owned: number;
+	/** Units overdue from an earlier booking — may not return in time. */
+	delayed: number;
+	/** Required items are always issued, stock notwithstanding. */
+	isRequired: boolean;
+}
+
+export interface RequestAvailabilityResponse {
+	date: string | null;
+	items: RequestAvailabilityLine[];
+}
+
 export interface BorrowRequestListResponse {
 	requests: BorrowRequestRecord[];
 	total: number;
@@ -369,6 +390,18 @@ export const borrowRequestsAPI = {
 		invalidateAllCaches();
 		setCache(detailCache, id, data);
 		return data;
+	},
+
+	/**
+	 * Per-item availability on this request's booked day. Lets an approver see
+	 * what approving would commit before they commit it.
+	 */
+	async availability(id: string): Promise<RequestAvailabilityResponse> {
+		const response = await fetch(
+			`/api/borrow-requests/${id}/availability`,
+			getFetchOptions('GET')
+		);
+		return handleResponse<RequestAvailabilityResponse>(response);
 	},
 
 	async release(id: string): Promise<BorrowRequestRecord> {

@@ -108,6 +108,27 @@
 	let inFlightLoadId = 0;
 	let firstPageResponse: any = null;
 
+	// Shelf stock answers "what is here now", not "what is free on Thursday".
+	// Picking a day re-reads the list with per-date figures attached.
+	let availabilityDate = $state('');
+
+	function freeOnSelectedDate(item: InventoryItem): number | null {
+		if (!availabilityDate) return null;
+		return item.availability?.[availabilityDate]?.free ?? null;
+	}
+
+	function delayedOnSelectedDate(item: InventoryItem): number {
+		if (!availabilityDate) return 0;
+		return item.availability?.[availabilityDate]?.delayed ?? 0;
+	}
+
+	async function applyAvailabilityDate(value: string): Promise<void> {
+		availabilityDate = value;
+		inventoryStore.invalidateAll();
+		inventoryItemsAPI.invalidateCache();
+		await loadInventoryProgressive(true);
+	}
+
 	async function fetchItemsPage(page: number, forceRefresh: boolean) {
 		const cacheValid = inventoryStore.isItemsCacheValid();
 		if (!forceRefresh && cacheValid && page === 1) {
@@ -127,7 +148,8 @@
 			page,
 			limit: INVENTORY_FETCH_PAGE_SIZE,
 			includeArchived: true,
-			forceRefresh
+			forceRefresh,
+			dates: availabilityDate ? [availabilityDate] : undefined
 		});
 
 		if (page === 1) {
@@ -4241,6 +4263,32 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 								</div>
 							</div>
 
+							<!-- Availability date: shelf stock cannot say what is free on a
+							     future day, so allow checking one. -->
+							<div class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-2">
+								<label for="availabilityDate" class="text-xs font-semibold text-gray-600">
+									Show availability for
+								</label>
+								<input
+									id="availabilityDate"
+									type="date"
+									value={availabilityDate}
+									onchange={(e) => applyAvailabilityDate(e.currentTarget.value)}
+									class="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 shadow-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
+								/>
+								{#if availabilityDate}
+									<button
+										type="button"
+										onclick={() => applyAvailabilityDate('')}
+										class="rounded-lg px-2 py-1 text-xs font-semibold text-pink-600 hover:bg-pink-50"
+									>
+										Clear
+									</button>
+								{:else}
+									<span class="text-xs text-gray-500">Showing stock on hand right now</span>
+								{/if}
+							</div>
+
 							<!-- 2. Three Column Dropdowns -->
 							<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
 								<!-- Category Selector -->
@@ -4688,6 +4736,26 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 													>
 														{item.released ?? 0}
 													</button>
+													<!-- Free on the chosen day, which differs from shelf stock. -->
+													{#if freeOnSelectedDate(item) !== null}
+														{@const free = freeOnSelectedDate(item)}
+														{@const delayed = delayedOnSelectedDate(item)}
+														<span class="text-gray-300">|</span>
+														<span
+															class="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-semibold ring-1 {free && free > 0 ? 'bg-indigo-50 text-indigo-700 ring-indigo-600/10' : 'bg-red-50 text-red-700 ring-red-600/10'}"
+															title="Free on the selected date"
+														>
+															{free} free
+														</span>
+														{#if delayed > 0}
+															<span
+																class="inline-flex items-center rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-600/10"
+																title="Overdue from an earlier booking - may not return in time"
+															>
+																{delayed} late
+															</span>
+														{/if}
+													{/if}
 												</div>
 											</td>
 

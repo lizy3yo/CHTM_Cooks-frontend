@@ -1,7 +1,11 @@
 <script lang="ts">
 import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 import type { ClassCodeResponse } from '$lib/api/classCodes';
-import type { BorrowRequestStatus } from '$lib/api/borrowRequests';
+import {
+	borrowRequestsAPI,
+	type BorrowRequestStatus,
+	type RequestAvailabilityLine
+} from '$lib/api/borrowRequests';
 
 interface Props {
 	request: any;
@@ -28,6 +32,44 @@ let {
 	getStatusLabel,
 	getStatusColor
 }: Props = $props();
+
+// Stock is judged per booked day, not by today's shelf count, so the approver
+// sees what approving would actually commit.
+let availabilityLines = $state<RequestAvailabilityLine[]>([]);
+let bookedDayLabel = $state('');
+
+$effect(() => {
+	const rawId = request?.rawId;
+	if (!rawId) return;
+
+	let cancelled = false;
+
+	borrowRequestsAPI
+		.availability(rawId)
+		.then((result) => {
+			if (cancelled) return;
+			availabilityLines = result.items;
+			bookedDayLabel = result.date
+				? new Date(`${result.date}T00:00:00`).toLocaleDateString('en-US', {
+						month: 'short',
+						day: 'numeric'
+					})
+				: '';
+		})
+		.catch(() => {
+			// Availability is advisory here — the approve call re-checks server-side,
+			// so a failure should not block the modal.
+			if (!cancelled) availabilityLines = [];
+		});
+
+	return () => {
+		cancelled = true;
+	};
+});
+
+function availabilityFor(itemId: string): RequestAvailabilityLine | undefined {
+	return availabilityLines.find((line) => line.itemId === itemId);
+}
 </script>
 
 <div class="fixed inset-0 z-50 overflow-y-auto">
@@ -255,6 +297,7 @@ let {
 							<div class="divide-y divide-gray-100">
 								{#each request.items as item}
 									{@const pic = item.picture ?? itemPictureCache.get(item.itemId)}
+									{@const line = availabilityFor(item.itemId)}
 									<div class="grid items-center gap-3 bg-white p-3 sm:grid-cols-12 sm:p-4 transition-colors hover:bg-gray-50/50">
 										<!-- Item Info -->
 										<div class="col-span-12 flex items-center gap-3 sm:col-span-8 min-w-0">
@@ -272,6 +315,22 @@ let {
 											{/if}
 											<div class="flex flex-col gap-1 min-w-0">
 												<span class="truncate text-sm font-semibold text-gray-900">{item.name}</span>
+												<!-- What approving this would commit on the booked day. -->
+												{#if line && !line.isRequired}
+													<span class="text-[11px] font-medium {line.free < line.requested ? 'text-red-600' : 'text-gray-500'}">
+														{line.free} of {line.owned} free on {bookedDayLabel}
+														{#if line.free >= line.requested}
+															· approving leaves {line.free - line.requested}
+														{:else}
+															· not enough for this request
+														{/if}
+													</span>
+												{/if}
+												{#if line && line.delayed > 0}
+													<span class="text-[11px] font-semibold text-amber-600">
+														{line.delayed} overdue from an earlier booking
+													</span>
+												{/if}
 											</div>
 										</div>
 										

@@ -1,6 +1,18 @@
 import { browser } from '$app/environment';
 import { getApiErrorMessage } from './session';
 
+/** Stock figures for one calendar day. */
+export interface DayAvailability {
+	/** Total units the school owns, including those currently out on loan. */
+	owned: number;
+	/** Units already held by approved requests on this day. */
+	committed: number;
+	/** owned − committed. What can still be booked for this day. */
+	free: number;
+	/** Units overdue from an earlier booking — may not return in time. */
+	delayed: number;
+}
+
 export interface InventoryItem {
 	id: string;
 	name: string;
@@ -21,6 +33,12 @@ export interface InventoryItem {
 	archived: boolean;
 	isrequired?: boolean; // Items that always appear on student request forms (required items)
 	maxQuantityPerRequest?: number; // Maximum quantity allowed per request for required items
+	/**
+	 * Per-date availability, keyed by YYYY-MM-DD. Only present when the request
+	 * passed `dates` — `available` above is shelf stock right now and cannot say
+	 * whether an item can be borrowed on a future day.
+	 */
+	availability?: Record<string, DayAvailability> | null;
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -207,6 +225,8 @@ export const inventoryItemsAPI = {
 		page?: number;
 		limit?: number;
 		forceRefresh?: boolean;
+		/** Days (YYYY-MM-DD) to compute per-date availability for. */
+		dates?: string[];
 	}): Promise<{ items: InventoryItem[]; total: number; page: number; limit: number; pages: number }> {
 		console.log('[INVENTORY-API] 🌐 getAll called with params:', params);
 		
@@ -217,6 +237,7 @@ export const inventoryItemsAPI = {
 		if (params?.search) queryParams.set('search', params.search);
 		if (params?.page) queryParams.set('page', params.page.toString());
 		if (params?.limit) queryParams.set('limit', params.limit.toString());
+		if (params?.dates && params.dates.length > 0) queryParams.set('dates', params.dates.join(','));
 		// Optional cache-bypass for force refresh (adds a timestamp query param)
 		if (params?.forceRefresh) {
 			const timestamp = String(Date.now());
@@ -234,7 +255,8 @@ export const inventoryItemsAPI = {
 			status: params?.status,
 			search: params?.search,
 			page: params?.page,
-			limit: params?.limit
+			limit: params?.limit,
+			dates: params?.dates
 		});
 		
 		if (!params?.forceRefresh) {
