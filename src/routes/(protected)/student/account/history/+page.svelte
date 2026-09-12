@@ -40,7 +40,7 @@
 	// search, page 1, limit 10) so the cache key matches.
 	const initialHistory = browser
 		? borrowRequestsAPI.peekCachedList({
-				statuses: ['returned', 'resolved', 'cancelled', 'rejected'],
+				statuses: ['returned', 'resolved', 'cancelled', 'rejected', 'expired'],
 				sortBy: 'createdAt',
 				page: 1,
 				limit: 10
@@ -70,7 +70,8 @@
 		{ value: 'returned', label: 'Returned' },
 		{ value: 'resolved', label: 'Resolved' },
 		{ value: 'cancelled', label: 'Cancelled' },
-		{ value: 'rejected', label: 'Rejected' }
+		{ value: 'rejected', label: 'Rejected' },
+		{ value: 'expired', label: 'Not Picked Up' }
 	];
 
 	async function loadHistoryProgressive(forceRefresh = true) {
@@ -78,7 +79,7 @@
 		try {
 			let apiStatuses: string[];
 			if (!statusFilter) {
-				apiStatuses = ['returned', 'resolved', 'cancelled', 'rejected'];
+				apiStatuses = ['returned', 'resolved', 'cancelled', 'rejected', 'expired'];
 			} else if (statusFilter === 'cancelled') {
 				apiStatuses = ['cancelled', 'rejected'];
 			} else {
@@ -136,7 +137,7 @@
 			try {
 				let apiStatuses: string[];
 				if (!statusFilter) {
-					apiStatuses = ['returned', 'resolved', 'cancelled', 'rejected'];
+					apiStatuses = ['returned', 'resolved', 'cancelled', 'rejected', 'expired'];
 				} else if (statusFilter === 'cancelled') {
 					apiStatuses = ['cancelled', 'rejected'];
 				} else {
@@ -234,7 +235,8 @@
 			resolved: 'resolved',
 			returned: 'returned',
 			cancelled: 'cancelled',
-			rejected: 'rejected'
+			rejected: 'rejected',
+			expired: 'expired'
 		};
 		return map[status] ?? status;
 	}
@@ -250,7 +252,8 @@
 			resolved: 'Resolved',
 			returned: 'Returned',
 			cancelled: 'Cancelled',
-			rejected: 'Rejected'
+			rejected: 'Rejected',
+			expired: 'Not Picked Up'
 		};
 		return labels[s] ?? s;
 	}
@@ -338,6 +341,8 @@
 				return 'bg-emerald-100 text-emerald-800';
 			case 'cancelled':
 				return 'bg-slate-100 text-slate-800';
+			case 'expired':
+				return 'bg-gray-200 text-gray-700';
 			case 'rejected':
 				return 'bg-red-100 text-red-800';
 			case 'appealed':
@@ -366,6 +371,8 @@
 			case 'resolved':
 				return FileCheck;
 			case 'cancelled':
+				return CircleX;
+			case 'expired':
 				return CircleX;
 			case 'rejected':
 				return CircleX;
@@ -396,6 +403,8 @@
 				return 'border-emerald-500';
 			case 'cancelled':
 				return 'border-slate-400';
+			case 'expired':
+				return 'border-gray-400';
 			case 'rejected':
 				return 'border-red-500';
 			case 'appealed':

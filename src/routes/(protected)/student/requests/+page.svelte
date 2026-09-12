@@ -176,6 +176,7 @@
 		| 'returned'
 		| 'rejected'
 		| 'cancelled'
+		| 'expired'
 		| 'appealed' {
 		switch (status) {
 			case 'pending_instructor':
@@ -196,6 +197,8 @@
 				return 'returned';
 			case 'cancelled':
 				return 'cancelled';
+			case 'expired':
+				return 'expired';
 			case 'rejected':
 				return isCancelledRequest(status, rejectionReason) ? 'cancelled' : 'rejected';
 			case 'pending_appeal':
@@ -485,6 +488,8 @@
 				return 'bg-emerald-100 text-emerald-800';
 			case 'cancelled':
 				return 'bg-slate-100 text-slate-800';
+			case 'expired':
+				return 'bg-gray-200 text-gray-700';
 			case 'rejected':
 				return 'bg-red-100 text-red-800';
 			case 'appealed':
@@ -515,6 +520,8 @@
 			case 'resolved':
 				return FileCheck;
 			case 'cancelled':
+				return CircleX;
+			case 'expired':
 				return CircleX;
 			case 'rejected':
 				return CircleX;
@@ -547,6 +554,8 @@
 				return 'border-emerald-500';
 			case 'cancelled':
 				return 'border-slate-400';
+			case 'expired':
+				return 'border-gray-400';
 			case 'rejected':
 				return 'border-red-500';
 			case 'appealed':
@@ -568,6 +577,7 @@
 			returned: 'Returned',
 			resolved: 'Resolved',
 			cancelled: 'Cancelled',
+			expired: 'Not Picked Up',
 			rejected: 'Rejected',
 			appealed: 'Appeal Submitted'
 		};
@@ -591,7 +601,9 @@
 				return false;
 			if (
 				statusFilter === 'history' &&
-				!['returned', 'resolved', 'rejected', 'cancelled', 'appealed'].includes(req.status)
+				!['returned', 'resolved', 'rejected', 'cancelled', 'expired', 'appealed'].includes(
+					req.status
+				)
 			)
 				return false;
 			if (

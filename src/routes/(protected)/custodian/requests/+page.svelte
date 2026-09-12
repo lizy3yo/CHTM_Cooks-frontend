@@ -194,6 +194,8 @@
 				return 'history';
 			case 'rejected':
 				return 'history';
+			case 'expired':
+				return 'history';
 			default:
 				return 'history';
 		}
@@ -245,6 +247,30 @@
 			hour: 'numeric',
 			minute: '2-digit',
 			hour12: true
+		});
+	}
+
+	function startOfDay(value: string | Date): Date {
+		const date = new Date(value);
+		date.setHours(0, 0, 0, 0);
+		return date;
+	}
+
+	/** True when the request's booked day is still ahead of today. */
+	function isEarlyPickup(borrowDate?: string): boolean {
+		if (!borrowDate) return false;
+		const booked = startOfDay(borrowDate);
+		if (Number.isNaN(booked.getTime())) return false;
+		return booked.getTime() > startOfDay(new Date()).getTime();
+	}
+
+	function formatBookedDate(value: string): string {
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return value;
+		return date.toLocaleDateString('en-US', {
+			weekday: 'long',
+			month: 'short',
+			day: 'numeric'
 		});
 	}
 
@@ -351,11 +377,18 @@
 	async function confirmPickup(rawId: string): Promise<void> {
 		closeActionMenu();
 
+		// Students can only book tomorrow or the day after, so an early pickup is
+		// at most a day ahead — still worth flagging before the items leave.
+		const request = requests.find((r) => r.rawId === rawId);
+		const early = isEarlyPickup(request?.borrowDate);
+
 		const confirmed = await confirmStore.confirm({
-			title: 'Confirm Pickup',
-			message: 'Confirm that the student has successfully picked up all released items?',
+			title: early ? 'Pickup Is Early' : 'Confirm Pickup',
+			message: early
+				? `This request is booked for ${formatBookedDate(request.borrowDate)}, not today. Hand over the items anyway?`
+				: 'Confirm that the student has successfully picked up all released items?',
 			type: 'warning',
-			confirmText: 'Confirm Pickup',
+			confirmText: early ? 'Hand Over Anyway' : 'Confirm Pickup',
 			cancelText: 'Cancel'
 		});
 
@@ -823,7 +856,11 @@
 				if (historySubTab === 'resolved') return req.rawStatus === 'resolved';
 				if (historySubTab === 'completed') return req.rawStatus === 'returned';
 				if (historySubTab === 'cancelled')
-					return req.rawStatus === 'cancelled' || req.rawStatus === 'rejected';
+					return (
+						req.rawStatus === 'cancelled' ||
+						req.rawStatus === 'rejected' ||
+						req.rawStatus === 'expired'
+					);
 				return true;
 			})
 			.filter((req) => {
@@ -894,7 +931,10 @@
 		historyResolved: requests.filter((r) => r.rawStatus === 'resolved').length,
 		historyCompleted: requests.filter((r) => r.rawStatus === 'returned').length,
 		historyCancelled: requests.filter(
-			(r) => r.rawStatus === 'cancelled' || r.rawStatus === 'rejected'
+			(r) =>
+				r.rawStatus === 'cancelled' ||
+				r.rawStatus === 'rejected' ||
+				r.rawStatus === 'expired'
 		).length
 	});
 
@@ -945,6 +985,8 @@
 			case 'history':
 				if (rawStatus === 'resolved')
 					return { text: 'Resolved', color: 'bg-emerald-100 text-emerald-800' };
+				if (rawStatus === 'expired')
+					return { text: 'Expired', color: 'bg-gray-200 text-gray-700' };
 				return isCancelledRequest(rawStatus ?? 'returned', rejectionReason)
 					? { text: 'Cancelled', color: 'bg-slate-100 text-slate-800' }
 					: rawStatus === 'rejected'
@@ -970,7 +1012,9 @@
 			case 'unresolved':
 				return 'border-rose-500';
 			case 'history':
-				return isCancelledRequest(rawStatus ?? 'returned', rejectionReason)
+				return rawStatus === 'expired'
+					? 'border-gray-400'
+					: isCancelledRequest(rawStatus ?? 'returned', rejectionReason)
 					? 'border-slate-400'
 					: rawStatus === 'rejected'
 						? 'border-red-500'
@@ -1016,7 +1060,12 @@
 					color: 'text-rose-700'
 				};
 			case 'history':
-				return isCancelledRequest(rawStatus ?? 'returned', rejectionReason)
+				return rawStatus === 'expired'
+					? {
+							text: 'The student never collected these items before their booked date passed, so the request expired automatically.',
+							color: 'text-slate-700'
+						}
+					: isCancelledRequest(rawStatus ?? 'returned', rejectionReason)
 					? {
 							text: 'This request was cancelled by the student before fulfillment and archived in history.',
 							color: 'text-slate-700'
@@ -1089,7 +1138,7 @@
 			case 'resolved_completed': 
 				return { label: 'Resolved / Completed Only', bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-600/10', btn: 'text-emerald-500', btnHoverBg: 'hover:bg-emerald-100', btnHoverText: 'hover:text-emerald-700' };
 			case 'cancelled': 
-				return { label: 'Cancelled Only', bg: 'bg-slate-50', text: 'text-slate-700', ring: 'ring-slate-600/10', btn: 'text-slate-500', btnHoverBg: 'hover:bg-slate-100', btnHoverText: 'hover:text-slate-700' };
+				return { label: 'Cancelled / Expired Only', bg: 'bg-slate-50', text: 'text-slate-700', ring: 'ring-slate-600/10', btn: 'text-slate-500', btnHoverBg: 'hover:bg-slate-100', btnHoverText: 'hover:text-slate-700' };
 			default: return null;
 		}
 	});
@@ -1328,7 +1377,7 @@
 							<option value="overdue">Overdue</option>
 							<option value="unresolved">Unresolved Obligations</option>
 							<option value="resolved_completed">Resolved / Completed</option>
-							<option value="cancelled">Cancelled</option>
+							<option value="cancelled">Cancelled / Expired</option>
 						</select>
 						<select
 							bind:value={sortBy}

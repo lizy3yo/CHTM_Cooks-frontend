@@ -516,7 +516,8 @@
 			returned: { text: 'Returned & Completed', class: 'bg-green-50 text-green-800 border-green-200' },
 			cancelled: { text: 'Cancelled', class: 'bg-gray-50 text-gray-800 border-gray-200' },
 			rejected: { text: 'Rejected', class: 'bg-rose-50 text-rose-800 border-rose-200' },
-			pending_appeal: { text: 'Pending Appeal', class: 'bg-cyan-50 text-cyan-800 border-cyan-200' }
+			pending_appeal: { text: 'Pending Appeal', class: 'bg-cyan-50 text-cyan-800 border-cyan-200' },
+			expired: { text: 'Not Picked Up', class: 'bg-gray-100 text-gray-700 border-gray-300' }
 		};
 
 		const c = config[status] || { text: status, class: 'bg-gray-50 text-gray-800 border-gray-200' };

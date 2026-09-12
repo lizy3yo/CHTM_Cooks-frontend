@@ -12,7 +12,8 @@ export type BorrowRequestStatus =
 	| 'returned'
 	| 'cancelled'
 	| 'rejected'
-	| 'pending_appeal';
+	| 'pending_appeal'
+	| 'expired';
 
 export type BorrowRequestRealtimeAction =
 	| 'created'
@@ -104,6 +105,7 @@ export interface BorrowRequestRecord {
 	releasedAt?: string;
 	pickedUpAt?: string;
 	returnedAt?: string;
+	expiredAt?: string;
 	missingAt?: string;
 	resolvedAt?: string;
 	lastReminderAt?: string;
