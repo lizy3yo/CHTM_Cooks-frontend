@@ -1342,7 +1342,7 @@
 			>
 				<div class="flex items-center justify-between gap-2">
 					<div class="min-w-0">
-						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Pending Requests</p>
+						<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Under Review</p>
 						<p class="mt-1 text-xl font-semibold text-amber-600 sm:mt-2 sm:text-3xl">
 							{stats.pendingCount}
 						</p>

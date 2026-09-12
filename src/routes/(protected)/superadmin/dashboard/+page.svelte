@@ -541,7 +541,7 @@
 				<div class="flex items-center justify-between gap-2">
 					<div class="min-w-0">
 						<p class="truncate text-xs font-semibold tracking-wide text-yellow-700 uppercase">
-							Pending Requests
+							Under Review
 						</p>
 						<p class="mt-1 text-2xl font-bold text-yellow-700 sm:mt-2 sm:text-3xl">
 							{pendingRequests}

@@ -717,7 +717,7 @@
 						class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-amber-700 uppercase"
 					>
 						<Clock size={12} />
-						<span>Pending Requests</span>
+						<span>Under Review</span>
 					</div>
 					<p class="mt-2 text-3xl font-bold text-amber-700 sm:text-4xl">{metrics.pendingCount}</p>
 					<p class="mt-0.5 text-xs text-amber-500">Awaiting action</p>
