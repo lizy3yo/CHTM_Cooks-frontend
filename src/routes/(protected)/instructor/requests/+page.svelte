@@ -523,7 +523,7 @@
 		};
 
 		// Periodic background refresh every 5 minutes (not 15 seconds).
-		const intervalId = window.setInterval(refresh, 5 * 60 * 1000);
+		const intervalId = window.setInterval(refresh, 120_000);
 		window.addEventListener('focus', refresh);
 
 		const onVisibilityChange = () => {

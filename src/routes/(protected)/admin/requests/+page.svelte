@@ -789,7 +789,7 @@
 
 		const pollInterval = setInterval(() => {
 			void refreshRequests();
-		}, 30_000);
+		}, 120_000);
 
 		const onFocus = () => {
 			void refreshRequests();

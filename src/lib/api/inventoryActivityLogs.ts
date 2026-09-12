@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { subscribeToTopic } from './realtime';
 import { getApiErrorMessage } from './session';
 
 /**
@@ -183,37 +184,7 @@ export const inventoryActivityLogsAPI = {
 	 * Returns an unsubscribe function to clean up the connection
 	 */
 	subscribeToChanges(callback: (event: any) => void): () => void {
-		if (!browser) return () => {};
-
-		const source = new EventSource('/api/inventory/stream', { withCredentials: true });
-
-		source.addEventListener('open', () => {
-			console.log('[INVENTORY-ACTIVITY-STREAM] Connected');
-		});
-
-		source.addEventListener('inventory_change', (e: MessageEvent) => {
-			try {
-				const data = JSON.parse(e.data);
-				console.log('[INVENTORY-ACTIVITY-STREAM] Event received:', data);
-				callback(data);
-			} catch (err) {
-				console.error('[INVENTORY-ACTIVITY-STREAM] Malformed payload', err);
-			}
-		});
-
-		source.addEventListener('error', (e) => {
-			if (source.readyState === EventSource.CONNECTING) {
-				console.warn('[INVENTORY-ACTIVITY-STREAM] Connection closed or lost. Attempting to reconnect... (readyState: CONNECTING)');
-			} else {
-				console.error('[INVENTORY-ACTIVITY-STREAM] ✗ Permanent error event:', e);
-				console.error('[INVENTORY-ACTIVITY-STREAM] EventSource readyState:', source.readyState);
-			}
-		});
-
-		return () => {
-			source.close();
-			console.log('[INVENTORY-ACTIVITY-STREAM] Disconnected');
-		};
+		return subscribeToTopic('inventory_change', () => callback({ action: 'refresh' }));
 	}
 };
 

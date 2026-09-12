@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { subscribeToTopic } from './realtime';
 import type { UserResponse } from '$lib/types/auth';
 import { getApiErrorMessage } from './session';
 
@@ -163,20 +164,6 @@ export const profileApi = {
 	},
 
 	subscribeToProfileChanges(onChange: () => void): () => void {
-		if (!browser) return () => {};
-
-		const source = new EventSource('/api/auth/profile/stream', { withCredentials: true });
-		source.addEventListener('profile_change', () => {
-			this.clearCache();
-			onChange();
-		});
-
-		source.onerror = () => {
-			// Browser handles retries. Keep handler no-op to avoid noise.
-		};
-
-		return () => {
-			source.close();
-		};
+		return subscribeToTopic('user_change', onChange);
 	}
 };

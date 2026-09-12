@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { subscribeToTopic } from './realtime';
 import { getApiErrorMessage } from './session';
 
 export type BorrowRequestStatus =
@@ -497,32 +498,17 @@ export const borrowRequestsAPI = {
 	 * Safe to call from SSR context (no-ops when not in browser).
 	 */
 	subscribeToChanges(callback: (event: BorrowRequestRealtimeEvent) => void): () => void {
-		if (!browser) return () => {};
-
-		// Ensure cookies are sent so the server can authenticate the SSE connection
-		const source = new EventSource('/api/borrow-requests/stream', { withCredentials: true });
-
-		source.addEventListener('open', () => {
-			// no-op, but useful for debugging connections
-			console.log('[BORROW-REQUESTS-STREAM] connected');
-		});
-
-		source.addEventListener('borrow_request_change', (e: MessageEvent) => {
-			try {
-				const data = JSON.parse(e.data) as BorrowRequestRealtimeEvent;
-				callback(data);
-			} catch (err) {
-				console.error('[BORROW-REQUESTS-STREAM] malformed payload', err);
-			}
-		});
-
-		source.addEventListener('error', (e) => {
-			// EventSource will attempt to reconnect automatically.
-			console.error('[BORROW-REQUESTS-STREAM] error', e);
-		});
-
-		return () => {
-			source.close();
-		};
+		// Delegates to the shared realtime hub: one multiplexed connection for
+		// the whole page rather than one stream per domain. The callback also
+		// fires on every (re)connect, so a gap cannot leave stale data on screen.
+		return subscribeToTopic('borrow_request_change', () =>
+			callback({
+				action: 'created',
+				requestId: '',
+				studentId: '',
+				status: '',
+				occurredAt: new Date().toISOString()
+			})
+		);
 	}
 };

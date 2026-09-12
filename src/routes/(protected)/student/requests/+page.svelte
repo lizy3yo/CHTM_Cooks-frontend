@@ -444,10 +444,10 @@
 		});
 		liveSyncActive = true;
 
-		// --- 30-second polling fallback (handles SSE gaps / reconnects) ---
+		// --- Slow polling backstop; the realtime hub is the primary path ---
 		_pollInterval = setInterval(() => {
 			void refreshRequests();
-		}, 30_000);
+		}, 120_000);
 
 		// --- Refresh on tab/window focus so stale data is never shown ---
 		const onFocus = () => refreshRequests();

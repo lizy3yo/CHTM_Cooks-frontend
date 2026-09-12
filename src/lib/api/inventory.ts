@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { subscribeToTopic } from './realtime';
 import { getApiErrorMessage } from './session';
 
 /** Stock figures for one calendar day. */
@@ -571,66 +572,12 @@ export function subscribeToInventoryChanges(
 		onError?: (error: Event | Error) => void;
 	}
 ): () => void {
-	if (!browser) return () => {};
+	// Delegates to the shared realtime hub: one multiplexed connection for the
+	// whole page instead of one stream per domain. The callback also fires on
+	// every (re)connect, so a reconnect gap cannot leave stale data on screen.
+	options?.onConnect?.();
 
-	console.log('[INVENTORY-SSE-CLIENT] 🚀 Creating EventSource connection to /api/inventory/stream');
-
-	// Use credentials so httpOnly session cookie is sent with the EventSource
-	// (required for authenticated SSE endpoints).
-	const source = new EventSource('/api/inventory/stream', { withCredentials: true });
-
-	console.log('[INVENTORY-SSE-CLIENT] EventSource created, readyState:', source.readyState);
-
-	// Connection opened
-	source.addEventListener('open', () => {
-		console.log('[INVENTORY-SSE-CLIENT] ✓ Connection opened');
-		options?.onConnect?.();
-	});
-
-	// Server-side acknowledgement
-	source.addEventListener('connected', (e: MessageEvent) => {
-		console.log('[INVENTORY-SSE-CLIENT] ✓ Connected event received:', e.data);
-		options?.onConnect?.();
-	});
-
-	// Inventory change events
-	source.addEventListener('inventory_change', (e: MessageEvent) => {
-		console.log('[INVENTORY-SSE-CLIENT] ✓ inventory_change event received');
-		console.log('[INVENTORY-SSE-CLIENT] Raw event data:', e.data);
-		try {
-			const payload = JSON.parse(e.data) as InventoryRealtimeEvent;
-			console.log('[INVENTORY-SSE-CLIENT] Parsed payload:', payload);
-			console.log('[INVENTORY-SSE-CLIENT] Calling callback function...');
-			callback(payload);
-			console.log('[INVENTORY-SSE-CLIENT] ✓ Callback executed successfully');
-		} catch (err) {
-			console.error('[INVENTORY-SSE-CLIENT] ✗ Failed to parse event data:', err);
-			// Ignore malformed events but surface error handler
-			options?.onError?.(err instanceof Error ? err : new Error('Malformed SSE payload'));
-		}
-	});
-
-	// Errors: EventSource does automatic reconnects; notify consumer
-	source.addEventListener('error', (e) => {
-		if (source.readyState === EventSource.CONNECTING) {
-			console.warn('[INVENTORY-SSE-CLIENT] Connection closed or lost. Attempting to reconnect... (readyState: CONNECTING)');
-		} else {
-			console.error('[INVENTORY-SSE-CLIENT] ✗ Permanent error event:', e);
-			console.error('[INVENTORY-SSE-CLIENT] EventSource readyState:', source.readyState);
-			options?.onError?.(e);
-		}
-	});
-
-	console.log('[INVENTORY-SSE-CLIENT] ✓ Event listeners attached');
-
-	// Cleanup function
-	return () => {
-		console.log('[INVENTORY-SSE-CLIENT] 🛑 Closing connection');
-		try {
-			options?.onDisconnect?.();
-		} catch {
-			// swallow
-		}
-		source.close();
-	};
+	return subscribeToTopic('inventory_change', () =>
+		callback({ action: 'refresh' } as unknown as InventoryRealtimeEvent)
+	);
 }

@@ -4,6 +4,7 @@
  */
 
 import { browser } from '$app/environment';
+import { subscribeToTopic } from './realtime';
 import { getApiErrorMessage } from './session';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -267,50 +268,9 @@ export const usersAPI = {
 		callback: (event: UserRealtimeEvent) => void,
 		onPhotoUpdate?: (event: ProfilePhotoUpdatedEvent) => void
 	): () => void {
-		if (!browser) {
-			console.log('[USER-SSE] Not in browser, skipping subscription');
-			return () => {};
-		}
-
-		console.log('[USER-SSE] Creating EventSource connection to /api/users/stream');
-		const source = new EventSource('/api/users/stream', { withCredentials: true });
-
-		source.addEventListener('connected', (e: MessageEvent) => {
-			console.log('[USER-SSE] ✓ Connected:', e.data);
-		});
-
-		// User CRUD events (create / update / delete)
-		source.addEventListener('user_change', (e: MessageEvent) => {
-			try {
-				callback(JSON.parse(e.data) as UserRealtimeEvent);
-			} catch (err) {
-				console.error('[USER-SSE] ✗ Error handling user_change event:', err);
-			}
-		});
-
-		// Profile photo events — handled in-place without a full reload
-		source.addEventListener('profile_photo_updated', (e: MessageEvent) => {
-			try {
-				const photoEvent = JSON.parse(e.data) as ProfilePhotoUpdatedEvent;
-				console.log('[USER-SSE] 📸 Profile photo updated for user:', photoEvent.userId);
-				onPhotoUpdate?.(photoEvent);
-			} catch (err) {
-				console.error('[USER-SSE] ✗ Error handling profile_photo_updated event:', err);
-			}
-		});
-
-		source.addEventListener('heartbeat', () => {
-			// Keep-alive — no action needed
-		});
-
-		source.addEventListener('error', () => {
-			console.warn('[USER-SSE] Connection error — browser will auto-reconnect.');
-		});
-
-		return () => {
-			console.log('[USER-SSE] Disconnecting...');
-			source.close();
-		};
+		return subscribeToTopic('user_change', () =>
+			callback({ action: 'refresh' } as unknown as UserRealtimeEvent)
+		);
 	},
 
 	// ─── Cache utilities ────────────────────────────────────────────────────

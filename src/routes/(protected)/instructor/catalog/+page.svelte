@@ -393,7 +393,7 @@
 		} else {
 			fetchCatalog();
 		}
-		const interval = setInterval(() => fetchCatalog({ background: true, forceRefresh: true }), 5 * 60 * 1000);
+		const interval = setInterval(() => fetchCatalog({ background: true, forceRefresh: true }), 120_000);
 		return () => { clearInterval(interval); clearTimeout(searchTimeout); };
 	});
 

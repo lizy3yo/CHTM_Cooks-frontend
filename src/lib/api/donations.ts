@@ -4,6 +4,7 @@
  */
 
 import { browser } from '$app/environment';
+import { subscribeToTopic } from './realtime';
 import { getApiErrorMessage } from './session';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -269,55 +270,7 @@ export const donationsAPI = {
 	 * EventSource automatically reconnects on connection loss.
 	 */
 	subscribeToChanges(callback: (event?: any) => void): () => void {
-		if (!browser) {
-			console.log('[DONATION-SSE] Not in browser, skipping subscription');
-			return () => {};
-		}
-
-		console.log('[DONATION-SSE] Creating EventSource connection to /api/donations/stream');
-		const source = new EventSource('/api/donations/stream', { withCredentials: true });
-
-		source.addEventListener('open', () => {
-			console.log('[DONATION-SSE] ✓ Connection opened');
-		});
-
-		source.addEventListener('connected', (e: MessageEvent) => {
-			console.log('[DONATION-SSE] ✓ Connected event received:', e.data);
-		});
-
-		source.addEventListener('donation_change', (e: MessageEvent) => {
-			console.log('[DONATION-SSE] ✓ donation_change event received:', e.data);
-			try {
-				const eventData = JSON.parse(e.data);
-				console.log('[DONATION-SSE] Parsed event data:', eventData);
-				console.log('[DONATION-SSE] Calling callback function...');
-				callback(eventData);
-				console.log('[DONATION-SSE] Callback completed');
-			} catch (err) {
-				console.error('[DONATION-SSE] ✗ Error handling event:', err);
-			}
-		});
-
-		source.addEventListener('heartbeat', (e: MessageEvent) => {
-			console.log('[DONATION-SSE] ♥ Heartbeat received');
-		});
-
-		source.addEventListener('error', (e) => {
-			if (source.readyState === EventSource.CONNECTING) {
-				console.warn('[DONATION-SSE] Connection closed or lost. Attempting to reconnect... (readyState: CONNECTING)');
-			} else {
-				console.error('[DONATION-SSE] ✗ Permanent error event:', e);
-				console.error('[DONATION-SSE] EventSource readyState:', source.readyState);
-			}
-		});
-
-		console.log('[DONATION-SSE] EventSource created, readyState:', source.readyState);
-
-		return () => {
-			console.log('[DONATION-SSE] Disconnecting...');
-			source.close();
-			console.log('[DONATION-SSE] Disconnected');
-		};
+		return subscribeToTopic('donation_change', () => callback({ action: 'refresh' }));
 	},
 
 	// ─── Cache utilities ────────────────────────────────────────────────────

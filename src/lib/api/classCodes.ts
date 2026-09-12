@@ -5,6 +5,7 @@
  */
 
 import { browser } from '$app/environment';
+import { subscribeToTopic } from './realtime';
 import { getApiErrorMessage } from './session';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -367,37 +368,9 @@ export const classCodesAPI = {
 	 * Returns an unsubscribe function.
 	 */
 	subscribeToChanges(callback: (event: ClassCodeRealtimeEvent) => void): () => void {
-		if (!browser) {
-			return () => {};
-		}
-
-		console.log('[CLASS-CODE-SSE] Creating EventSource connection');
-		const source = new EventSource('/api/class-codes/stream', { withCredentials: true });
-
-		source.addEventListener('connected', (e: MessageEvent) => {
-			console.log('[CLASS-CODE-SSE] ✓ Connected:', e.data);
-		});
-
-		source.addEventListener('class_code_change', (e: MessageEvent) => {
-			try {
-				callback(JSON.parse(e.data) as ClassCodeRealtimeEvent);
-			} catch (err) {
-				console.error('[CLASS-CODE-SSE] ✗ Error handling class_code_change event:', err);
-			}
-		});
-
-		source.addEventListener('heartbeat', () => {
-			// Keep-alive — no action needed
-		});
-
-		source.addEventListener('error', () => {
-			console.warn('[CLASS-CODE-SSE] Connection error — browser will auto-reconnect.');
-		});
-
-		return () => {
-			console.log('[CLASS-CODE-SSE] Disconnecting...');
-			source.close();
-		};
+		return subscribeToTopic('class_code_change', () =>
+			callback({ action: 'refresh' } as unknown as ClassCodeRealtimeEvent)
+		);
 	},
 
 	invalidateCache(): void {

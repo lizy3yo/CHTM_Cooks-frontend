@@ -6,6 +6,7 @@
  */
 
 import { browser } from '$app/environment';
+import { subscribeToTopic } from './realtime';
 import { getApiErrorMessage } from './session';
 
 export type ObligationType = 'missing' | 'damaged';
@@ -267,22 +268,7 @@ export const replacementObligationsAPI = {
 	 * Returns an unsubscribe function — call it in component cleanup.
 	 */
 	subscribeToChanges(onEvent: () => void): () => void {
-		if (!browser) return () => {};
-
-		const es = new EventSource('/api/replacement-obligations/stream', {
-			withCredentials: true
-		});
-
-		es.addEventListener('replacement_obligation_change', () => {
-			invalidateAllCaches();
-			onEvent();
-		});
-
-		es.addEventListener('error', () => {
-			// EventSource auto-reconnects; no action needed.
-		});
-
-		return () => es.close();
+		return subscribeToTopic('replacement_obligation_change', onEvent);
 	},
 
 	// ─── Cache utilities ────────────────────────────────────────────────────

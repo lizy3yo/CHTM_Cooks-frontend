@@ -632,7 +632,7 @@
 
 		const pollInterval = setInterval(() => {
 			void refreshBorrowedItems();
-		}, 30_000);
+		}, 120_000);
 
 		const onFocus = () => {
 			void refreshBorrowedItems();
