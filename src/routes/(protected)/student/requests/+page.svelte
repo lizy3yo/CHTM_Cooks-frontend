@@ -45,7 +45,15 @@
 		BookOpen
 	} from 'lucide-svelte';
 
-	type StatusFilterType = 'all' | 'pending' | 'approved' | 'ready' | 'active' | 'unresolved' | 'history';
+	type StatusFilterType =
+		| 'all'
+		| 'pending'
+		| 'approved'
+		| 'ready'
+		| 'active'
+		| 'overdue'
+		| 'unresolved'
+		| 'history';
 	type RequestViewMode = 'card' | 'list';
 
 	// Pagination requireds
@@ -228,7 +236,12 @@
 			rejectionReason: request.rejectReason,
 			rejectionNotes: request.rejectionNotes,
 			appealReason: request.appealReason,
-			appealCount: request.appealCount ?? 0
+			appealCount: request.appealCount ?? 0,
+			// Past its return date while still out. Drives the Overdue filter and
+			// the dashboard card that links to it.
+			isOverdue:
+				['borrowed', 'pending_return'].includes(request.status) &&
+				new Date(request.returnDate) < new Date()
 		};
 
 		console.log('[REQUEST-MAP] Mapped request:', {
@@ -383,7 +396,9 @@
 
 	afterNavigate(({ to }) => {
 		const tab = to?.url.searchParams.get('tab') ?? null;
-		if (tab && ['pending', 'approved', 'ready', 'active', 'unresolved', 'history', 'all'].includes(tab)) {
+		if (tab && ['pending', 'approved', 'ready', 'active', 'overdue', 'unresolved', 'history', 'all'].includes(
+				tab
+			)) {
 			statusFilter = tab as StatusFilterType;
 		}
 
@@ -445,7 +460,9 @@
 	onMount(() => {
 		const params = new URLSearchParams(window.location.search);
 		const tab = params.get('tab');
-		if (tab && ['pending', 'approved', 'ready', 'active', 'unresolved', 'history', 'all'].includes(tab)) {
+		if (tab && ['pending', 'approved', 'ready', 'active', 'overdue', 'unresolved', 'history', 'all'].includes(
+				tab
+			)) {
 			statusFilter = tab as StatusFilterType;
 		}
 
@@ -621,6 +638,7 @@
 				!['picked-up', 'pending-return'].includes(req.status)
 			)
 				return false;
+			if (statusFilter === 'overdue' && !req.isOverdue) return false;
 			if (
 				statusFilter === 'unresolved' &&
 				!['unresolved', 'missing'].includes(req.status)
@@ -699,7 +717,8 @@
 		activeCount: requests.filter((r) =>
 			['picked-up', 'pending-return', 'missing'].includes(r.status)
 		).length,
-		readyForPickup: requests.filter((r) => r.status === 'ready').length
+		readyForPickup: requests.filter((r) => r.status === 'ready').length,
+		overdueCount: requests.filter((r) => r.isOverdue).length
 	});
 
 	function openDetailModal(request: any) {
@@ -1130,7 +1149,9 @@
 			{/each}
 		</div>
 	{:else}
-		<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+		<!-- The Overdue card only appears when something is actually overdue, so
+		     the grid stays at four in the normal case. -->
+		<div class="grid grid-cols-2 gap-3 {stats.overdueCount > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}">
 			<button
 				onclick={() => (statusFilter = 'all')}
 				class="w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:p-5 {statusFilter === 'all' ? 'border-blue-400 bg-blue-50 ring-2 ring-blue-500/30' : ''}"
@@ -1198,6 +1219,25 @@
 					</div>
 				</div>
 			</button>
+
+			{#if stats.overdueCount > 0}
+				<button
+					onclick={() => (statusFilter = 'overdue')}
+					class="w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-red-500/20 sm:p-5 {statusFilter === 'overdue' ? 'border-red-400 bg-red-50 ring-2 ring-red-500/30' : ''}"
+				>
+					<div class="flex items-center justify-between gap-2">
+						<div class="min-w-0">
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Past Return Date</p>
+							<p class="mt-1 text-2xl font-semibold text-red-600 sm:mt-2 sm:text-3xl">
+								{stats.overdueCount}
+							</p>
+						</div>
+						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 sm:h-12 sm:w-12">
+							<CircleAlert class="h-5 w-5 sm:h-6 sm:w-6" />
+						</div>
+					</div>
+				</button>
+			{/if}
 		</div>
 	{/if}
 

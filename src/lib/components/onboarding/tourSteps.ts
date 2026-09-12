@@ -350,25 +350,8 @@ const student: TourStep[] = [
 		body: "Each request shows its status — Under Review, Approved, Ready for Pickup, or Declined. If a request is declined, your instructor's reason appears here so you know what to adjust."
 	},
 
-	// ── My Borrowed Items ────────────────────────────────────────────────────
 	{
-		target: 'a[href="/student/borrowed"]',
-		advanceWhenRoute: '/student/borrowed',
-		placement: 'right',
-		clickHint: 'Click here to open My Borrowed Items',
-		title: 'Manage Borrowed Items',
-		body: "Items you're currently holding live here. Click to open it."
-	},
-	{
-		route: '/student/borrowed',
-		target: '[data-tour="student-borrowed-header"]',
-		placement: 'bottom',
-		title: 'My Borrowed Items',
-		body: 'See what you currently hold, your return deadlines, and any replacement obligations. Return items to the custodian by the due date to keep your record clear.'
-	},
-
-	{
-		route: '/student/borrowed',
+		route: '/student/requests',
 		title: "You're all set! 🎉",
 		body: "That's the full borrowing flow, start to finish. You can replay this tour anytime from the Help page. Happy borrowing!"
 	}
@@ -461,25 +444,8 @@ export const studentUnenrolled: TourStep[] = [
 		body: 'Every request you make will show its status here — Under Review, Approved, Ready for Pickup, or Declined — so you always know where it stands.'
 	},
 
-	// ── My Borrowed Items (where activity will appear once enrolled) ─────────
 	{
-		target: 'a[href="/student/borrowed"]',
-		advanceWhenRoute: '/student/borrowed',
-		placement: 'right',
-		clickHint: 'Click here to open My Borrowed Items',
-		title: 'Where your borrowed items will live',
-		body: 'Items you currently hold will appear here. Click to take a look.'
-	},
-	{
-		route: '/student/borrowed',
-		target: '[data-tour="student-borrowed-header"]',
-		placement: 'bottom',
-		title: 'My Borrowed Items',
-		body: 'This shows what you hold, your return deadlines, and any replacement obligations. Returning items on time keeps your record — and your Trust Score — healthy.'
-	},
-
-	{
-		route: '/student/borrowed',
+		route: '/student/requests',
 		title: 'One step to get started 🎉',
 		body: "Here's your next move: contact your instructor to be enrolled in a class code. Once you're in, replay this tour anytime from the Help page to walk through the full borrowing flow. Welcome aboard!"
 	}
@@ -569,25 +535,8 @@ export const studentPending: TourStep[] = [
 		body: "Your request shows its status here — Under Review, Approved, Ready for Pickup, or Declined. While it's still Under Review you can cancel it here if you need to; if it's declined, your instructor's reason appears so you know what to adjust."
 	},
 
-	// ── My Borrowed Items ────────────────────────────────────────────────────
 	{
-		target: 'a[href="/student/borrowed"]',
-		advanceWhenRoute: '/student/borrowed',
-		placement: 'right',
-		clickHint: 'Click here to open My Borrowed Items',
-		title: 'Your borrowed items',
-		body: 'Items you currently hold live here. Click to take a look.'
-	},
-	{
-		route: '/student/borrowed',
-		target: '[data-tour="student-borrowed-header"]',
-		placement: 'bottom',
-		title: 'My Borrowed Items',
-		body: 'See what you hold, your return deadlines, and any replacement obligations. Returning items on time keeps your Trust Score healthy.'
-	},
-
-	{
-		route: '/student/borrowed',
+		route: '/student/requests',
 		title: "You're all set 🎉",
 		body: 'Once your current request is processed, requesting reopens and you can borrow again. Replay this tour anytime from the Help page to walk through the full borrowing flow.'
 	}
@@ -1157,7 +1106,6 @@ const PAGE_LABELS: Record<string, string> = {
 	'/student/catalog': 'Equipment Catalog',
 	'/student/request': 'New Request',
 	'/student/requests': 'My Requests',
-	'/student/borrowed': 'Borrowed Items',
 	'/instructor/dashboard': 'Dashboard',
 	'/instructor/requests': 'Request Approvals',
 	'/instructor/inventory': 'Inventory',

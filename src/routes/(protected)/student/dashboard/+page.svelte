@@ -682,7 +682,7 @@
 			<!-- ── KPI cards ───────────────────────────────────────────────────── -->
 			<div data-tour="student-dash-stats" class="grid grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-3">
 				<button
-					onclick={() => goto('/student/borrowed')}
+					onclick={() => goto('/student/requests?tab=active')}
 					class="rounded-xl border border-violet-200 bg-violet-50 p-3 shadow-sm hover:shadow-md hover:border-violet-300/60 hover:bg-violet-100/30 transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-violet-500/20 sm:p-4"
 				>
 					<div
@@ -724,7 +724,7 @@
 				</button>
 
 				<button
-					onclick={() => goto('/student/borrowed?filter=overdue')}
+					onclick={() => goto('/student/requests?tab=overdue')}
 					class="rounded-xl border {metrics.overdueCount > 0
 						? 'border-red-200 bg-red-50 hover:border-red-300/60 hover:bg-red-100/30 focus:ring-red-500/20'
 						: 'border-gray-200 bg-gray-50 hover:border-gray-300/60 hover:bg-gray-100/30 focus:ring-gray-500/20'} p-3 shadow-sm transition-all duration-200 active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 sm:p-4"
@@ -1035,7 +1035,7 @@
 							<h2 class="text-sm font-semibold text-gray-900">Currently Borrowed</h2>
 						</div>
 						<a
-							href="/student/borrowed"
+							href="/student/requests?tab=active"
 							class="flex items-center gap-1 text-xs font-medium text-pink-600 hover:text-pink-700"
 						>
 							View all <ArrowRight size={13} />

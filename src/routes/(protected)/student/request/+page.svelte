@@ -327,7 +327,7 @@
 			)
 			.then((confirmed) => {
 				if (confirmed) {
-					void goto('/student/borrowed');
+					void goto('/student/requests?tab=unresolved');
 				}
 			});
 	});
@@ -2062,7 +2062,7 @@
 									<div class="flex items-center justify-between gap-2">
 										<h3 class="text-sm font-bold text-rose-900">Replacement Obligation Pending</h3>
 										<a
-											href="/student/borrowed"
+											href="/student/requests?tab=unresolved"
 											class="inline-flex items-center gap-1 text-xs font-semibold text-rose-700 hover:text-rose-900 underline"
 										>
 											View Obligations
