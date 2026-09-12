@@ -9,6 +9,7 @@
 		type BorrowRequestRealtimeEvent
 	} from '$lib/api/borrowRequests';
 	import { catalogAPI } from '$lib/api/catalog';
+	import { DeltaSync } from '$lib/api/deltaSync';
 	import { confirmStore } from '$lib/stores/confirm';
 	import { toastStore } from '$lib/stores/toast';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
@@ -71,11 +72,14 @@
 	async function loadRequestsProgressive(shouldForceRefresh: boolean) {
 		const loadId = ++inFlightLoadId;
 		try {
-			// Step 1: Load cards (borrowRequestsAPI.list + catalogAPI.getCatalog in parallel)
+			// Step 1: Load cards.
+			// The catalog is NOT fetched here. It is ~167KB and only fills in item
+			// photos, which persist in itemPictureCache across refreshes — so
+			// after the first load there is usually nothing to fill.
+			// backfillItemPictures() fetches it only when something is missing.
 			const listPromise = borrowRequestsAPI.list({}, { forceRefresh: shouldForceRefresh });
-			const catalogPromise = catalogAPI.getCatalog({ availability: 'all', limit: 300 });
 
-			const results = await Promise.allSettled([listPromise, catalogPromise]);
+			const results = await Promise.allSettled([listPromise]);
 
 			if (loadId !== inFlightLoadId) return;
 
@@ -93,25 +97,7 @@
 			await new Promise((resolve) => setTimeout(resolve, 100));
 			if (loadId !== inFlightLoadId) return;
 
-			// Backfill pictures from the catalog response
-			const catalogResult = results[1];
-			if (catalogResult.status === 'fulfilled') {
-				const next = new Map(itemPictureCache);
-				const missingIds = new Set<string>();
-				for (const req of requests) {
-					for (const item of req.items) {
-						if (item.itemId && !item.picture && !itemPictureCache.has(item.itemId)) {
-							missingIds.add(item.itemId);
-						}
-					}
-				}
-				for (const catalogItem of catalogResult.value.items) {
-					if (missingIds.has(catalogItem.id) && catalogItem.picture) {
-						next.set(catalogItem.id, catalogItem.picture);
-					}
-				}
-				itemPictureCache = next;
-			}
+			await backfillItemPictures();
 
 			tableLoading = false;
 		} catch (error: any) {
@@ -301,6 +287,29 @@
 	 * Refresh the list, guarding against overlapping fetches.
 	 * If a fetch is already running, set a flag so we re-run once it finishes.
 	 */
+	/**
+	 * Keeps the list current by fetching only what changed.
+	 *
+	 * The page holds every request and filters client-side, so merging a changed
+	 * row lets `filteredRequests` recompute on its own and Svelte redraws just
+	 * that row. Falls back to a full read whenever a delta cannot be trusted.
+	 */
+	const requestSync = new DeltaSync<BorrowRequestRecord>({
+		idOf: (record) => record.id,
+		fetchAll: async () => {
+			borrowRequestsAPI.invalidateCache();
+			const result = await borrowRequestsAPI.list({}, { forceRefresh: true });
+			return { items: result.requests, total: result.total, syncedAt: result.syncedAt };
+		},
+		fetchSince: async (since) => {
+			const result = await borrowRequestsAPI.list({ since });
+			return { items: result.requests, total: result.total, syncedAt: result.syncedAt };
+		}
+	});
+
+	/** Server-shaped records behind `requests`, so deltas merge against raw rows. */
+	let syncedRecords: BorrowRequestRecord[] = [];
+
 	async function refreshRequests(forceRefresh = false): Promise<void> {
 		if (refreshInFlight) {
 			pendingRefresh = true;
@@ -308,10 +317,28 @@
 		}
 		refreshInFlight = true;
 		try {
-			if (forceRefresh) {
-				borrowRequestsAPI.invalidateCache();
+			// No baseline yet (first load) — take the full path, then record it.
+			if (!requestSync.primed) {
+				if (forceRefresh) {
+					borrowRequestsAPI.invalidateCache();
+				}
+				await loadRequests(forceRefresh);
+				const cached = borrowRequestsAPI.peekCachedList({});
+				if (cached) {
+					syncedRecords = cached.requests;
+					await requestSync.sync(syncedRecords);
+				}
+				syncSelectedRequestWithLatestData();
+				return;
 			}
-			await loadRequests(forceRefresh);
+
+			const result = await requestSync.sync(syncedRecords);
+			if (result.mode !== 'unchanged') {
+				syncedRecords = result.records;
+				requests = syncedRecords.map(mapRequest);
+				await backfillItemPictures();
+			}
+
 			// Sync the open detail modal if it is stale
 			syncSelectedRequestWithLatestData();
 		} finally {

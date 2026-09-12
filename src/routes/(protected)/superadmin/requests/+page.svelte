@@ -328,6 +328,39 @@
 		};
 	}
 
+	/**
+	 * Fill in item photos we do not already have.
+	 *
+	 * The catalog is ~167KB, and itemPictureCache persists across refreshes, so
+	 * after the first load there is usually nothing missing — fetching it
+	 * unconditionally downloaded the whole catalog to learn nothing.
+	 */
+	async function backfillItemPictures(): Promise<void> {
+		const missingIds = new Set<string>();
+		for (const req of requests) {
+			for (const item of req.items) {
+				if (item.itemId && !item.picture && !itemPictureCache.has(item.itemId)) {
+					missingIds.add(item.itemId);
+				}
+			}
+		}
+
+		if (missingIds.size === 0) return;
+
+		try {
+			const response = await catalogAPI.getCatalog({ availability: 'all', limit: 300 });
+			const next = new Map(itemPictureCache);
+			for (const catalogItem of response.items) {
+				if (missingIds.has(catalogItem.id) && catalogItem.picture) {
+					next.set(catalogItem.id, catalogItem.picture);
+				}
+			}
+			itemPictureCache = next;
+		} catch {
+			// Photos are cosmetic; a failure here must not break the list.
+		}
+	}
+
 	async function backfillClassCodes() {
 		const missingCodes = new Set<string>();
 		for (const req of requests) {
@@ -489,9 +522,8 @@
 			const statsPromise = borrowRequestsAPI.list({ limit: 1000 }, { forceRefresh });
 			const obligationsPromise = replacementObligationsAPI.getObligations({ limit: 200 }, { forceRefresh });
 			const activeTabPromise = borrowRequestsAPI.list(getListParams(), { forceRefresh });
-			const catalogPromise = catalogAPI.getCatalog({ availability: 'all', limit: 300 });
-
-			const results = await Promise.allSettled([statsPromise, obligationsPromise, activeTabPromise, catalogPromise]);
+			// The catalog is NOT fetched here — see backfillItemPictures().
+			const results = await Promise.allSettled([statsPromise, obligationsPromise, activeTabPromise]);
 
 			if (loadId !== inFlightLoadId) return;
 
@@ -543,24 +575,7 @@
 			obligationsLoading = false;
 
 			// Backfill pictures/classCodes in background
-			const catalogResult = results[3];
-			if (catalogResult.status === 'fulfilled') {
-				const next = new Map(itemPictureCache);
-				const missingIds = new Set<string>();
-				for (const req of requests) {
-					for (const item of req.items) {
-						if (item.itemId && !item.picture && !itemPictureCache.has(item.itemId)) {
-							missingIds.add(item.itemId);
-						}
-					}
-				}
-				for (const catalogItem of catalogResult.value.items) {
-					if (missingIds.has(catalogItem.id) && catalogItem.picture) {
-						next.set(catalogItem.id, catalogItem.picture);
-					}
-				}
-				itemPictureCache = next;
-			}
+			await backfillItemPictures();
 			await backfillClassCodes();
 
 		} catch (error) {

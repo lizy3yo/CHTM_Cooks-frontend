@@ -138,10 +138,15 @@ export interface RequestAvailabilityResponse {
 
 export interface BorrowRequestListResponse {
 	requests: BorrowRequestRecord[];
+	/** Count of ALL visible requests, never just the changed ones. */
 	total: number;
 	page: number;
 	limit: number;
 	pages: number;
+	/** True when `since` was honoured and `requests` holds only changes. */
+	isDelta?: boolean;
+	/** Server clock at read time — the watermark for the next delta. */
+	syncedAt?: string;
 }
 
 interface ApiError {
@@ -264,6 +269,8 @@ export const borrowRequestsAPI = {
 			sortBy?: 'createdAt' | 'returnDate';
 			page?: number;
 			limit?: number;
+			/** ISO timestamp; returns only requests touched at or after it. */
+			since?: string;
 		} = {},
 		options: RequestOptions = {}
 	): Promise<BorrowRequestListResponse> {
@@ -276,6 +283,7 @@ export const borrowRequestsAPI = {
 		if (params.sortBy) query.set('sortBy', params.sortBy);
 		if (params.page) query.set('page', String(params.page));
 		if (params.limit) query.set('limit', String(params.limit));
+		if (params.since) query.set('since', params.since);
 		
 		// Add cache-busting parameter when forcing refresh
 		if (options.forceRefresh) {
@@ -286,7 +294,7 @@ export const borrowRequestsAPI = {
 		const cacheKey = buildListCacheKey(params);
 		const inFlightKey = `list:${cacheKey}`;
 
-		if (!options.forceRefresh) {
+		if (!options.forceRefresh && !params.since) {
 			const cached = getFreshCache(listCache, cacheKey);
 			if (cached) {
 				return cached;
@@ -301,9 +309,23 @@ export const borrowRequestsAPI = {
 		const requestPromise = (async () => {
 			const response = await fetch(url, getFetchOptions('GET'));
 			const data = await handleResponse<BorrowRequestListResponse>(response);
-			setCache(listCache, cacheKey, data);
+
+			// Never cache a delta under the full-list key: peekCachedList would
+			// then hand a caller a couple of changed rows as if that were the
+			// entire list. Deltas are merged by the caller, not cached here.
+			if (!params.since) {
+				setCache(listCache, cacheKey, data);
+			}
+
 			return data;
 		})();
+
+		// Deltas stay out of the in-flight map: the key does not encode `since`,
+		// so sharing it would let a caller expecting the full list receive a
+		// handful of changed rows instead.
+		if (params.since) {
+			return await requestPromise;
+		}
 
 		inFlight.set(inFlightKey, requestPromise);
 		try {

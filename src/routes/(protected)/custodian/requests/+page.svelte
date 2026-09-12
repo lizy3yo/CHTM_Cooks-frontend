@@ -11,6 +11,7 @@
 		type BorrowRequestStatus
 	} from '$lib/api/borrowRequests';
 	import { catalogAPI } from '$lib/api/catalog';
+	import { DeltaSync } from '$lib/api/deltaSync';
 	import { classCodesAPI, type ClassCodeResponse } from '$lib/api/classCodes';
 	import { confirmStore } from '$lib/stores/confirm';
 	import { toastStore } from '$lib/stores/toast';
@@ -66,10 +67,14 @@
 		try {
 			// Step 1: Load cards (and parallel fetch classCodes, reconcile replacement obligations, catalog items)
 			const listPromise = borrowRequestsAPI.list(LIST_PARAMS, { forceRefresh });
-			const catalogPromise = catalogAPI.getCatalog({ availability: 'all', limit: 300 });
+			// The catalog is NOT fetched here. It is ~167KB and is only needed to
+			// fill in item photos, which persist in itemPictureCache across
+			// refreshes — so after the first load there is usually nothing to
+			// fill. backfillItemPictures() fetches it only when something is
+			// actually missing.
 			const reconcilePromise = replacementObligationsAPI.reconcile();
 
-			const results = await Promise.allSettled([listPromise, catalogPromise, reconcilePromise]);
+			const results = await Promise.allSettled([listPromise, reconcilePromise]);
 
 			if (loadId !== inFlightLoadId) return;
 
@@ -108,25 +113,7 @@
 			historyLoading = false;
 
 			// Backfill pictures/classCodes in background
-			const catalogResult = results[1];
-			if (catalogResult.status === 'fulfilled') {
-				const next = new Map(itemPictureCache);
-				const missingIds = new Set<string>();
-				for (const req of requests) {
-					for (const item of req.items) {
-						if (item.itemId && !item.picture && !itemPictureCache.has(item.itemId)) {
-							missingIds.add(item.itemId);
-						}
-					}
-				}
-				for (const catalogItem of catalogResult.value.items) {
-					if (missingIds.has(catalogItem.id) && catalogItem.picture) {
-						next.set(catalogItem.id, catalogItem.picture);
-					}
-				}
-				itemPictureCache = next;
-			}
-
+			await backfillItemPictures();
 			await backfillClassCodes();
 			await maybeOpenScannedRequestFromUrl();
 			syncSelectedRequestWithLatestData();
@@ -683,6 +670,35 @@
 		}
 	}
 
+	/**
+	 * Keeps the list current by fetching only what changed.
+	 *
+	 * The page holds every request and filters client-side, so merging a changed
+	 * row lets `filteredRequests` recompute on its own and Svelte redraws just
+	 * that row. Falls back to a full read whenever a delta cannot be trusted.
+	 */
+	const requestSync = new DeltaSync<BorrowRequestRecord>({
+		idOf: (record) => record.id,
+		fetchAll: async () => {
+			borrowRequestsAPI.invalidateCache();
+			const result = await borrowRequestsAPI.list(LIST_PARAMS, { forceRefresh: true });
+			return { items: result.requests, total: result.total, syncedAt: result.syncedAt };
+		},
+		fetchSince: async (since) => {
+			const result = await borrowRequestsAPI.list({ ...LIST_PARAMS, since });
+			return { items: result.requests, total: result.total, syncedAt: result.syncedAt };
+		}
+	});
+
+	/** Server-shaped records behind `requests`, so deltas merge against raw rows. */
+	let syncedRecords: BorrowRequestRecord[] = [];
+
+	function applySyncedRecords(): void {
+		requests = syncedRecords
+			.filter((record) => record.status !== 'pending_instructor')
+			.map(mapRequest);
+	}
+
 	async function refreshRequests(): Promise<void> {
 		if (refreshInFlight) {
 			pendingRefresh = true;
@@ -691,8 +707,26 @@
 
 		refreshInFlight = true;
 		try {
-			borrowRequestsAPI.invalidateCache();
-			await loadRequests(true);
+			// No baseline yet (first load) — take the full path, then record it.
+			if (!requestSync.primed) {
+				borrowRequestsAPI.invalidateCache();
+				await loadRequests(true);
+				const cached = borrowRequestsAPI.peekCachedList(LIST_PARAMS);
+				if (cached) {
+					syncedRecords = cached.requests;
+					await requestSync.sync(syncedRecords);
+				}
+				return;
+			}
+
+			const result = await requestSync.sync(syncedRecords);
+			if (result.mode === 'unchanged') return;
+
+			syncedRecords = result.records;
+			applySyncedRecords();
+
+			await backfillItemPictures();
+			syncSelectedRequestWithLatestData();
 		} finally {
 			refreshInFlight = false;
 			if (pendingRefresh) {

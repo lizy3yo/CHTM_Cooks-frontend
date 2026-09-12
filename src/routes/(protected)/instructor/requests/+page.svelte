@@ -75,9 +75,11 @@
 		try {
 			// Step 1: Load cards (and parallel fetch classCodes, catalog items)
 			const listPromise = borrowRequestsAPI.list(LIST_PARAMS, { forceRefresh });
-			const catalogPromise = catalogAPI.getCatalog({ availability: 'all', limit: 300 });
-
-			const results = await Promise.allSettled([listPromise, catalogPromise]);
+			// The catalog is NOT fetched here. It is ~167KB and only fills in item
+			// photos, which persist in itemPictureCache across refreshes — so
+			// after the first load there is usually nothing to fill.
+			// backfillItemPictures() fetches it only when something is missing.
+			const results = await Promise.allSettled([listPromise]);
 
 			if (loadId !== inFlightLoadId) return;
 
@@ -118,25 +120,7 @@
 			historyLoading = false;
 
 			// Backfill pictures in background
-			const catalogResult = results[1];
-			if (catalogResult.status === 'fulfilled') {
-				const next = new Map(itemPictureCache);
-				const missingIds = new Set<string>();
-				for (const req of requests) {
-					for (const item of req.items) {
-						if (item.itemId && !item.picture && !itemPictureCache.has(item.itemId)) {
-							missingIds.add(item.itemId);
-						}
-					}
-				}
-				for (const catalogItem of catalogResult.value.items) {
-					if (missingIds.has(catalogItem.id) && catalogItem.picture) {
-						next.set(catalogItem.id, catalogItem.picture);
-					}
-				}
-				itemPictureCache = next;
-			}
-
+			await backfillItemPictures();
 			await backfillClassCodes();
 
 		} catch (error) {
