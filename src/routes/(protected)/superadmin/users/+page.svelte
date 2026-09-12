@@ -171,7 +171,11 @@
 					user_updated: 'A user was updated',
 					user_deleted: 'A user was removed'
 				};
-				toastStore.info(msgs[event.action] || 'User list updated', 'Live Update');
+				// Reconnects wake every subscriber and connections recycle constantly,
+				// so only announce an actual change — never a defensive re-read.
+				if (event?.reason === 'change') {
+					toastStore.info(msgs[event.action] || 'User list updated', 'Live Update');
+				}
 			},
 			// ── Profile photo events (in-place avatar patch) ────────────────────
 			async (event: ProfilePhotoUpdatedEvent) => {

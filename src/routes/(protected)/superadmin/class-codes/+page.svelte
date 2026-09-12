@@ -190,7 +190,11 @@
 				class_deleted: 'A class was removed',
 				enrollment_updated: 'Class enrollment changed'
 			};
-			toastStore.info(msgs[event.action] || 'Class list updated', 'Live Update');
+			// Reconnects wake every subscriber and connections recycle constantly,
+			// so only announce an actual change — never a defensive re-read.
+			if (event?.reason === 'change') {
+				toastStore.info(msgs[event.action] || 'Class list updated', 'Live Update');
+			}
 		});
 		setTimeout(() => {
 			sseConnected = true;

@@ -270,7 +270,12 @@ export const donationsAPI = {
 	 * EventSource automatically reconnects on connection loss.
 	 */
 	subscribeToChanges(callback: (event?: any) => void): () => void {
-		return subscribeToTopic('donation_change', () => callback({ action: 'refresh' }));
+		// `reason` distinguishes a real change from a defensive re-read on
+		// reconnect. Callers that only refetch can ignore it; callers that notify
+		// the user must not fire on 'connect'.
+		return subscribeToTopic('donation_change', (reason) =>
+			callback({ action: reason === 'change' ? 'donation_change' : 'refresh', reason })
+		);
 	},
 
 	// ─── Cache utilities ────────────────────────────────────────────────────

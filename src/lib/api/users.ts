@@ -4,7 +4,7 @@
  */
 
 import { browser } from '$app/environment';
-import { subscribeToTopic } from './realtime';
+import { subscribeToTopic, type RealtimeReason } from './realtime';
 import { getApiErrorMessage } from './session';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -63,6 +63,12 @@ export interface UpdateUserRequest {
 }
 
 export interface UserRealtimeEvent {
+	/**
+	 * Why this fired: 'change' means the server reported a real change,
+	 * 'connect' means we re-read state after (re)connecting. Never notify the
+	 * user on 'connect' — connections recycle constantly.
+	 */
+	reason?: RealtimeReason;
 	action: 'user_created' | 'user_updated' | 'user_deleted';
 	userId: string;
 	occurredAt: string;
@@ -268,8 +274,12 @@ export const usersAPI = {
 		callback: (event: UserRealtimeEvent) => void,
 		onPhotoUpdate?: (event: ProfilePhotoUpdatedEvent) => void
 	): () => void {
-		return subscribeToTopic('user_change', () =>
-			callback({ action: 'refresh' } as unknown as UserRealtimeEvent)
+		// 'refresh' means we merely reconnected; only 'change' is real news.
+		return subscribeToTopic('user_change', (reason) =>
+			callback({
+				action: reason === 'change' ? 'user_updated' : 'refresh',
+				reason
+			} as unknown as UserRealtimeEvent)
 		);
 	},
 

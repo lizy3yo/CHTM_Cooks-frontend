@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import { subscribeToTopic } from './realtime';
+import { subscribeToTopic, type RealtimeReason } from './realtime';
 import { getApiErrorMessage } from './session';
 
 /** Stock figures for one calendar day. */
@@ -570,6 +570,12 @@ export type InventoryRealtimeAction =
 	| 'category_deleted';
 
 export interface InventoryRealtimeEvent {
+	/**
+	 * Why this fired: 'change' means the server reported a real change,
+	 * 'connect' means we re-read state after (re)connecting. Never notify the
+	 * user on 'connect' — connections recycle constantly.
+	 */
+	reason?: RealtimeReason;
 	action: InventoryRealtimeAction;
 	entityType: 'item' | 'category';
 	entityId: string;
@@ -600,7 +606,14 @@ export function subscribeToInventoryChanges(
 	// every (re)connect, so a reconnect gap cannot leave stale data on screen.
 	options?.onConnect?.();
 
-	return subscribeToTopic('inventory_change', () =>
-		callback({ action: 'refresh' } as unknown as InventoryRealtimeEvent)
+	// A reconnect is a defensive re-read, not news: it reports 'refresh', which
+	// callers filtering on real item actions correctly ignore. Only an actual
+	// change reports 'item_updated'.
+	return subscribeToTopic('inventory_change', (reason) =>
+		callback({
+			action: reason === 'change' ? 'item_updated' : 'refresh',
+			entityType: 'item',
+			reason
+		} as unknown as InventoryRealtimeEvent)
 	);
 }

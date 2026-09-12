@@ -5,7 +5,7 @@
  */
 
 import { browser } from '$app/environment';
-import { subscribeToTopic } from './realtime';
+import { subscribeToTopic, type RealtimeReason } from './realtime';
 import { getApiErrorMessage } from './session';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -93,6 +93,12 @@ export interface UpdateClassCodeRequest {
 }
 
 export interface ClassCodeRealtimeEvent {
+	/**
+	 * Why this fired: 'change' means the server reported a real change,
+	 * 'connect' means we re-read state after (re)connecting. Never notify the
+	 * user on 'connect' — connections recycle constantly.
+	 */
+	reason?: RealtimeReason;
 	action:
 		| 'class_created'
 		| 'class_updated'
@@ -368,8 +374,12 @@ export const classCodesAPI = {
 	 * Returns an unsubscribe function.
 	 */
 	subscribeToChanges(callback: (event: ClassCodeRealtimeEvent) => void): () => void {
-		return subscribeToTopic('class_code_change', () =>
-			callback({ action: 'refresh' } as unknown as ClassCodeRealtimeEvent)
+		// 'refresh' means we merely reconnected; only 'change' is real news.
+		return subscribeToTopic('class_code_change', (reason) =>
+			callback({
+				action: reason === 'change' ? 'class_updated' : 'refresh',
+				reason
+			} as unknown as ClassCodeRealtimeEvent)
 		);
 	},
 

@@ -1846,7 +1846,13 @@
 			);
 
 			// Subscribe to donations stream to catch donation events that affect inventory
-			donationSSEUnsubscribe = donationsAPI.subscribeToChanges(() => {
+			donationSSEUnsubscribe = donationsAPI.subscribeToChanges((event) => {
+				// Only a real donation change should refresh the catalog and tell the
+				// student. This also fires on every reconnect, and connections
+				// recycle constantly — treating that as news produced an "Equipment
+				// availability updated" toast every time, with nothing changed.
+				if (event?.reason !== 'change') return;
+
 				console.log(
 					'[SSE] Donation change detected (donations stream) - triggering inventory update'
 				);

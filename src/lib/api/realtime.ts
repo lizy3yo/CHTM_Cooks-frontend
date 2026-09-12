@@ -39,7 +39,18 @@ const ALL_TOPICS: RealtimeTopic[] = [
 	'support_change'
 ];
 
-type Listener = () => void;
+/**
+ * Why a subscriber was invoked.
+ *
+ * `change`  — the server reported this topic actually moved.
+ * `connect` — we (re)connected and are re-reading state defensively. Nothing is
+ *             known to have changed, so this must never drive a user-visible
+ *             notification; connections recycle constantly and the user would
+ *             be told "updated" every time.
+ */
+export type RealtimeReason = 'change' | 'connect';
+
+type Listener = (reason: RealtimeReason) => void;
 
 /** A stream closing sooner than this suggests it cannot be held open at all. */
 const QUICK_CLOSE_MS = 5_000;
@@ -60,13 +71,13 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 let lastSignatures: Record<string, string> = {};
 let visibilityBound = false;
 
-function notify(topic: RealtimeTopic): void {
+function notify(topic: RealtimeTopic, reason: RealtimeReason): void {
 	const subscribers = listeners.get(topic);
 	if (!subscribers) return;
 
 	for (const listener of subscribers) {
 		try {
-			listener();
+			listener(reason);
 		} catch (error) {
 			console.error(`[REALTIME] subscriber for ${topic} threw`, error);
 		}
@@ -76,7 +87,7 @@ function notify(topic: RealtimeTopic): void {
 /** Wake every subscriber — used on (re)connect so nobody shows stale data. */
 function notifyAll(): void {
 	for (const topic of listeners.keys()) {
-		notify(topic);
+		notify(topic, 'connect');
 	}
 }
 
@@ -101,7 +112,7 @@ function openStream(): void {
 	});
 
 	for (const topic of ALL_TOPICS) {
-		source.addEventListener(topic, () => notify(topic));
+		source.addEventListener(topic, () => notify(topic, 'change'));
 	}
 
 	source.addEventListener('error', () => {
@@ -142,7 +153,7 @@ async function pollSignatures(): Promise<void> {
 
 		for (const [topic, signature] of Object.entries(next)) {
 			if (!first && lastSignatures[topic] !== signature) {
-				notify(topic as RealtimeTopic);
+				notify(topic as RealtimeTopic, 'change');
 			}
 		}
 
