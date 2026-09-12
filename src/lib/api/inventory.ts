@@ -24,6 +24,11 @@ export interface InventoryItem {
 	picture?: string;
 	quantity: number;
 	donations?: number;
+	/**
+	 * Units handed over that stock could not account for, awaiting a physical
+	 * recount. Non-zero means the recorded count is known to be wrong.
+	 */
+	stockDiscrepancy?: number;
 	released?: number;
 	available?: number;
 	eomCount: number;
@@ -215,6 +220,24 @@ export const inventoryItemsAPI = {
 		listCache.clear();
 		inFlight.clear();
 	},
+	/**
+	 * Clear a recorded stock discrepancy after a physical recount, optionally
+	 * correcting the on-hand quantity at the same time.
+	 */
+	async reconcileStock(
+		id: string,
+		input: { countedQuantity?: number; notes?: string } = {}
+	): Promise<InventoryItem> {
+		const response = await fetchWithAuthRetry(
+			`/api/inventory/items/${id}/reconcile-stock`,
+			getFetchOptions('POST', input)
+		);
+		const item = await handleResponse<InventoryItem>(response);
+		listCache.clear();
+		inFlight.clear();
+		return item;
+	},
+
 	/**
 	 * Get all inventory items
 	 */

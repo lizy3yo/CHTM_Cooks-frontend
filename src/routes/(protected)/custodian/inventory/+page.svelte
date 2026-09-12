@@ -3437,6 +3437,56 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 			'Template downloaded! Name your Excel sheet tab as the category (e.g., "Hot Kitchen")'
 		);
 	}
+
+	// --- Stock reconciliation -------------------------------------------------
+	// A discrepancy means units were handed over that the recorded count could
+	// not cover. Clearing it requires a physical recount, so the custodian is
+	// asked for the real number rather than the figure simply being zeroed.
+	let reconcileItem = $state<InventoryItem | null>(null);
+	let reconcileCount = $state('');
+	let reconcileNotes = $state('');
+	let reconcileSaving = $state(false);
+
+	function openReconcileModal(item: InventoryItem): void {
+		reconcileItem = item;
+		reconcileCount = String(item.quantity ?? 0);
+		reconcileNotes = '';
+	}
+
+	function closeReconcileModal(): void {
+		reconcileItem = null;
+		reconcileCount = '';
+		reconcileNotes = '';
+	}
+
+	async function submitReconcile(): Promise<void> {
+		if (!reconcileItem || reconcileSaving) return;
+
+		const counted = reconcileCount.trim() === '' ? undefined : Number(reconcileCount);
+		if (counted !== undefined && (!Number.isFinite(counted) || counted < 0)) {
+			toastStore.error('Enter a valid counted quantity.', 'Invalid count');
+			return;
+		}
+
+		reconcileSaving = true;
+		try {
+			await inventoryItemsAPI.reconcileStock(reconcileItem.id, {
+				countedQuantity: counted,
+				notes: reconcileNotes.trim() || undefined
+			});
+			toastStore.success('Stock reconciled.', reconcileItem.name);
+			closeReconcileModal();
+			inventoryStore.invalidateAll();
+			await loadInventoryProgressive(true);
+		} catch (error) {
+			toastStore.error(
+				error instanceof Error ? error.message : 'Failed to reconcile stock.',
+				'Reconcile failed'
+			);
+		} finally {
+			reconcileSaving = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -4736,6 +4786,18 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 													>
 														{item.released ?? 0}
 													</button>
+													<!-- Units handed over that stock could not account for. Shown here
+													     because a wrong count is invisible until someone recounts. -->
+													{#if (item.stockDiscrepancy ?? 0) > 0}
+														<button
+															type="button"
+															onclick={() => openReconcileModal(item)}
+															class="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-600/20 transition-colors hover:bg-rose-100"
+															title="Stock could not account for {item.stockDiscrepancy} unit(s) handed over. Click to reconcile."
+														>
+															{item.stockDiscrepancy} unaccounted
+														</button>
+													{/if}
 													<!-- Free on the chosen day, which differs from shelf stock. -->
 													{#if freeOnSelectedDate(item) !== null}
 														{@const free = freeOnSelectedDate(item)}
@@ -6968,4 +7030,67 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 			selectedBorrowersItem = null;
 		}}
 	/>
+{/if}
+
+<!-- Stock reconciliation -->
+{#if reconcileItem}
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+		<button
+			type="button"
+			class="fixed inset-0 bg-black/40 backdrop-blur-sm"
+			onclick={closeReconcileModal}
+			aria-label="Close"
+			tabindex="-1"
+		></button>
+		<div class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+			<h2 class="text-lg font-bold text-gray-900">Reconcile stock</h2>
+			<p class="mt-1 text-sm text-gray-600">{reconcileItem.name}</p>
+
+			<div class="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-600/10">
+				<strong>{reconcileItem.stockDiscrepancy}</strong>
+				unit{(reconcileItem.stockDiscrepancy ?? 0) === 1 ? '' : 's'} were handed out that the
+				recorded count could not cover. Count the shelf and enter what is actually there.
+			</div>
+
+			<label for="reconcileCount" class="mt-4 block text-sm font-medium text-gray-700">
+				Counted quantity on hand
+			</label>
+			<input
+				id="reconcileCount"
+				type="number"
+				min="0"
+				bind:value={reconcileCount}
+				class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
+			/>
+
+			<label for="reconcileNotes" class="mt-3 block text-sm font-medium text-gray-700">
+				Notes <span class="font-normal text-gray-400">(optional)</span>
+			</label>
+			<textarea
+				id="reconcileNotes"
+				rows="2"
+				bind:value={reconcileNotes}
+				placeholder="e.g. two pans found in the back cupboard"
+				class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
+			></textarea>
+
+			<div class="mt-5 flex justify-end gap-2">
+				<button
+					type="button"
+					onclick={closeReconcileModal}
+					class="rounded-lg px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100"
+				>
+					Cancel
+				</button>
+				<button
+					type="button"
+					onclick={submitReconcile}
+					disabled={reconcileSaving}
+					class="rounded-lg bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-700 disabled:opacity-50"
+				>
+					{reconcileSaving ? 'Saving…' : 'Reconcile'}
+				</button>
+			</div>
+		</div>
+	</div>
 {/if}

@@ -12,6 +12,7 @@
 		type BorrowRequestStatus
 	} from '$lib/api/borrowRequests';
 	import { catalogAPI } from '$lib/api/catalog';
+	import { DeltaSync } from '$lib/api/deltaSync';
 	import { classCodesAPI, type ClassCodeResponse } from '$lib/api/classCodes';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import ActionMenu from '$lib/components/ui/ActionMenu.svelte';
@@ -332,11 +333,36 @@
 		};
 	}
 
+	/**
+	 * Keeps the list current by fetching only what changed.
+	 *
+	 * The page holds every request and filters client-side, so merging a changed
+	 * row lets the derived views recompute on their own and Svelte redraws just
+	 * that row. Falls back to a full read whenever a delta cannot be trusted.
+	 */
+	const requestSync = new DeltaSync<BorrowRequestRecord>({
+		idOf: (record) => record.id,
+		fetchAll: async () => {
+			const result = await borrowRequestsAPI.list(LIST_PARAMS, { forceRefresh: true });
+			return { items: result.requests, total: result.total, syncedAt: result.syncedAt };
+		},
+		fetchSince: async (since) => {
+			const result = await borrowRequestsAPI.list({ ...LIST_PARAMS, since });
+			return { items: result.requests, total: result.total, syncedAt: result.syncedAt };
+		}
+	});
+
+	/** Server-shaped records behind `requests`, so deltas merge against raw rows. */
+	let syncedRecords: BorrowRequestRecord[] = [];
+
 	async function loadRequests(forceRefresh = false, background = false): Promise<void> {
 		if (background) {
 			try {
-				const response = await borrowRequestsAPI.list(LIST_PARAMS, { forceRefresh });
-				requests = response.requests.map(mapRequest);
+				const result = await requestSync.sync(syncedRecords);
+				if (result.mode === 'unchanged') return;
+
+				syncedRecords = result.records;
+				requests = syncedRecords.map(mapRequest);
 				await backfillItemPictures();
 				await backfillClassCodes();
 			} catch (error) {
@@ -344,6 +370,16 @@
 			}
 		} else {
 			await loadRequestsProgressive(forceRefresh);
+
+			// Seed the delta baseline from the full read so the next background
+			// refresh can be incremental.
+			const cached = borrowRequestsAPI.peekCachedList(LIST_PARAMS);
+			if (cached) {
+				syncedRecords = cached.requests;
+				if (!requestSync.primed) {
+					await requestSync.sync(syncedRecords);
+				}
+			}
 		}
 	}
 
