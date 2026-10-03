@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { fly } from 'svelte/transition';
-	import { cubicOut } from 'svelte/easing';
 	import { X, Package, Calendar, Clock } from 'lucide-svelte';
 
 	interface Props {
@@ -36,7 +34,7 @@
 	<div class="fixed inset-0 z-50 overflow-y-auto">
 		<button type="button" class="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-label="Close" onclick={onClose}></button>
 		<div class="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4">
-			<div class="relative w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl" in:fly={{ y: 16, duration: 220, easing: cubicOut }}>
+			<div class="animate-scaleIn relative w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
 				<div class="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
 					<div class="flex min-w-0 items-start gap-3">
 						<div class="mt-0.5 rounded-full bg-pink-100 p-2.5 text-pink-600"><Package class="h-5 w-5" /></div>

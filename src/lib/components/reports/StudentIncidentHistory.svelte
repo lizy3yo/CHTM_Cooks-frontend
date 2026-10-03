@@ -35,7 +35,7 @@
 	const PAGE_SIZE = 10;
 
 	let scope = $state<'all' | 'range'>('all');
-	let report = $state<StudentIncidentReport | null>(null);
+	let report = $state.raw<StudentIncidentReport | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let search = $state('');
@@ -43,8 +43,8 @@
 	let exporting = $state(false);
 
 	// Detail modal
-	let selected = $state<StudentIncidentSummary | null>(null);
-	let detail = $state<StudentIncident[]>([]);
+	let selected = $state.raw<StudentIncidentSummary | null>(null);
+	let detail = $state.raw<StudentIncident[]>([]);
 	let detailLoading = $state(false);
 	let detailError = $state<string | null>(null);
 	let detailExporting = $state(false);

@@ -77,11 +77,14 @@
 		? peekCachedAnalytics({ period: 'month', from: initialFrom, to: initialTo })
 		: null;
 
-	let report = $state<AnalyticsReport | null>(initialReport);
-	let borrowDetail = $state<{ kind: 'entry' | 'item' | 'borrower'; subject: any } | null>(null);
-	let adjDetail = $state<any | null>(null);
-	let studentDetail = $state<any | null>(null);
-	let summaryReport = $state<Partial<AnalyticsReport> | null>(null);
+	// Raw, not deep-reactive: the report is only ever replaced whole, and deep
+	// proxies made every read of its (large) lists ~100x slower, e.g. when a
+	// detail modal scans itemEntries on open.
+	let report = $state.raw<AnalyticsReport | null>(initialReport);
+	let borrowDetail = $state.raw<{ kind: 'entry' | 'item' | 'borrower'; subject: any } | null>(null);
+	let adjDetail = $state.raw<any | null>(null);
+	let studentDetail = $state.raw<any | null>(null);
+	let summaryReport = $state.raw<Partial<AnalyticsReport> | null>(null);
 	// Walk-in transactions come from the shared analytics payload (all staff roles see them).
 	const walkInSource = $derived(report?.walkIns ?? summaryReport?.walkIns ?? null);
 	let loading = $state(!initialReport);

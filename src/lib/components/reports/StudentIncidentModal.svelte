@@ -2,8 +2,6 @@
 	/**
 	 * One student's full damage & missing history, newest first.
 	 */
-	import { fly } from 'svelte/transition';
-	import { cubicOut } from 'svelte/easing';
 	import { X, Download, PackageX, Wrench, ClipboardList, Store } from 'lucide-svelte';
 	import type { StudentIncident, StudentIncidentSummary } from '$lib/api/studentIncidents';
 
@@ -52,8 +50,7 @@
 		<button type="button" class="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-label="Close" onclick={onClose}></button>
 		<div class="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4">
 			<div
-				class="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
-				in:fly={{ y: 16, duration: 220, easing: cubicOut }}
+				class="animate-scaleIn relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
 			>
 				<!-- Header -->
 				<div class="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">

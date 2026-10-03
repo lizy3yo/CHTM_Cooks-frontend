@@ -213,8 +213,7 @@
 
 		<div class="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4">
 			<div
-				class="relative w-full max-w-xl overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
-				in:fly={{ y: 16, duration: 220, easing: cubicOut }}
+				class="animate-scaleIn relative w-full max-w-xl overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
 			>
 				<!-- Header -->
 				<div class="flex items-start justify-between border-b border-gray-100 px-5 py-4 sm:px-7 sm:py-5">
