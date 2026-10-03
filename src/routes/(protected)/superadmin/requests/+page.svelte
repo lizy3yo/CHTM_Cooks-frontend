@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import RequestTimeline from '$lib/components/ui/RequestTimeline.svelte';
 	import { browser } from '$app/environment';
 	import { 
 		Search, 
@@ -294,6 +295,8 @@
 	function mapRequest(record: BorrowRequestRecord): any {
 		const studentName = record.student?.fullName || `Student ${record.studentId.slice(-6).toUpperCase()}`;
 		return {
+			// The detail modal reads the API record itself (dates, people, items).
+			raw: record,
 			rawId: record.id,
 			rawStatus: record.status,
 			rawItems: record.items,
@@ -485,9 +488,9 @@
 				toastStore.info(msgs[event.action], 'Request Update');
 			}
 			
-			if (selectedRequest && event.requestId === selectedRequest.id) {
-				const freshReq = requests.find(r => r.id === selectedRequest!.id);
-				if (freshReq) selectedRequest = freshReq;
+			if (showDetailModal && selectedRequest && event.requestId === selectedRequest.id) {
+				const freshReq = requests.find((r) => r.rawId === selectedRequest!.id);
+				if (freshReq?.raw) selectedRequest = freshReq.raw;
 			}
 		});
 
@@ -652,8 +655,9 @@
 		}, 300);
 	}
 
-	function openDetail(request: BorrowRequestRecord) {
-		selectedRequest = request;
+	function openDetail(request: any) {
+		// List rows are display-mapped; the modal needs the original record.
+		selectedRequest = request.raw ?? request;
 		showDetailModal = true;
 		qrDataUrl = null;
 		QRCode.toDataURL(request.id, {
@@ -1528,6 +1532,9 @@
 							</span>
 						{/if}
 					</div>
+
+					<!-- Request lifecycle, submission to return -->
+					<RequestTimeline record={selectedRequest} />
 
 					<!-- Request Information -->
 					<div>

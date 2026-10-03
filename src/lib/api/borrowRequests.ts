@@ -107,6 +107,9 @@ export interface BorrowRequestRecord {
 	pickedUpAt?: string;
 	returnedAt?: string;
 	expiredAt?: string;
+	/** When and by whom the request was cancelled; null for older records without it. */
+	cancelledAt?: string | null;
+	cancelledBy?: BorrowRequestUserSummary | null;
 	missingAt?: string;
 	resolvedAt?: string;
 	lastReminderAt?: string;

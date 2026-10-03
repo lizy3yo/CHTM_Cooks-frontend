@@ -22,6 +22,7 @@
 	import RequestsSkeletonLoader from '$lib/components/ui/RequestsSkeletonLoader.svelte';
 	import { replacementObligationsAPI } from '$lib/api/replacementObligations';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
+	import RequestTimeline from '$lib/components/ui/RequestTimeline.svelte';
 	import { Package } from 'lucide-svelte';
 	type Tab = 'all' | 'pending' | 'ready' | 'active' | 'unresolved' | 'history';
 	type HistorySubTab = 'all' | 'done' | 'resolved' | 'completed' | 'cancelled';
@@ -282,6 +283,7 @@
 		).length;
 
 		return {
+			raw: record,
 			rawId: record.id,
 			rawStatus: record.status,
 			rawItems: record.items,
@@ -1569,7 +1571,7 @@
 															request.rejectionReason
 														).text}
 													</span>
-													{#if request.approvedBy}
+													{#if request.approvedDate}
 														<p class="mt-1 text-[11px] text-gray-500">Approved by {request.approvedBy}</p>
 													{/if}
 												</div>
@@ -2062,7 +2064,7 @@
 										).text}</span
 									>
 								</div>
-								{#if selectedRequest.approvedBy}
+								{#if selectedRequest.approvedDate}
 									<p class="mt-1 text-xs text-gray-500">Approved by {selectedRequest.approvedBy}</p>
 								{/if}
 							</div>
@@ -2092,165 +2094,8 @@
 				<!-- Content -->
 				<div class="max-h-[70vh] overflow-y-auto px-4 py-5 sm:px-8 sm:py-8">
 					<div class="space-y-6 sm:space-y-8">
-						<!-- Workflow Timeline -->
-						<div>
-							<div
-								class="rounded-2xl border border-gray-200 bg-linear-to-br from-white to-gray-50 p-4 sm:p-5"
-							>
-								<!-- Timeline Container -->
-								<div class="relative">
-									<!-- SVG Background for connector lines -->
-									<svg class="pointer-events-none absolute inset-0 h-16 w-full" style="z-index: 0;">
-										{#each [{ label: 'Request Submitted', by: 'Student', date: selectedRequest.requestDate, completed: true }, { label: 'Approved', by: selectedRequest.approvedBy, date: selectedRequest.approvedDate, completed: !!selectedRequest.approvedDate }, { label: 'Custodian Approved', by: 'Custodian', date: selectedRequest.releasedDate, completed: !!selectedRequest.releasedDate }, { label: 'Awaiting Pickup', by: 'Student', date: selectedRequest.pickedUpDate, completed: !!selectedRequest.pickedUpDate && selectedRequest.status !== 'ready' }] as step, idx}
-											{@const stepCount = 4}
-											{@const isLastStep = idx === stepCount - 1}
-											{@const stepWidth = 100 / stepCount}
-											{@const x1 = stepWidth * (idx + 0.5)}
-											{@const x2 = stepWidth * (idx + 1.5)}
-											{@const y = 20}
-											{@const isCurrentCompleted = step.completed}
-
-											{#if !isLastStep}
-												<line
-													x1="{x1}%"
-													y1={y}
-													x2="{x2}%"
-													y2={y}
-													stroke={isCurrentCompleted ? '#ec4899' : '#e5e7eb'}
-													stroke-width="2"
-													stroke-linecap="round"
-												/>
-											{/if}
-										{/each}
-									</svg>
-
-									<!-- Timeline steps -->
-									<div
-										class="relative flex items-start justify-between gap-1 sm:gap-2"
-										style="z-index: 1;"
-									>
-										{#each [{ label: 'Request Submitted', by: 'Student', date: selectedRequest.requestDate, completed: true }, { label: 'Approved', by: selectedRequest.approvedBy, date: selectedRequest.approvedDate, completed: !!selectedRequest.approvedDate }, { label: 'Custodian Approved', by: 'Custodian', date: selectedRequest.releasedDate, completed: !!selectedRequest.releasedDate }, { label: 'Awaiting Pickup', by: 'Student', date: selectedRequest.pickedUpDate, completed: !!selectedRequest.pickedUpDate && selectedRequest.status !== 'ready' }] as step, idx}
-											<div class="flex flex-1 flex-col items-center">
-												<!-- Icon Circle -->
-												<div class="relative mb-2 flex items-center justify-center">
-													<div
-														class="flex h-10 w-10 items-center justify-center rounded-full border-2 bg-white sm:h-12 sm:w-12 {step.completed
-															? 'border-pink-600'
-															: 'border-gray-300'}"
-													>
-														{#if idx === 0}
-															<svg
-																class="h-4 w-4 sm:h-5 sm:w-5 {step.completed
-																	? 'text-pink-600'
-																	: 'text-gray-400'}"
-																fill="none"
-																stroke="currentColor"
-																viewBox="0 0 24 24"
-															>
-																<path
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																	stroke-width="2"
-																	d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-																/>
-															</svg>
-														{:else if idx === 1}
-															<svg
-																class="h-4 w-4 sm:h-5 sm:w-5 {step.completed
-																	? 'text-pink-600'
-																	: 'text-gray-400'}"
-																fill="none"
-																stroke="currentColor"
-																viewBox="0 0 24 24"
-															>
-																<path
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																	stroke-width="2"
-																	d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-																/>
-															</svg>
-														{:else if idx === 2}
-															<svg
-																class="h-4 w-4 sm:h-5 sm:w-5 {step.completed
-																	? 'text-pink-600'
-																	: 'text-gray-400'}"
-																fill="none"
-																stroke="currentColor"
-																viewBox="0 0 24 24"
-															>
-																<path
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																	stroke-width="2"
-																	d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
-																/>
-															</svg>
-														{:else}
-															<svg
-																class="h-4 w-4 sm:h-5 sm:w-5 {step.completed
-																	? 'text-pink-600'
-																	: 'animate-pulse text-gray-400'}"
-																fill="none"
-																stroke="currentColor"
-																viewBox="0 0 24 24"
-															>
-																<path
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																	stroke-width="2"
-																	d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-																/>
-															</svg>
-														{/if}
-													</div>
-												</div>
-
-												<!-- Step Label -->
-												<div class="min-w-0 text-center">
-													<p
-														class="line-clamp-2 text-[10px] leading-tight font-semibold text-gray-900 sm:text-xs"
-													>
-														{step.label}
-													</p>
-													<p class="mt-0.5 line-clamp-1 text-[9px] text-gray-500 sm:text-xs">
-														{step.by}
-													</p>
-													<p
-														class="text-[9px] font-medium sm:text-xs {step.completed
-															? 'text-pink-600'
-															: 'text-gray-400'} mt-0.5"
-													>
-														{#if step.date}
-															{new Date(step.date).toLocaleDateString('en-US', {
-																month: 'short',
-																day: 'numeric'
-															})}
-														{:else}
-															Pending
-														{/if}
-													</p>
-												</div>
-											</div>
-										{/each}
-									</div>
-								</div>
-
-								<!-- Status Legend -->
-								<div
-									class="mt-4 flex flex-wrap justify-center gap-3 border-t border-gray-200 pt-3 text-[10px] sm:text-xs"
-								>
-									<div class="flex items-center gap-1.5">
-										<div class="h-2 w-2 rounded-full bg-pink-600"></div>
-										<span class="text-gray-600">Completed</span>
-									</div>
-									<div class="flex items-center gap-1.5">
-										<div class="h-2 w-2 rounded-full bg-gray-300"></div>
-										<span class="text-gray-600">Pending</span>
-									</div>
-								</div>
-							</div>
-						</div>
+						<!-- Request lifecycle, submission to return -->
+						<RequestTimeline record={selectedRequest.raw} />
 
 						<!-- Student Information -->
 						<div>

@@ -1,5 +1,6 @@
 <script lang="ts">
 import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
+import RequestTimeline from '$lib/components/ui/RequestTimeline.svelte';
 import type { ClassCodeResponse } from '$lib/api/classCodes';
 import {
 	borrowRequestsAPI,
@@ -110,7 +111,11 @@ function availabilityFor(itemId: string): RequestAvailabilityLine | undefined {
 			<!-- Content -->
 			<div class="max-h-[70vh] overflow-y-auto px-4 py-5 sm:px-8 sm:py-8">
 				<div class="space-y-6 sm:space-y-8">
-					
+					<!-- Request lifecycle, submission to return -->
+					{#if request.raw}
+						<RequestTimeline record={request.raw} />
+					{/if}
+
 					<!-- Student Information -->
 					<div>
 						<h3 class="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-gray-900">

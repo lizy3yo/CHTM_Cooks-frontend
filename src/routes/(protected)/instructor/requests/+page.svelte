@@ -263,6 +263,7 @@
 			record.student?.fullName || `Student ${record.studentId.slice(-6).toUpperCase()}`;
 		const user = $authStore.user;
 		return {
+			raw: record,
 			rawId: record.id,
 			rawStatus: record.status,
 			id: getDisplayId(record.id),

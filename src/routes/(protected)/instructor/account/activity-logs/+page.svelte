@@ -5,6 +5,7 @@
 	import { toastStore } from '$lib/stores/toast';
 	import { profileStore } from '$lib/stores/profile';
 	import { borrowRequestsAPI } from '$lib/api/borrowRequests';
+	import RequestTimeline from '$lib/components/ui/RequestTimeline.svelte';
 	import { catalogAPI } from '$lib/api/catalog';
 	import { inventoryActivityLogsAPI } from '$lib/api/inventoryActivityLogs';
 	import type { InventoryActivityLogEntry } from '$lib/api/inventoryActivityLogs';
@@ -1339,6 +1340,9 @@
 				<!-- Content -->
 				<div class="max-h-[70vh] overflow-y-auto px-4 py-5 sm:px-8 sm:py-8">
 					<div class="space-y-6 sm:space-y-8">
+						<!-- Request lifecycle, submission to return -->
+						<RequestTimeline record={selectedHistoryRequest} />
+
 						<!-- Student Information -->
 						<div>
 							<h3
