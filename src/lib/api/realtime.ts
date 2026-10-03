@@ -106,7 +106,9 @@ function openStream(): void {
 
 	source.addEventListener('connected', () => {
 		connectedAt = Date.now();
-		quickCloses = 0;
+		// quickCloses is NOT reset here: a stream that connects and then drops
+		// at once must still count, or it reconnects (and refetches every
+		// subscriber) forever instead of falling back to polling.
 		// Re-read current state; anything missed while disconnected is covered.
 		notifyAll();
 	});
@@ -119,9 +121,13 @@ function openStream(): void {
 		const lived = connectedAt ? Date.now() - connectedAt : 0;
 
 		// A stream that dies immediately, repeatedly, is not going to work here.
+		// One that stayed up proves SSE works, so the count starts over.
 		if (connectedAt === 0 || lived < QUICK_CLOSE_MS) {
 			quickCloses += 1;
+		} else {
+			quickCloses = 0;
 		}
+		connectedAt = 0;
 
 		if (quickCloses >= QUICK_CLOSE_LIMIT) {
 			console.info('[REALTIME] event stream unavailable, falling back to signature polling');
