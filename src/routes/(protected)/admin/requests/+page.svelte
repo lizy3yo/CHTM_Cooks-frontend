@@ -23,7 +23,8 @@
 	import { replacementObligationsAPI } from '$lib/api/replacementObligations';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import { Package } from 'lucide-svelte';
-	type Tab = 'all' | 'pending' | 'ready' | 'active' | 'unresolved' | 'history';
+	import { statusLabel } from '$lib/utils/statusDisplay';
+	type Tab = 'all' | 'review' | 'pending' | 'ready' | 'active' | 'unresolved' | 'history';
 	type HistorySubTab = 'all' | 'done' | 'resolved' | 'completed' | 'cancelled';
 	type ViewMode = 'card' | 'list';
 
@@ -82,7 +83,6 @@
 			const listResult = results[0];
 			if (listResult.status === 'fulfilled') {
 				requests = listResult.value.requests
-					.filter((record) => record.status !== 'pending_instructor')
 					.map(mapRequest);
 			} else {
 				throw listResult.reason;
@@ -161,8 +161,11 @@
 	function toUiStatus(
 		status: BorrowRequestStatus,
 		rejectionReason?: string
-	): 'pending' | 'ready' | 'active' | 'unresolved' | 'history' {
+	): 'review' | 'pending' | 'ready' | 'active' | 'unresolved' | 'history' {
 		switch (status) {
+			case 'pending_instructor':
+			case 'pending_appeal':
+				return 'review';
 			case 'approved_instructor':
 				return 'pending';
 			case 'ready_for_pickup':
@@ -583,7 +586,7 @@
 	afterNavigate(({ to }) => {
 		if (to) {
 			const tabParam = to.url.searchParams.get('tab');
-			if (tabParam && ['pending', 'ready', 'active', 'unresolved', 'history'].includes(tabParam)) {
+			if (tabParam && ['review', 'pending', 'ready', 'active', 'unresolved', 'history'].includes(tabParam)) {
 				activeTab = tabParam as Tab;
 			}
 			const filterParam = to.url.searchParams.get('filter');
@@ -685,7 +688,7 @@
 
 			syncedRecords = result.records;
 			requests = syncedRecords
-				.filter((record) => record.status !== 'pending_instructor')				.map(mapRequest);
+				.map(mapRequest);
 
 			await backfillItemPictures();
 		} finally {
@@ -783,7 +786,7 @@
 	onMount(() => {
 		// Parse search parameters
 		const tabParam = $page.url.searchParams.get('tab');
-		if (tabParam && ['pending', 'ready', 'active', 'unresolved', 'history'].includes(tabParam)) {
+		if (tabParam && ['review', 'pending', 'ready', 'active', 'unresolved', 'history'].includes(tabParam)) {
 			activeTab = tabParam as Tab;
 		}
 		const filterParam = $page.url.searchParams.get('filter');
@@ -794,7 +797,6 @@
 		// Populate cached data if available
 		if (hasCachedData && cachedRequests) {
 			requests = cachedRequests.requests
-				.filter((record) => record.status !== 'pending_instructor')
 				.map(mapRequest);
 			console.log('[REQUESTS] Loaded from cache:', requests.length, 'requests');
 			cardsLoading = false;
@@ -907,6 +909,7 @@
 
 	const stats = $derived({
 		totalRequests: requests.length,
+		reviewCount: requests.filter((r) => r.status === 'review').length,
 		pendingCount: requests.filter((r) => r.status === 'pending').length,
 		readyCount: requests.filter((r) => r.status === 'ready').length,
 		activeCount: requests.filter((r) => r.status === 'active').length,
@@ -914,6 +917,7 @@
 	});
 
 	const tabCounts = $derived({
+		review: requests.filter((r) => r.status === 'review').length,
 		pending: requests.filter((r) => r.status === 'pending').length,
 		ready: requests.filter((r) => r.status === 'ready').length,
 		active: requests.filter((r) => r.status === 'active').length,
@@ -929,6 +933,7 @@
 	const activeTabLoading = $derived.by(() => {
 		switch (activeTab) {
 			case 'all': return pendingLoading || readyLoading || activeLoading || unresolvedLoading || historyLoading;
+			case 'review':
 			case 'pending': return pendingLoading;
 			case 'ready': return readyLoading;
 			case 'active': return activeLoading;
@@ -960,8 +965,10 @@
 
 	function getStatusBadge(status: Tab, rawStatus?: BorrowRequestStatus, rejectionReason?: string) {
 		switch (status) {
+			case 'review':
+				return { text: statusLabel(rawStatus ?? 'pending_instructor'), color: 'bg-yellow-100 text-yellow-800' };
 			case 'pending':
-				return { text: 'Pending Preparation', color: 'bg-yellow-100 text-yellow-800' };
+				return { text: statusLabel('approved_instructor'), color: 'bg-amber-100 text-amber-800' };
 			case 'ready':
 				return { text: 'Ready for Pickup', color: 'bg-green-100 text-green-800' };
 			case 'active':
@@ -973,6 +980,8 @@
 			case 'history':
 				if (rawStatus === 'resolved')
 					return { text: 'Resolved', color: 'bg-emerald-100 text-emerald-800' };
+				if (rawStatus === 'expired')
+					return { text: statusLabel('expired'), color: 'bg-stone-100 text-stone-700' };
 				return isCancelledRequest(rawStatus ?? 'returned', rejectionReason)
 					? { text: 'Cancelled', color: 'bg-slate-100 text-slate-800' }
 					: rawStatus === 'rejected'
@@ -989,8 +998,10 @@
 		rejectionReason?: string
 	): string {
 		switch (status) {
+			case 'review':
+				return 'border-yellow-400';
 			case 'pending':
-				return 'border-yellow-500';
+				return 'border-amber-500';
 			case 'ready':
 				return 'border-green-500';
 			case 'active':
@@ -1016,6 +1027,16 @@
 		rejectionReason?: string
 	): { text: string; color: string } {
 		switch (status) {
+			case 'review':
+				return rawStatus === 'pending_appeal'
+					? {
+							text: 'The student appealed a declined request. It is back with the instructor for a decision; nothing to prepare yet.',
+							color: 'text-yellow-700'
+						}
+					: {
+							text: 'Awaiting the instructor’s decision. Once approved it moves to Awaiting Preparation; nothing to prepare yet.',
+							color: 'text-yellow-700'
+						};
 			case 'pending':
 				return {
 					text: 'Prepare the requested equipment and release it when the request is ready for pickup.',
@@ -1044,6 +1065,12 @@
 					color: 'text-rose-700'
 				};
 			case 'history':
+				if (rawStatus === 'expired') {
+					return {
+						text: 'The booked pickup day passed without collection, so the request expired. No stock was deducted.',
+						color: 'text-stone-600'
+					};
+				}
 				return isCancelledRequest(rawStatus ?? 'returned', rejectionReason)
 					? {
 							text: 'This request was cancelled by the student before fulfillment and archived in history.',
@@ -1070,6 +1097,7 @@
 
 	function getWorkflowFilter(): string {
 		if (activeTab === 'all') return 'all';
+		if (activeTab === 'review') return 'review';
 		if (activeTab === 'pending') return 'pending';
 		if (activeTab === 'ready') return 'ready';
 		if (activeTab === 'unresolved') return 'unresolved';
@@ -1087,6 +1115,7 @@
 
 	function setWorkflowFilter(val: string) {
 		if (val === 'all') { activeTab = 'all'; overdueOnly = false; pendingReturnOnly = false; historySubTab = 'all'; }
+		else if (val === 'review') { activeTab = 'review'; overdueOnly = false; pendingReturnOnly = false; }
 		else if (val === 'pending') { activeTab = 'pending'; overdueOnly = false; pendingReturnOnly = false; }
 		else if (val === 'ready') { activeTab = 'ready'; overdueOnly = false; pendingReturnOnly = false; }
 		else if (val === 'active') { activeTab = 'active'; overdueOnly = false; pendingReturnOnly = false; }
@@ -1102,8 +1131,10 @@
 		if (filter === 'all') return null;
 		
 		switch (filter) {
-			case 'pending': 
-				return { label: 'Pending Preparation Only', bg: 'bg-yellow-50', text: 'text-yellow-700', ring: 'ring-yellow-600/10', btn: 'text-yellow-500', btnHoverBg: 'hover:bg-yellow-100', btnHoverText: 'hover:text-yellow-700' };
+			case 'review':
+				return { label: 'Under Review Only', bg: 'bg-yellow-50', text: 'text-yellow-700', ring: 'ring-yellow-600/10', btn: 'text-yellow-500', btnHoverBg: 'hover:bg-yellow-100', btnHoverText: 'hover:text-yellow-700' };
+			case 'pending':
+				return { label: 'Awaiting Preparation Only', bg: 'bg-amber-50', text: 'text-amber-700', ring: 'ring-amber-600/10', btn: 'text-amber-500', btnHoverBg: 'hover:bg-amber-100', btnHoverText: 'hover:text-amber-700' };
 			case 'ready': 
 				return { label: 'Ready for Pickup Only', bg: 'bg-green-50', text: 'text-green-700', ring: 'ring-green-600/10', btn: 'text-green-500', btnHoverBg: 'hover:bg-green-100', btnHoverText: 'hover:text-green-700' };
 			case 'active': 
@@ -1136,9 +1167,9 @@
 
 		<!-- Statistics Cards -->
 		{#if cardsLoading}
-			<div class="grid grid-cols-2 gap-3 lg:grid-cols-5 animate-pulse">
-				{#each Array(5) as _, idx}
-					<div class="rounded-lg bg-white p-3 shadow sm:p-5 h-[80px] sm:h-[116px] {idx === 4 ? 'col-span-2 lg:col-span-1' : ''}">
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 animate-pulse">
+				{#each Array(6) as _}
+					<div class="rounded-lg bg-white p-3 shadow sm:p-5 h-[80px] sm:h-[116px]">
 						<div class="flex items-center justify-between gap-2 h-full">
 							<div class="space-y-2 flex-1">
 								<div class="h-4 bg-gray-200 rounded w-2/3"></div>
@@ -1150,7 +1181,7 @@
 				{/each}
 			</div>
 		{:else}
-			<div class="grid grid-cols-2 gap-3 lg:grid-cols-5" data-tour="admin-requests-stats">
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3" data-tour="admin-requests-stats">
 				<button
 					type="button"
 					onclick={() => { activeTab = 'all'; overdueOnly = false; pendingReturnOnly = false; searchQuery = ''; }}
@@ -1185,12 +1216,44 @@
 
 				<button
 					type="button"
+					onclick={() => { activeTab = 'review'; overdueOnly = false; pendingReturnOnly = false; }}
+					class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-yellow-500/20 sm:p-5 {activeTab === 'review' ? 'border-yellow-400 bg-yellow-50 ring-2 ring-yellow-500/30' : ''}"
+				>
+					<div class="flex items-center justify-between gap-2">
+						<div class="min-w-0">
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Under Review</p>
+							<p class="mt-1 text-xl font-semibold text-yellow-600 sm:mt-2 sm:text-3xl">
+								{stats.reviewCount}
+							</p>
+						</div>
+						<div
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-yellow-100 text-yellow-600 sm:h-12 sm:w-12"
+						>
+							<svg
+								class="h-5 w-5 text-yellow-600 sm:h-6 sm:w-6"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+								/>
+							</svg>
+						</div>
+					</div>
+				</button>
+
+				<button
+					type="button"
 					onclick={() => { activeTab = 'pending'; overdueOnly = false; pendingReturnOnly = false; }}
 					class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-amber-500/20 sm:p-5 {activeTab === 'pending' ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-500/30' : ''}"
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Pending Requests</p>
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Awaiting Preparation</p>
 							<p class="mt-1 text-xl font-semibold text-amber-600 sm:mt-2 sm:text-3xl">
 								{stats.pendingCount}
 							</p>
@@ -1282,7 +1345,7 @@
 				<button
 					type="button"
 					onclick={() => { activeTab = 'active'; overdueOnly = true; pendingReturnOnly = false; }}
-					class="col-span-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-red-500/20 lg:col-span-1 sm:p-5 {activeTab === 'active' && overdueOnly ? 'border-red-400 bg-red-50 ring-2 ring-red-500/30' : ''}"
+					class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-red-500/20 sm:p-5 {activeTab === 'active' && overdueOnly ? 'border-red-400 bg-red-50 ring-2 ring-red-500/30' : ''}"
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
@@ -1349,7 +1412,8 @@
 							class="h-10 min-w-[150px] rounded-xl border border-gray-300 bg-white px-3 text-sm shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-100 focus:outline-none"
 						>
 							<option value="all">All Statuses</option>
-							<option value="pending">Pending Preparation</option>
+							<option value="review">Under Review</option>
+							<option value="pending">Awaiting Preparation</option>
 							<option value="ready">Ready for Pickup (Confirm Pickup)</option>
 							<option value="active">Currently Borrowed</option>
 							<option value="pending_return">Confirm Return</option>
@@ -1611,8 +1675,10 @@
 											</svg>
 										</div>
 										<h3 class="mt-6 text-base font-semibold text-gray-900">
-											{#if activeTab === 'pending'}
-												No pending requests
+											{#if activeTab === 'review'}
+												Nothing under review
+											{:else if activeTab === 'pending'}
+												Nothing awaiting preparation
 											{:else if activeTab === 'ready'}
 												No items ready for pickup
 											{:else if activeTab === 'active'}
@@ -1624,7 +1690,9 @@
 											{/if}
 										</h3>
 										<p class="mx-auto mt-2 max-w-md text-sm text-gray-600">
-											{#if activeTab === 'pending'}
+											{#if activeTab === 'review'}
+												Requests waiting for an instructor’s decision, including appeals, will appear here.
+											{:else if activeTab === 'pending'}
 												Requests approved by instructors will appear here for your action.
 											{:else if activeTab === 'ready'}
 												Items that have been released and are ready for student pickup will appear
@@ -1803,8 +1871,10 @@
 											</svg>
 										</div>
 										<h3 class="mt-6 text-base font-semibold text-gray-900">
-											{#if activeTab === 'pending'}
-												No pending requests
+											{#if activeTab === 'review'}
+												Nothing under review
+											{:else if activeTab === 'pending'}
+												Nothing awaiting preparation
 											{:else if activeTab === 'ready'}
 												No items ready for pickup
 											{:else if activeTab === 'active'}
@@ -1816,7 +1886,9 @@
 											{/if}
 										</h3>
 										<p class="mx-auto mt-2 max-w-md text-sm text-gray-600">
-											{#if activeTab === 'pending'}
+											{#if activeTab === 'review'}
+												Requests waiting for an instructor’s decision, including appeals, will appear here.
+											{:else if activeTab === 'pending'}
 												Requests approved by instructors will appear here for your action.
 											{:else if activeTab === 'ready'}
 												Items that have been released and are ready for student pickup will appear

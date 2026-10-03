@@ -732,14 +732,14 @@ const custodian: TourStep[] = [
 		target: '[data-tour="custodian-dash-kpis"]',
 		placement: 'bottom',
 		title: 'Key numbers at a glance',
-		body: "These cards summarise what's currently borrowed, what's pending, what's overdue, and any open replacement cases. Tap any card to jump straight to that list."
+		body: "These live cards show what's under review with instructors, what's awaiting preparation, what's currently borrowed, what's overdue, and any open replacement cases. Tap a card to jump straight to that list."
 	},
 	{
 		route: '/custodian/dashboard',
 		target: '[data-tour="custodian-dash-actions"]',
 		placement: 'top',
 		title: 'Requests Needing Action',
-		body: "A live queue of what needs handling — approved requests waiting for release, items ready for pickup, and what's currently out (overdue ones flagged in red)."
+		body: "A live queue of what needs handling — requests still under review, approved requests awaiting preparation, items ready for pickup, and what's currently out (overdue ones flagged in red)."
 	},
 
 	// ── Inventory ────────────────────────────────────────────────────────────
@@ -925,21 +925,21 @@ const admin: TourStep[] = [
 		target: '[data-tour="admin-dash-kpis"]',
 		placement: 'bottom',
 		title: 'Key numbers at a glance',
-		body: "These cards summarise what's currently borrowed, what's pending action, what's overdue, and any open replacement cases. Each one is a shortcut — click it to jump straight to that filtered list."
+		body: "These live cards show what's under review with instructors, what's awaiting preparation, what's currently borrowed, what's overdue, and any open replacement cases. Each one is a shortcut — click it to jump straight to that filtered list."
 	},
 	{
 		route: '/admin/dashboard',
 		target: '[data-tour="admin-dash-actions"]',
 		placement: 'top',
 		title: 'Requests Needing Action',
-		body: "A live queue of requests moving through the workflow — pending release, ready for pickup, and currently borrowed (overdue ones flagged in red). A quick read on where things stand."
+		body: "A live queue of requests moving through the workflow — under review, awaiting preparation, ready for pickup, and currently borrowed (overdue ones flagged in red). A quick read on where things stand."
 	},
 	{
 		route: '/admin/dashboard',
 		target: '[data-tour="admin-dash-analytics"]',
 		placement: 'top',
 		title: 'Operational snapshots',
-		body: 'Request breakdown, inventory variance, and student-risk summaries give you an at-a-glance health check. Use the link on each card to open the full report.'
+		body: 'The live request pipeline, inventory variance, and student-risk summaries give you an at-a-glance health check. Use the link on each card to open the full report.'
 	},
 
 	// ── Inventory Catalog ────────────────────────────────────────────────────
@@ -1001,7 +1001,7 @@ const admin: TourStep[] = [
 		target: '[data-tour="admin-requests-stats"]',
 		placement: 'bottom',
 		title: 'Filter by status',
-		body: 'These cards count requests by stage — total, pending, ready, currently borrowed, and overdue. Click one to filter the list to that stage.'
+		body: 'These cards count requests by stage — total, under review, awaiting preparation, ready, currently borrowed, and overdue. Click one to filter the list to that stage.'
 	},
 	{
 		route: '/admin/requests',

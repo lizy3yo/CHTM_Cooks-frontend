@@ -13,6 +13,11 @@
 	import { classCodesAPI, type ClassCodeStats } from '$lib/api/classCodes';
 	import { borrowRequestsAPI, type BorrowRequestRecord } from '$lib/api/borrowRequests';
 	import { inventoryItemsAPI, type InventoryItem } from '$lib/api/inventory';
+	import {
+		fetchOperationsOverview,
+		peekCachedOperationsOverview,
+		type OperationsOverview
+	} from '$lib/api/operationsDashboard';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import DashboardSkeletonLoader from '$lib/components/ui/DashboardSkeletonLoader.svelte';
 	import {
@@ -44,6 +49,7 @@
 		? borrowRequestsAPI.peekCachedList({ limit: 10, sortBy: 'createdAt' })
 		: null;
 	const cachedInventory = browser ? inventoryItemsAPI.peekCachedList() : null;
+	const cachedOverview = browser ? peekCachedOperationsOverview() : null;
 
 	let loading = $state(
 		!initialReport || !cachedUsers || !cachedClassStats || !cachedRequests || !cachedInventory
@@ -119,18 +125,20 @@
 	if (cachedRequests) {
 		totalRequests = cachedRequests.total;
 		recentRequests = cachedRequests.requests;
-		pendingRequests = cachedRequests.requests.filter(
-			(r: BorrowRequestRecord) => r.status === 'pending_instructor'
-		).length;
-		currentlyBorrowedCount = cachedRequests.requests.filter(
-			(r: BorrowRequestRecord) => r.status === 'borrowed' || r.status === 'pending_return'
-		).length;
-		overdueRequests = cachedRequests.requests.filter(
-			(r: BorrowRequestRecord) =>
-				(r.status === 'borrowed' || r.status === 'pending_return') &&
-				new Date(r.returnDate) < new Date()
-		).length;
 	}
+
+	/**
+	 * Stage counts come from the live operations snapshot. Counting them from
+	 * the "recent requests" list would only ever see the newest 10.
+	 */
+	function syncPipelineCounts(overview: OperationsOverview | null): void {
+		if (!overview) return;
+		pendingRequests = overview.pipeline.underReview;
+		currentlyBorrowedCount = overview.pipeline.borrowed + overview.pipeline.pendingReturn;
+		overdueRequests = overview.pipeline.overdue;
+	}
+
+	syncPipelineCounts(cachedOverview);
 
 	if (cachedInventory) {
 		totalInventory = cachedInventory.total;
@@ -241,13 +249,15 @@
 			);
 			const inventoryPromise = inventoryItemsAPI.getAll({ forceRefresh });
 			const analyticsPromise = fetchAnalytics({ period: 'month', forceRefresh });
+			const overviewPromise = fetchOperationsOverview();
 
 			const results = await Promise.allSettled([
 				usersPromise,
 				classStatsPromise,
 				requestsPromise,
 				inventoryPromise,
-				analyticsPromise
+				analyticsPromise,
+				overviewPromise
 			]);
 
 			if (loadId !== inFlightLoadId) return;
@@ -257,6 +267,7 @@
 			const reqsRes = results[2];
 			const invRes = results[3];
 			const analyticsRes = results[4];
+			const overviewRes = results[5];
 
 			// 1. Cards (KPI Strip & Health counts)
 			if (usersRes.status === 'fulfilled') {
@@ -277,17 +288,9 @@
 				const requestsResVal = reqsRes.value;
 				totalRequests = requestsResVal.total;
 				recentRequests = requestsResVal.requests;
-				pendingRequests = requestsResVal.requests.filter(
-					(r: BorrowRequestRecord) => r.status === 'pending_instructor'
-				).length;
-				currentlyBorrowedCount = requestsResVal.requests.filter(
-					(r: BorrowRequestRecord) => r.status === 'borrowed' || r.status === 'pending_return'
-				).length;
-				overdueRequests = requestsResVal.requests.filter(
-					(r: BorrowRequestRecord) =>
-						(r.status === 'borrowed' || r.status === 'pending_return') &&
-						new Date(r.returnDate) < new Date()
-				).length;
+			}
+			if (overviewRes.status === 'fulfilled') {
+				syncPipelineCounts(overviewRes.value);
 			}
 			if (invRes.status === 'fulfilled') {
 				const inventoryResVal = invRes.value;
