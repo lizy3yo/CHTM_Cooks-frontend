@@ -10,13 +10,16 @@ export type NotificationType =
 	| 'borrow_request_missing'
 	| 'borrow_request_item_issue'
 	| 'borrow_request_cancelled'
+	| 'borrow_request_expired'
+	| 'borrow_request_appealed'
 	| 'borrow_request_reminder'
+	| 'borrow_request_overdue_notice'
 	| 'support_message_received';
 
 export interface NotificationRecord {
 	id: string;
 	userId: string;
-	audienceRole: 'student' | 'instructor' | 'custodian' | 'superadmin';
+	audienceRole: 'student' | 'instructor' | 'custodian' | 'admin' | 'superadmin';
 	type: NotificationType;
 	title: string;
 	message: string;
@@ -36,6 +39,7 @@ export interface NotificationListResponse {
 
 import { browser } from '$app/environment';
 import { getApiErrorMessage } from './session';
+import { subscribeToTopic } from './realtime';
 
 interface ApiError {
 	error?: string;
@@ -104,6 +108,8 @@ export const notificationsAPI = {
 		const query = new URLSearchParams({ limit: String(limit), skip: String(skip) });
 		if (options.forceRefresh) {
 			query.set('_t', Date.now().toString());
+			// Other page sizes (the full notifications page) are stale too.
+			invalidateListCache();
 		}
 		const response = await fetch(`/api/notifications?${query.toString()}`, {
 			credentials: 'include'
@@ -140,3 +146,13 @@ export const notificationsAPI = {
 		invalidateListCache();
 	}
 };
+
+/**
+ * Run `onChange` whenever this user's notifications may have changed on the
+ * server. That includes reconnects: a notification that arrives while the
+ * stream is down is never announced, and re-reading five rows is cheap.
+ * Returns an unsubscribe function.
+ */
+export function watchNotifications(onChange: () => void): () => void {
+	return subscribeToTopic('notification_change', () => onChange());
+}

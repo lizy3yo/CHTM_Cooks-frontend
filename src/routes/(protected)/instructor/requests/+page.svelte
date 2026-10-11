@@ -11,6 +11,7 @@
 		type BorrowRequestRecord,
 		type BorrowRequestStatus
 	} from '$lib/api/borrowRequests';
+	import { approverName } from '$lib/utils/requestTimeline';
 	import { catalogAPI } from '$lib/api/catalog';
 	import { DeltaSync } from '$lib/api/deltaSync';
 	import { classCodesAPI, type ClassCodeResponse } from '$lib/api/classCodes';
@@ -293,7 +294,7 @@
 			classCodeId: record.classCodeId,
 			urgent: false,
 			daysUntil: 0,
-			approvedBy: record.instructor?.fullName || user?.firstName || 'Instructor',
+			approvedBy: approverName(record) || user?.firstName || 'Instructor',
 			approvedDate: formatDateTime(record.approvedAt),
 			instructorData: record.instructor ?? null,
 			custodianData: record.custodian ?? null,

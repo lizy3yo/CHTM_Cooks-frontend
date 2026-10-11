@@ -464,6 +464,15 @@
 				pagination.page = 1;
 			}
 		}
+		// Notifications link here with ?requestId=…; open that request directly.
+		const linkedRequestId = new URLSearchParams(window.location.search).get('requestId')?.trim();
+		if (linkedRequestId) {
+			void borrowRequestsAPI
+				.getById(linkedRequestId)
+				.then((record) => openDetail(mapRequest(record)))
+				.catch(() => toastStore.error('That request could not be opened.'));
+		}
+
 		hydrateFromCache();
 		void loadRequests(requests.length === 0, false);
 		void loadStats(false);

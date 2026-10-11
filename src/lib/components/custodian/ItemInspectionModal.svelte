@@ -1,21 +1,13 @@
 <script lang="ts">
-	import type { BorrowRequestItem } from '$lib/api/borrowRequests';
-	import { CheckCircle2, AlertTriangle, XCircle, Package, Search, Plus, Minus, Calendar, User, Info, ShieldAlert, Check } from 'lucide-svelte';
+	import type { BorrowRequestItem, ItemInspectionInput } from '$lib/api/borrowRequests';
+	import { uploadInventoryImage } from '$lib/api/inventory';
+	import { CheckCircle2, AlertTriangle, XCircle, Package, Search, Plus, Minus, Calendar, User, Info, ShieldAlert, Check, Camera, X, LoaderCircle } from 'lucide-svelte';
 	import { untrack } from 'svelte';
 
 	interface Props {
 		items: BorrowRequestItem[];
 		requestId: string;
-		onSubmit: (
-			inspections: Array<{
-				itemId: string;
-				status: 'good' | 'damaged' | 'missing';
-				notes: string;
-				replacementQuantity?: number;
-				dueDate?: string;
-				additionalReturned?: number;
-			}>
-		) => Promise<void>;
+		onSubmit: (inspections: ItemInspectionInput[]) => Promise<void>;
 		onCancel: () => void;
 		studentName?: string;
 		leaderName?: string;
@@ -51,7 +43,13 @@
 		notes: string;
 		additionalReturned: number;
 		dueDate: string;
+		/** Evidence photos of the damage, already uploaded. */
+		photos: string[];
+		uploading: boolean;
 	}
+
+	/** Enough to show the damage from a few angles without bloating the report. */
+	const MAX_PHOTOS = 6;
 
 	let inspections = $state<ItemInspection[]>([]);
 
@@ -71,7 +69,9 @@
 					missingQty: 0,
 					notes: '',
 					additionalReturned: 0,
-					dueDate: ''
+					dueDate: '',
+					photos: [],
+					uploading: false
 				}));
 			} else {
 				const updatedInspections = [...inspections];
@@ -89,7 +89,9 @@
 							missingQty: 0,
 							notes: '',
 							additionalReturned: 0,
-							dueDate: ''
+							dueDate: '',
+							photos: [],
+							uploading: false
 						});
 					} else {
 						existing.name = item.name;
@@ -129,8 +131,35 @@
 			inspection.additionalReturned = 0;
 			inspection.notes = '';
 			inspection.dueDate = '';
+			inspection.photos = [];
 		}
 	}
+
+	async function addPhotos(inspection: ItemInspection, input: HTMLInputElement) {
+		const files = Array.from(input.files ?? []).slice(0, MAX_PHOTOS - inspection.photos.length);
+		// Let the same file be picked again after a failed upload.
+		input.value = '';
+		if (files.length === 0) return;
+
+		error = null;
+		inspection.uploading = true;
+		try {
+			for (const file of files) {
+				const uploaded = await uploadInventoryImage(file);
+				inspection.photos = [...inspection.photos, uploaded.url];
+			}
+		} catch (err) {
+			error = `Could not upload the photo for "${inspection.name}". ${err instanceof Error ? err.message : 'Try again.'}`;
+		} finally {
+			inspection.uploading = false;
+		}
+	}
+
+	function removePhoto(inspection: ItemInspection, url: string) {
+		inspection.photos = inspection.photos.filter((p) => p !== url);
+	}
+
+	const uploadingPhotos = $derived(inspections.some((i) => i.uploading));
 
 	const hasIssues = $derived(
 		inspections.some((i) => i.damagedQty > 0 || i.missingQty > 0)
@@ -182,11 +211,15 @@
 				const overReturn = i.additionalReturned > 0 ? ` Over-return: +${i.additionalReturned}` : '';
 				const finalNotes = `${breakdown}${overReturn}${i.notes ? ' | Remarks: ' + i.notes : ''}`;
 
-				const baseInspection: any = {
+				const baseInspection: ItemInspectionInput = {
 					itemId: i.itemId,
 					status: derivedStatus,
 					notes: finalNotes,
+					damagedQuantity: i.damagedQty,
+					missingQuantity: i.missingQty,
 					additionalReturned: i.additionalReturned || 0,
+					...(i.notes.trim() ? { remarks: i.notes.trim() } : {}),
+					...(derivedStatus !== 'good' && i.photos.length ? { photos: i.photos } : {}),
 					...(derivedStatus !== 'good' && replacementQty > 0 ? { replacementQuantity: replacementQty } : {}),
 					...(i.dueDate ? { dueDate: i.dueDate } : {})
 				};
@@ -534,6 +567,49 @@
 												/>
 											</div>
 										</div>
+
+										<div class="mt-3">
+											<p class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+												Photos of the Damage <span class="font-medium normal-case text-gray-400">(optional, up to {MAX_PHOTOS})</span>
+											</p>
+											<div class="flex flex-wrap items-center gap-2">
+												{#each inspection.photos as photo (photo)}
+													<div class="relative h-16 w-16 overflow-hidden rounded-lg border border-gray-200 bg-white">
+														<img src={photo} alt="Damage to {inspection.name}" class="h-full w-full object-cover" />
+														<button
+															type="button"
+															onclick={() => removePhoto(inspection, photo)}
+															class="absolute top-0.5 right-0.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80"
+															aria-label="Remove photo"
+														>
+															<X class="h-3 w-3" />
+														</button>
+													</div>
+												{/each}
+
+												{#if inspection.photos.length < MAX_PHOTOS}
+													<label
+														class="flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-gray-300 bg-white text-[10px] font-semibold text-gray-500 transition-colors hover:border-pink-400 hover:text-pink-600 {inspection.uploading ? 'pointer-events-none opacity-60' : ''}"
+													>
+														{#if inspection.uploading}
+															<LoaderCircle class="h-4 w-4 animate-spin" />
+															Uploading
+														{:else}
+															<Camera class="h-4 w-4" />
+															Add photo
+														{/if}
+														<input
+															type="file"
+															accept="image/*"
+															multiple
+															class="sr-only"
+															disabled={inspection.uploading}
+															onchange={(e) => addPhotos(inspection, e.currentTarget)}
+														/>
+													</label>
+												{/if}
+											</div>
+										</div>
 									</div>
 								</div>
 							{/if}
@@ -557,7 +633,7 @@
 				<button
 					type="button"
 					onclick={handleSubmit}
-					disabled={submitting}
+					disabled={submitting || uploadingPhotos}
 					class="rounded-xl bg-pink-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-pink-600/30 transition-all hover:bg-pink-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
 				>
 					{#if submitting}

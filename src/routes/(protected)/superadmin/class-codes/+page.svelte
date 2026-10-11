@@ -1,4 +1,6 @@
 <script lang="ts">
+	import SpreadsheetImportModal, { type ImportColumn } from '$lib/components/ui/SpreadsheetImportModal.svelte';
+	import { importsAPI, type ClassCodeImportRow } from '$lib/api/imports';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import {
@@ -323,6 +325,27 @@
 		activeTab = tab;
 		if (tab === 'all') loadClasses();
 		if (tab === 'archived') loadArchived();
+	}
+
+	// ─── Import Classes (Excel / CSV) ────────────────────────────────────────────
+	let showImportModal = $state(false);
+	const CLASS_IMPORT_COLUMNS: ImportColumn[] = [
+		{ key: 'courseCode', label: 'Course Code', required: true, example: 'HM-201' },
+		{ key: 'courseName', label: 'Course Name', required: true, example: 'Food Production', aliases: ['Course Title', 'Description'] },
+		{ key: 'section', label: 'Section', required: true, example: 'BSHM 2A', aliases: ['Block'] },
+		{ key: 'academicYear', label: 'Academic Year', required: true, example: '2026-2027', aliases: ['School Year', 'AY'] },
+		{ key: 'semester', label: 'Semester', required: true, example: 'First', aliases: ['Sem'] },
+		{ key: 'maxEnrollment', label: 'Max Enrollment', type: 'integer', example: '40', aliases: ['Capacity', 'Max Students'] },
+		{ key: 'instructorEmail', label: 'Instructor Email', type: 'email', example: 'instructor@gordoncollege.edu.ph', aliases: ['Instructor'] }
+	];
+
+	async function importClassRows(rows: Record<string, string | number | undefined>[]): Promise<string> {
+		const r = await importsAPI.classCodes(rows as unknown as ClassCodeImportRow[]);
+		return `${r.created} class${r.created === 1 ? '' : 'es'} created, ${r.updated} updated, ${r.instructorsAssigned} instructor assignment${r.instructorsAssigned === 1 ? '' : 's'} made.`;
+	}
+
+	async function refreshAfterImport(): Promise<void> {
+		await Promise.all([loadClasses(false, true), loadStats(true)]);
 	}
 
 	// ─── Create Class ─────────────────────────────────────────────────────────────
@@ -823,6 +846,18 @@
 			</div>
 		</div>
 	</div>
+{/if}
+
+{#if showImportModal}
+	<SpreadsheetImportModal
+		title="Import Class Codes"
+		description="Create classes and assign their instructor. A class that already exists for the same course, section, year and semester is updated."
+		columns={CLASS_IMPORT_COLUMNS}
+		templateName="class_codes_import_template"
+		onImport={importClassRows}
+		onImported={refreshAfterImport}
+		onClose={() => (showImportModal = false)}
+	/>
 {/if}
 
 <!-- ─── Create Class Modal ──────────────────────────────────────────────────── -->
@@ -1700,6 +1735,11 @@
 						<option value={yr}>{yr}</option>
 					{/each}
 				</select>
+				<button
+					type="button"
+					onclick={() => (showImportModal = true)}
+					class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+				>Import Classes</button>
 				<button
 					onclick={() => (showCreateModal = true)}
 					class="inline-flex items-center gap-2 rounded-lg bg-pink-600 px-4 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-sm transition hover:bg-pink-700"

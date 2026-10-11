@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import SearchWithHistory from '$lib/components/ui/SearchWithHistory.svelte';
+	import { user } from '$lib/stores/auth';
 	import { goto } from '$app/navigation';
 	import {
 		catalogAPI,
@@ -891,23 +893,15 @@
 					/>
 				</svg>
 			</div>
-			<input
-				type="text"
-				id="search"
-				data-tour="student-catalog-search"
+			<SearchWithHistory
 				bind:value={searchQuery}
-				oninput={(e) => handleSearch((e.target as HTMLInputElement).value)}
-				placeholder="Search by name, description, or code…"
-				class="block w-full rounded-lg border border-gray-300 py-2 pr-9 pl-9 text-sm focus:border-pink-500 focus:ring-pink-500"
-				aria-label="Search equipment"
-				aria-busy={isSearching}
+				onSearch={handleSearch}
+				storageKey={`catalog:${$user?.id ?? 'guest'}`}
+				tourId="student-catalog-search"
+				placeholder="Search by name or description…"
+				ariaLabel="Search equipment"
+				busy={isSearching}
 			/>
-			{#if isSearching}
-				<!-- Shown from the first keystroke until the matching items arrive -->
-				<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3" aria-hidden="true">
-					<span class="h-4 w-4 animate-spin rounded-full border-2 border-pink-200 border-t-pink-600"></span>
-				</div>
-			{/if}
 		</div>
 
 		<!-- Filters — 2 cols on mobile, 3 on sm+ -->

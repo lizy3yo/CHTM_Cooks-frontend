@@ -9,6 +9,10 @@
 	import { toastStore } from '$lib/stores/toast';
 	import { confirmStore } from '$lib/stores/confirm';
 	import { donationsAPI, type DonationResponse, type CreateDonationRequest } from '$lib/api/donations';
+	import { importsAPI, type DonationImportRow } from '$lib/api/imports';
+	import DonationDeedPanel from './DonationDeedPanel.svelte';
+	import SpreadsheetImportModal, { type ImportColumn } from '$lib/components/ui/SpreadsheetImportModal.svelte';
+	import { peso } from '$lib/utils/deedOfDonation';
 	import { walkInTransactionsAPI, type WalkInTransactionRecord } from '$lib/api/walkInTransactions';
 	import {
 		Plus,
@@ -128,6 +132,8 @@
 	let donationAction = $state<'new_item' | 'add_to_existing'>('new_item');
 	let donorName = $state('');
 	let donationQuantity = $state(1);
+	// Declared cost of one unit; blank when the donor did not state a value.
+	let donationUnitCost = $state<number | null>(null);
 	let donationUnit = $state('');
 	let donationPurpose = $state('');
 	let donationDate = $state(new Date().toISOString().split('T')[0]);
@@ -172,6 +178,36 @@
 	}
 
 	let isSubmittingDonation = $state(false);
+
+	// --- Donation import (Excel / CSV) ---
+	let showDonationImport = $state(false);
+	const DONATION_IMPORT_COLUMNS: ImportColumn[] = [
+		{ key: 'donorName', label: 'Donor', required: true, example: 'Hotel Sample Inc.', aliases: ['Donor Name', 'Donated By'] },
+		{ key: 'itemName', label: 'Item', required: true, example: 'Dinner Plate', aliases: ['Item Name', 'Name'] },
+		{ key: 'quantity', label: 'Quantity', required: true, type: 'integer', example: '50', aliases: ['Qty'] },
+		{ key: 'unitCost', label: 'Unit Cost', type: 'number', example: '150', aliases: ['Cost', 'Price', 'Unit Price'] },
+		{ key: 'date', label: 'Date Received', type: 'date', example: '2026-10-03', aliases: ['Date', 'Date Donated'] },
+		{ key: 'category', label: 'Category', example: 'Tableware' },
+		{ key: 'unit', label: 'Unit', example: 'pcs' },
+		{ key: 'purpose', label: 'Purpose', example: 'Laboratory use' },
+		{ key: 'notes', label: 'Notes' }
+	];
+
+	async function importDonationRows(rows: Record<string, string | number | undefined>[]): Promise<string> {
+		const result = await importsAPI.donations(rows as unknown as DonationImportRow[]);
+		donationsAPI.invalidateCache();
+		return `${result.imported} donation${result.imported === 1 ? '' : 's'} recorded: ${result.units} units worth ${peso(result.totalValue)}. ${result.newItems} new inventory item${result.newItems === 1 ? ' was' : 's were'} created.`;
+	}
+
+	async function refreshDonationsAfterImport(): Promise<void> {
+		donationsLoaded = false;
+		await fetchDonations();
+	}
+
+	/** Replace one donation in the list, e.g. after its deed is signed. */
+	function replaceDonation(updated: DonationResponse): void {
+		donations = donations.map((d) => (d.id === updated.id ? { ...d, ...updated } : d));
+	}
 
 	async function fetchDonations() {
 		if (donationsLoaded) return;
@@ -254,6 +290,7 @@
 					purpose: donationPurpose.trim() || 'Item donation to CHTM laboratory',
 					date: donationDate,
 					notes: donationNotes.trim() || undefined,
+					unitCost: donationUnitCost ?? undefined,
 					inventoryItemId: selectedDonationItem.id
 				};
 			} else {
@@ -274,7 +311,8 @@
 					unit: donationUnit.trim() || undefined,
 					purpose: donationPurpose.trim() || 'Item donation to CHTM laboratory',
 					date: donationDate,
-					notes: donationNotes.trim() || undefined
+					notes: donationNotes.trim() || undefined,
+					unitCost: donationUnitCost ?? undefined
 				};
 			}
 
@@ -286,6 +324,7 @@
 			donationStep = 1;
 			donorName = '';
 			donationQuantity = 1;
+			donationUnitCost = null;
 			donationUnit = '';
 			donationPurpose = '';
 			donationNotes = '';
@@ -1676,6 +1715,13 @@
 			{:else}
 				<button
 					type="button"
+					onclick={() => (showDonationImport = true)}
+					class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+				>
+					Import Donations
+				</button>
+				<button
+					type="button"
 					onclick={() => (showDonationModal = true)}
 					class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700"
 				>
@@ -2540,6 +2586,29 @@
 					</div>
 				</div>
 
+				<!-- Declared cost -->
+				<div>
+					<label for="donationUnitCost" class="block text-xs font-bold uppercase tracking-wider text-gray-700">
+						Cost per Unit (₱) <span class="text-gray-400 font-normal text-[11px]">(optional)</span>
+					</label>
+					<input
+						id="donationUnitCost"
+						type="number"
+						min="0"
+						step="0.01"
+						bind:value={donationUnitCost}
+						placeholder="150.00"
+						class="mt-1 block w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-xs focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+					/>
+					<p class="mt-1 text-xs text-gray-500">
+						{#if donationUnitCost !== null && donationUnitCost >= 0 && donationQuantity > 0}
+							Total donated value: <span class="font-semibold text-gray-800">{peso(donationUnitCost * donationQuantity)}</span>
+						{:else}
+							The declared value appears on the deed of donation and in reports.
+						{/if}
+					</p>
+				</div>
+
 					</div>
 				{:else}
 					<!-- Step 3: Review -->
@@ -2570,6 +2639,14 @@
 							<div class="flex items-start justify-between gap-3 border-t border-gray-100 py-1.5">
 								<span class="text-gray-500">Purpose</span>
 								<span class="text-right font-semibold text-gray-900">{donationPurpose || '—'}</span>
+							</div>
+							<div class="flex items-start justify-between gap-3 border-t border-gray-100 py-1.5">
+								<span class="text-gray-500">Declared value</span>
+								<span class="text-right font-semibold text-gray-900">
+									{donationUnitCost !== null && donationUnitCost >= 0
+										? `${peso(donationUnitCost * donationQuantity)} (${peso(donationUnitCost)} each)`
+										: 'Not declared'}
+								</span>
 							</div>
 							<div class="flex items-start justify-between gap-3 border-t border-gray-100 py-1.5">
 								<span class="text-gray-500">Date received</span>
@@ -3392,6 +3469,8 @@
 			</dl>
 		</section>
 
+		<DonationDeedPanel donation={d} {readOnly} onUpdated={replaceDonation} />
+
 		<section>
 			{@render detailSectionTitle('Purpose')}
 			<p class="text-sm text-gray-700">{d.purpose || 'Item donation'}</p>
@@ -3413,6 +3492,18 @@
 		donDetailBody,
 		donDetailFooter
 	)}
+{/if}
+
+{#if showDonationImport}
+	<SpreadsheetImportModal
+		title="Import Donations"
+		description="Record many donations at once. Items that match an inventory item by name are added to it; the rest are created."
+		columns={DONATION_IMPORT_COLUMNS}
+		templateName="donations_import_template"
+		onImport={importDonationRows}
+		onImported={refreshDonationsAfterImport}
+		onClose={() => (showDonationImport = false)}
+	/>
 {/if}
 
 <!-- ─── MODAL: WALK-IN RETURN / INSPECTION FORM ─────────────────────────── -->

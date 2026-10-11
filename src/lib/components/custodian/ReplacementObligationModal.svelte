@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { ReplacementObligation } from '$lib/api/replacementObligations';
-	import { CheckCircle2, AlertTriangle, XCircle, Package, Calendar } from 'lucide-svelte';
+	import { CheckCircle2, AlertTriangle, XCircle, Package, Calendar, Plus, Minus } from 'lucide-svelte';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 
 	interface Props {
@@ -23,6 +23,17 @@
 
 	let submitting = $state(false);
 	let error = $state<string | null>(null);
+
+	// Units the borrower actually handed over. Defaults to exactly what is
+	// owed; a custodian may accept more (one broken glass replaced with three),
+	// in which case the extra units are recorded as overage.
+	let received = $state(0);
+	$effect(() => {
+		received = currentObligation?.balance ?? 0;
+	});
+	const settles = $derived(Math.min(received, currentObligation?.balance ?? 0));
+	const surplus = $derived(Math.max(0, received - (currentObligation?.balance ?? 0)));
+	const stillOwed = $derived(Math.max(0, (currentObligation?.balance ?? 0) - received));
 
 	function getTypeColor(type: 'missing' | 'damaged'): string {
 		return type === 'missing'
@@ -58,8 +69,10 @@
 		error = null;
 
 		try {
-			// Automatically use the exact remaining balance required by the custodian
-			await onResolve(currentObligation.id, currentObligation.balance);
+			if (received < 1) {
+				throw new Error('Enter how many units were received.');
+			}
+			await onResolve(currentObligation.id, received);
 
 			// Auto-advance or close
 			if (activeObligations.length > 1 && currentIndex < activeObligations.length - 1) {
@@ -405,7 +418,64 @@
 						{/if}
 					</div>
 
-					<!-- Note: Quantity is automatically resolved using the exact remaining balance required by the custodian -->
+					{#if currentObligation.status === 'pending'}
+						<div class="rounded-2xl border-2 border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+							<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+								<div>
+									<p class="text-sm font-bold text-gray-900">Units Received</p>
+									<p class="mt-0.5 text-xs text-gray-500">
+										{currentObligation.balance} still owed. Enter more if the borrower gave extra.
+									</p>
+								</div>
+								<div class="flex items-center overflow-hidden rounded-lg border border-gray-300 bg-white self-start sm:self-auto">
+									<button
+										type="button"
+										onclick={() => (received = Math.max(1, received - 1))}
+										disabled={received <= 1 || submitting}
+										class="px-3 py-2 text-gray-600 hover:bg-gray-50 disabled:opacity-30"
+										aria-label="Fewer units"
+									>
+										<Minus class="h-4 w-4" />
+									</button>
+									<input
+										type="number"
+										min="1"
+										value={received}
+										oninput={(e) => (received = Math.max(0, parseInt(e.currentTarget.value) || 0))}
+										class="w-14 border-none p-0 text-center text-base font-bold text-gray-900 tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+										aria-label="Units received"
+									/>
+									<button
+										type="button"
+										onclick={() => (received += 1)}
+										disabled={submitting}
+										class="px-3 py-2 text-gray-600 hover:bg-gray-50 disabled:opacity-30"
+										aria-label="More units"
+									>
+										<Plus class="h-4 w-4" />
+									</button>
+								</div>
+							</div>
+
+							<div class="mt-4 grid grid-cols-2 gap-3 text-center">
+								<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+									<span class="block text-[10px] font-bold tracking-wide text-emerald-700 uppercase">Settles the debt</span>
+									<span class="text-lg font-extrabold text-emerald-700 tabular-nums">{settles}</span>
+								</div>
+								{#if stillOwed > 0}
+									<div class="rounded-xl border border-amber-200 bg-amber-50 p-3">
+										<span class="block text-[10px] font-bold tracking-wide text-amber-700 uppercase">Still owed after this</span>
+										<span class="text-lg font-extrabold text-amber-700 tabular-nums">{stillOwed}</span>
+									</div>
+								{:else}
+									<div class="rounded-xl border p-3 {surplus > 0 ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-gray-50'}">
+										<span class="block text-[10px] font-bold tracking-wide uppercase {surplus > 0 ? 'text-blue-700' : 'text-gray-500'}">Extra, goes to Over</span>
+										<span class="text-lg font-extrabold tabular-nums {surplus > 0 ? 'text-blue-700' : 'text-gray-400'}">+{surplus}</span>
+									</div>
+								{/if}
+							</div>
+						</div>
+					{/if}
 				</div>
 			</div>
 
@@ -469,6 +539,8 @@
 										</svg>
 										Processing...
 									</span>
+								{:else if stillOwed > 0}
+									Record Partial Replacement
 								{:else}
 									{activeObligations.length > 1 && currentIndex < activeObligations.length - 1
 										? 'Resolve & Next'

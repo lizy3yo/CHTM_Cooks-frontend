@@ -10,6 +10,7 @@
 		type BorrowRequestRecord,
 		type BorrowRequestStatus
 	} from '$lib/api/borrowRequests';
+	import { approverName } from '$lib/utils/requestTimeline';
 	import { catalogAPI } from '$lib/api/catalog';
 	import { DeltaSync } from '$lib/api/deltaSync';
 	import { classCodesAPI, type ClassCodeResponse } from '$lib/api/classCodes';
@@ -322,7 +323,7 @@
 			resolvedDate: formatDateTime(record.resolvedAt),
 			lastReminderAt: formatDateTime(record.lastReminderAt),
 			reminderCount: record.reminderCount || 0,
-			approvedBy: record.instructor?.fullName || 'Instructor',
+			approvedBy: approverName(record) || 'Instructor',
 			rejectionReason: record.rejectReason,
 			rejectionNotes: record.rejectionNotes,
 			approvedDate: formatDateTime(record.approvedAt),
@@ -1009,7 +1010,7 @@
 	function getStatusBadge(status: Tab, rawStatus?: BorrowRequestStatus, rejectionReason?: string) {
 		switch (status) {
 			case 'pending':
-				return { text: 'Pending Preparation', color: 'bg-yellow-100 text-yellow-800' };
+				return { text: 'Awaiting Preparation', color: 'bg-yellow-100 text-yellow-800' };
 			case 'ready':
 				return { text: 'Ready for Pickup', color: 'bg-green-100 text-green-800' };
 			case 'active':
@@ -1160,7 +1161,7 @@
 		
 		switch (filter) {
 			case 'pending': 
-				return { label: 'Pending Preparation Only', bg: 'bg-yellow-50', text: 'text-yellow-700', ring: 'ring-yellow-600/10', btn: 'text-yellow-500', btnHoverBg: 'hover:bg-yellow-100', btnHoverText: 'hover:text-yellow-700' };
+				return { label: 'Awaiting Preparation Only', bg: 'bg-yellow-50', text: 'text-yellow-700', ring: 'ring-yellow-600/10', btn: 'text-yellow-500', btnHoverBg: 'hover:bg-yellow-100', btnHoverText: 'hover:text-yellow-700' };
 			case 'ready': 
 				return { label: 'Ready for Pickup Only', bg: 'bg-green-50', text: 'text-green-700', ring: 'ring-green-600/10', btn: 'text-green-500', btnHoverBg: 'hover:bg-green-100', btnHoverText: 'hover:text-green-700' };
 			case 'active': 
@@ -1247,7 +1248,7 @@
 				>
 					<div class="flex items-center justify-between gap-2">
 						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Pending Requests</p>
+							<p class="truncate text-xs font-medium text-gray-600 sm:text-sm">Awaiting Preparation</p>
 							<p class="mt-1 text-xl font-semibold text-amber-600 sm:mt-2 sm:text-3xl">
 								{stats.pendingCount}
 							</p>
@@ -1406,7 +1407,7 @@
 							class="h-10 min-w-[150px] rounded-xl border border-gray-300 bg-white px-3 text-sm shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-100 focus:outline-none"
 						>
 							<option value="all">All Statuses</option>
-							<option value="pending">Pending Preparation</option>
+							<option value="pending">Awaiting Preparation</option>
 							<option value="ready">Ready for Pickup (Confirm Pickup)</option>
 							<option value="active">Currently Borrowed</option>
 							<option value="pending_return">Confirm Return</option>

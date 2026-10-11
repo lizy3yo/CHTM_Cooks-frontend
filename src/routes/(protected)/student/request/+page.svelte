@@ -265,6 +265,36 @@
 			hasPendingRequest = false;
 			console.error('[PENDING-CHECK] Failed to load pending request status:', err);
 		}
+
+		await checkOverdueHold();
+	}
+
+	// 3-day rule: items kept more than three days past their return date put
+	// borrowing on hold until they are back. The server enforces this; the
+	// check here only lets the student see why before they fill in the form.
+	const OVERDUE_HOLD_DAYS = 3;
+	let overdueHold = $state<{ items: string; dueDate: string; daysOverdue: number } | null>(null);
+
+	async function checkOverdueHold(): Promise<void> {
+		try {
+			const res = await borrowRequestsAPI.list({ statuses: ['borrowed', 'pending_return'], limit: 20 });
+			const now = Date.now();
+			const late = res.requests
+				.map((r) => ({ r, days: Math.floor((now - new Date(r.returnDate).getTime()) / 86_400_000) }))
+				.filter(({ days }) => days >= OVERDUE_HOLD_DAYS)
+				.sort((a, b) => b.days - a.days)[0];
+
+			overdueHold = late
+				? {
+						items: late.r.items.map((i) => `${i.name} ×${i.quantity}`).join(', '),
+						dueDate: new Date(late.r.returnDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+						daysOverdue: late.days
+					}
+				: null;
+		} catch (err) {
+			overdueHold = null;
+			console.error('[OVERDUE-HOLD] Failed to check overdue items:', err);
+		}
 	}
 
 	// Operating hours: 8:00 AM – 5:00 PM (08:00–17:00)
@@ -1322,6 +1352,10 @@
 			errors.pendingRequest = 'You already have a pending borrow request awaiting action.';
 		}
 
+		if (overdueHold) {
+			errors.pendingRequest = `Borrowing is on hold. ${overdueHold.items} was due ${overdueHold.dueDate} and has not been returned.`;
+		}
+
 		if (selectedItems.length === 0) {
 			errors.items = 'Please select at least one item';
 		}
@@ -2082,6 +2116,16 @@
 									</p>
 								</div>
 							</div>
+						</div>
+					{/if}
+
+					{#if overdueHold}
+						<div class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4" role="alert">
+							<h3 class="text-sm font-bold text-red-900">Borrowing Is on Hold</h3>
+							<p class="mt-1 text-xs leading-relaxed text-red-700">
+								{overdueHold.items} was due {overdueHold.dueDate} and is {overdueHold.daysOverdue} days overdue.
+								Return it to the custodian to borrow again.
+							</p>
 						</div>
 					{/if}
 

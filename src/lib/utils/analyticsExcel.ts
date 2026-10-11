@@ -76,11 +76,14 @@ export async function downloadAnalyticsExcel(opts: AnalyticsExcelOptions): Promi
 				d.itemName,
 				d.quantity,
 				d.unit ?? '',
+				d.unitCost ?? '',
+				d.totalValue ?? '',
+				d.deedStatus === 'signed' ? 'Signed' : 'Pending',
 				d.purpose ?? '',
 				d.receiptNumber ?? '',
 				fmtDate(d.date ?? d.createdAt)
 			]);
-			buildSheet(wb, { name: 'Donor Contributions', band: 'DONOR CONTRIBUTIONS', header: ['Donor', 'Item', 'Qty', 'Unit', 'Purpose', 'Receipt', 'Date'], rows: dRows, widths: [24, 26, 8, 12, 24, 18, 18] }, logos, meta);
+			buildSheet(wb, { name: 'Donor Contributions', band: 'DONOR CONTRIBUTIONS', header: ['Donor', 'Item', 'Qty', 'Unit', 'Unit Cost', 'Total Value', 'Deed', 'Purpose', 'Receipt', 'Date'], rows: dRows, widths: [24, 26, 8, 12, 12, 14, 10, 24, 18, 18] }, logos, meta);
 		}
 	}
 

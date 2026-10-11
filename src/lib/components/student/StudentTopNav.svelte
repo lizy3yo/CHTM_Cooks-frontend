@@ -21,7 +21,7 @@
 	import { authStore, user } from '$lib/stores/auth';
 	import { themeStore } from '$lib/stores/theme';
 	import { toastStore } from '$lib/stores/toast';
-	import { notificationsAPI, type NotificationRecord } from '$lib/api/notifications';
+	import { notificationsAPI, watchNotifications, type NotificationRecord } from '$lib/api/notifications';
 	import { sidebarCollapsed } from '$lib/stores/student';
 	import { requestCartCount, requestCartStore, requestCartItems } from '$lib/stores/requestCart';
 	import { catalogAPI } from '$lib/api/catalog';
@@ -47,6 +47,7 @@
 	let now = $state(new Date());
 	let ticker: ReturnType<typeof setInterval>;
 	let notificationTicker: ReturnType<typeof setInterval>;
+	let stopWatchingNotifications: (() => void) | undefined;
 
 	onMount(() => {
 		ticker = setInterval(() => { now = new Date(); }, 1000);
@@ -58,8 +59,10 @@
 		void loadNotifications();
 		
 		// Set up periodic refresh for notifications
+		// Refresh the moment a notification arrives; the timer is only a safety net.
+		stopWatchingNotifications = watchNotifications(() => void loadNotifications(true));
 		notificationTicker = setInterval(() => {
-			void loadNotifications();
+			void loadNotifications(true);
 		}, 60000);
 		
 		// Refresh catalog data every 5 minutes to keep images up-to-date
@@ -74,6 +77,7 @@
 	onDestroy(() => {
 		clearInterval(ticker);
 		clearInterval(notificationTicker);
+		stopWatchingNotifications?.();
 	});
 
 	const formattedDateTime = $derived(
@@ -129,10 +133,10 @@
 		return `${diffDays}d ago`;
 	}
 
-	async function loadNotifications() {
+	async function loadNotifications(force = false) {
 		loadingNotifications = true;
 		try {
-			const data = await notificationsAPI.list(5, 0);
+			const data = await notificationsAPI.list(5, 0, { forceRefresh: force });
 			recentNotifications = data.notifications;
 			unreadCount = data.unreadCount;
 		} catch {

@@ -67,7 +67,33 @@ export interface BorrowRequestItem {
 		replacementQuantity?: number;
 		unitPrice?: number;
 		dueDate?: string;
+		/** Name of the staff member who checked the item in. */
+		inspectedByName?: string | null;
+		/** Units by condition; together they add up to the borrowed quantity. */
+		goodQuantity?: number;
+		damagedQuantity?: number;
+		missingQuantity?: number;
+		/** Extra units handed in on top of what was borrowed. */
+		overReturnedQuantity?: number;
+		/** The custodian's own note on the damage or loss. */
+		remarks?: string | null;
+		/** Evidence photo URLs. */
+		photos?: string[];
 	};
+}
+
+/** One line of a return inspection as submitted by the checklist. */
+export interface ItemInspectionInput {
+	itemId: string;
+	status: 'good' | 'damaged' | 'missing';
+	notes: string;
+	replacementQuantity?: number;
+	dueDate?: string;
+	damagedQuantity?: number;
+	missingQuantity?: number;
+	additionalReturned?: number;
+	remarks?: string;
+	photos?: string[];
 }
 
 export interface BorrowRequestUserSummary {
@@ -114,8 +140,41 @@ export interface BorrowRequestRecord {
 	resolvedAt?: string;
 	lastReminderAt?: string;
 	reminderCount?: number;
+	/** When the 3-day overdue disciplinary notice went out; null if it has not. */
+	overdueNoticeSentAt?: string | null;
+	/** Lifecycle history, oldest first. Empty on servers that predate it. */
+	events?: BorrowRequestEvent[];
 	createdAt: string;
 	updatedAt: string;
+}
+
+export type BorrowRequestEventName =
+	| 'submitted'
+	| 'approved'
+	| 'rejected'
+	| 'appealed'
+	| 'cancelled'
+	| 'ready_for_pickup'
+	| 'picked_up'
+	| 'return_initiated'
+	| 'inspected'
+	| 'missing'
+	| 'resolved'
+	| 'expired'
+	| 'reminder_sent'
+	| 'overdue_notice';
+
+/** One recorded step of a request and the person who performed it. */
+export interface BorrowRequestEvent {
+	event: BorrowRequestEventName;
+	at: string;
+	/** Null for system actions (expiry) and for history rebuilt from older records. */
+	actorId: string | null;
+	actorName: string | null;
+	actorRole: string | null;
+	notes: string | null;
+	/** Inspection result: clean return or items with issues. */
+	outcome: 'returned' | 'item_issue' | null;
 }
 
 /** One line of a request, measured against its booked day. */
@@ -476,13 +535,7 @@ export const borrowRequestsAPI = {
 	 */
 	async inspectItems(
 		id: string,
-		items: Array<{
-			itemId: string;
-			status: 'good' | 'damaged' | 'missing';
-			notes?: string;
-			replacementQuantity?: number;
-			dueDate?: string;
-		}>
+		items: Array<Omit<ItemInspectionInput, 'notes'> & { notes?: string }>
 	): Promise<{ success: boolean; message: string; status: BorrowRequestStatus; obligationsCreated: number }> {
 		const response = await fetch(`/api/borrow-requests/${id}/inspect-items`, getFetchOptions('POST', { items }));
 		const data = await handleResponse<{

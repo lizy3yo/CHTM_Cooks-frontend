@@ -47,6 +47,8 @@
 	import StockAdjustmentDetailModal from '$lib/components/reports/StockAdjustmentDetailModal.svelte';
 	import WalkInTransactionsTab from '$lib/components/reports/WalkInTransactionsTab.svelte';
 	import StudentIncidentHistory from '$lib/components/reports/StudentIncidentHistory.svelte';
+	import InventoryVarianceReport from '$lib/components/reports/InventoryVarianceReport.svelte';
+	import ReturnedItemsReport from '$lib/components/reports/ReturnedItemsReport.svelte';
 
 	interface Props {
 		title?: string;
@@ -68,8 +70,8 @@
 		return tourId ? `${tourId}-${part}` : undefined;
 	}
 
-	type Tab = 'overview' | 'borrowing' | 'inventory' | 'students' | 'processed' | 'walk-in';
-	type DatePreset = 'today' | 'last7' | 'mtd' | 'custom';
+	type Tab = 'overview' | 'borrowing' | 'inventory' | 'returns' | 'students' | 'processed' | 'walk-in';
+	type DatePreset = 'today' | 'last7' | 'mtd' | 'month' | 'custom';
 
 	const initialTo = todayISO();
 	const initialFrom = monthStartISO();
@@ -102,6 +104,8 @@
 	let datePreset = $state<DatePreset>('mtd');
 	let customFrom = $state(initialFrom);
 	let customTo = $state(initialTo);
+	/** The calendar month shown by the "By Month" preset, as yyyy-mm. */
+	let selectedMonth = $state(initialTo.slice(0, 7));
 	let borrowedItemsQuery = $state('');
 	/** Borrowed Items list: every request line, or one row per item with totals. */
 	let borrowedView = $state<'entry' | 'item'>('entry');
@@ -167,8 +171,32 @@
 		return localISO(d);
 	}
 
+	function monthLabel(ym: string): string {
+		const [y, m] = ym.split('-').map(Number);
+		return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+	}
+
+	/** Show one whole calendar month; the current month stops at today. */
+	function applyMonth(ym: string): void {
+		if (!/^\d{4}-\d{2}$/.test(ym) || ym > todayISO().slice(0, 7)) return;
+		const [y, m] = ym.split('-').map(Number);
+		const lastDay = localISO(new Date(y, m, 0));
+		selectedMonth = ym;
+		datePreset = 'month';
+		period = 'month';
+		customFrom = `${ym}-01`;
+		customTo = lastDay > todayISO() ? todayISO() : lastDay;
+		scheduleLoad();
+	}
+
+	function shiftMonth(delta: number): void {
+		const [y, m] = selectedMonth.split('-').map(Number);
+		applyMonth(localISO(new Date(y, m - 1 + delta, 1)).slice(0, 7));
+	}
+
 	function formatRangeLabel(): string {
 		if (datePreset === 'today') return 'Today';
+		if (datePreset === 'month') return monthLabel(selectedMonth);
 		if (datePreset === 'last7') return 'Last 7 Days';
 		if (datePreset === 'mtd') return 'Month-to-Date';
 		if (customFrom && customTo) {
@@ -204,6 +232,9 @@
 			period = 'month';
 			customFrom = monthStartISO();
 			customTo = todayISO();
+		} else if (preset === 'month') {
+			applyMonth(selectedMonth);
+			return;
 		} else {
 			customFrom = customFrom || monthStartISO();
 			customTo = customTo || todayISO();
@@ -671,7 +702,7 @@
 		})();
 
 		// Deep link: ?tab=<id> opens that tab (e.g. dashboard "Details" links).
-		const TABS: Tab[] = ['overview', 'borrowing', 'inventory', 'students', 'processed', 'walk-in'];
+		const TABS: Tab[] = ['overview', 'borrowing', 'inventory', 'returns', 'students', 'processed', 'walk-in'];
 		const tabParam = get(page).url.searchParams.get('tab') as Tab | null;
 		if (tabParam && TABS.includes(tabParam)) activeTab = tabParam;
 
@@ -870,7 +901,7 @@
 	<div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-4" data-tour={tour('filters')}>
 		<div class="flex flex-wrap items-center gap-3">
 			<span class="text-sm font-semibold text-gray-700">Date Range:</span>
-			{#each [{ id: 'today', label: 'Today' }, { id: 'last7', label: 'Last 7 Days' }, { id: 'mtd', label: 'Month-to-Date' }, { id: 'custom', label: 'Custom' }] as option}
+			{#each [{ id: 'today', label: 'Today' }, { id: 'last7', label: 'Last 7 Days' }, { id: 'mtd', label: 'Month-to-Date' }, { id: 'month', label: 'By Month' }, { id: 'custom', label: 'Custom' }] as option}
 				<button
 					onclick={() => applyPreset(option.id as DatePreset)}
 					class="rounded-lg px-4 py-2 text-sm font-medium transition {datePreset === option.id
@@ -881,6 +912,32 @@
 				</button>
 			{/each}
 		</div>
+		{#if datePreset === 'month'}
+			<div class="flex flex-wrap items-center gap-2">
+				<button
+					type="button"
+					onclick={() => shiftMonth(-1)}
+					class="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+					aria-label="Previous month"
+				>‹</button>
+				<input
+					type="month"
+					value={selectedMonth}
+					max={todayISO().slice(0, 7)}
+					onchange={(e) => applyMonth(e.currentTarget.value)}
+					aria-label="Month"
+					class="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+				/>
+				<button
+					type="button"
+					onclick={() => shiftMonth(1)}
+					disabled={selectedMonth >= todayISO().slice(0, 7)}
+					class="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+					aria-label="Next month"
+				>›</button>
+				<span class="text-sm font-medium text-gray-700">{monthLabel(selectedMonth)}</span>
+			</div>
+		{/if}
 		{#if datePreset === 'custom'}
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 				<div>
@@ -951,7 +1008,7 @@
 	<div class="rounded-xl border border-gray-200 bg-white shadow-sm" data-tour={tour('tabs')}>
 		<div class="border-b border-gray-200 px-4">
 			<nav class="flex gap-4 overflow-x-auto" aria-label="Report tabs">
-				{#each [{ id: 'overview', label: 'Overview', icon: BarChart3 }, { id: 'borrowing', label: 'Borrowing Analytics', icon: Package }, { id: 'inventory', label: 'Inventory', icon: Package }, { id: 'students', label: 'Student Risk', icon: Users }, { id: 'processed', label: 'Processed Transactions', icon: FileText }, { id: 'walk-in', label: 'Walk-in Transactions', icon: Users }] as tab}
+				{#each [{ id: 'overview', label: 'Overview', icon: BarChart3 }, { id: 'borrowing', label: 'Borrowing Analytics', icon: Package }, { id: 'inventory', label: 'Inventory', icon: Package }, { id: 'returns', label: 'Returned Items', icon: Package }, { id: 'students', label: 'Student Risk', icon: Users }, { id: 'processed', label: 'Processed Transactions', icon: FileText }, { id: 'walk-in', label: 'Walk-in Transactions', icon: Users }] as tab}
 					<button
 						onclick={() => (activeTab = tab.id as Tab)}
 						class="flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition {activeTab ===
@@ -976,6 +1033,15 @@
 			</div>
 		{:else if activeTab === 'walk-in'}
 			<WalkInTransactionsTab data={walkInSource} />
+		{:else if activeTab === 'returns'}
+			<ReturnedItemsReport
+				range={selectedRange}
+				rangeLabel={formatRangeLabel()}
+				classCodeIds={selectedClassCodeId ? [selectedClassCodeId] : []}
+				studentIds={selectedStudentId ? [selectedStudentId] : []}
+				refreshKey={report?.meta?.generatedAt ?? null}
+				userName={exportUserName}
+			/>
 		{:else if error}
 			<div class="px-6 py-12">
 				<div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
@@ -1645,523 +1711,7 @@
 
 					{#if activeTab === 'inventory'}
 						<div data-tab-panel="inventory">
-							<div class="space-y-6">
-								<div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-									<div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-										<div>
-											<h3 class="text-lg font-semibold text-gray-900">Inventory Analytics</h3>
-											<p class="mt-1 text-sm text-gray-600">
-												Selected range: {formatRangeLabel()} (scoped to inventory activity in this period)
-											</p>
-										</div>
-										<p class="text-xs text-gray-500">
-											{filteredInventoryVarianceRows.length} of {inventoryVarianceRows.length} items with variance or overage
-										</p>
-									</div>
-
-									<div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-										<div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
-											<p class="text-sm text-gray-600">Current Count</p>
-											<p class="mt-2 text-2xl font-bold text-gray-900">
-												{numberFmt.format(inventorySummary.currentCount)}
-											</p>
-										</div>
-										<div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
-											<p class="text-sm text-gray-600">EOM Count</p>
-											<p class="mt-2 text-2xl font-bold text-gray-900">
-												{numberFmt.format(inventorySummary.eomCount)}
-											</p>
-										</div>
-										<div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
-											<p class="text-sm text-gray-600">Over</p>
-											<p
-												class="mt-2 text-2xl font-bold {inventoryOverTotal > 0
-													? 'text-emerald-700'
-													: 'text-gray-900'}"
-											>
-												{inventoryOverTotal > 0 ? '+' : ''}{numberFmt.format(inventoryOverTotal)}
-											</p>
-										</div>
-										<div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
-											<p class="text-sm text-gray-600">Under</p>
-											<p
-												class="mt-2 text-2xl font-bold {inventoryShortTotal < 0
-													? 'text-rose-700'
-													: 'text-gray-900'}"
-											>
-												{numberFmt.format(inventoryShortTotal)}
-											</p>
-										</div>
-
-									</div>
-								</div>
-
-								<div class="grid gap-4 lg:grid-cols-2">
-									<div
-										class="flex h-full flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
-									>
-										<div class="flex items-center justify-between gap-4">
-											<div>
-												<h3 class="text-lg font-semibold text-gray-900">Variance Items</h3>
-												<p class="mt-1 text-xs text-gray-600">
-													Items where current count differs from EOM count
-												</p>
-											</div>
-											<p class="text-xs text-gray-500">
-												{filteredInventoryVarianceRows.length} of {inventoryVarianceRows.length} items
-											</p>
-										</div>
-
-										<div class="mt-3">
-											<label
-												for="inventory-items-search"
-												class="mb-1 block text-xs font-medium text-gray-600"
-												>Search variance items</label
-											>
-											<div class="relative">
-												<Search
-													size={16}
-													class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-gray-400"
-												/>
-												<input
-													id="inventory-items-search"
-													type="text"
-													bind:value={inventoryItemsQuery}
-													placeholder="Search by item name, category, or counts"
-													class="w-full rounded-lg border border-gray-300 bg-white py-2 pr-9 pl-9 text-sm text-gray-900 placeholder:text-gray-400 focus:border-pink-500 focus:ring-2 focus:ring-pink-200 focus:outline-none"
-												/>
-												{#if inventoryItemsQuery}
-													<button
-														type="button"
-														onclick={() => (inventoryItemsQuery = '')}
-														class="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
-														aria-label="Clear variance items search"
-													>
-														<X size={14} />
-													</button>
-												{/if}
-											</div>
-
-											<div class="mt-3 flex items-center justify-between gap-3">
-												<div class="flex items-center gap-2 text-xs text-gray-600">
-													<span class="font-medium">Filter:</span>
-													<!-- Segmented control: All / Over / Under -->
-													<div role="tablist" aria-label="Variance filter" class="inline-flex rounded-lg bg-gray-100 p-1">
-														<button
-															type="button"
-															onclick={() => (inventoryVarianceFilter = 'all')}
-															aria-pressed={inventoryVarianceFilter === 'all'}
-															class="rounded-lg px-3 py-1 text-xs font-medium transition {inventoryVarianceFilter === 'all' ? 'bg-white text-pink-600 shadow-sm' : 'text-gray-600 hover:bg-gray-200'}"
-														>
-															All
-														</button>
-														<button
-															type="button"
-															onclick={() => (inventoryVarianceFilter = 'over')}
-															aria-pressed={inventoryVarianceFilter === 'over'}
-															class="rounded-lg px-3 py-1 text-xs font-medium transition {inventoryVarianceFilter === 'over' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600 hover:bg-gray-200'}"
-														>
-															Over
-														</button>
-														<button
-															type="button"
-															onclick={() => (inventoryVarianceFilter = 'under')}
-															aria-pressed={inventoryVarianceFilter === 'under'}
-															class="rounded-lg px-3 py-1 text-xs font-medium transition {inventoryVarianceFilter === 'under' ? 'bg-white text-rose-700 shadow-sm' : 'text-gray-600 hover:bg-gray-200'}"
-														>
-															Under
-														</button>
-													</div>
-												</div>
-												<div class="text-xs text-gray-500">Showing {filteredInventoryVarianceRows.length} items</div>
-											</div>
-										</div>
-
-										<div class="mt-4 flex flex-1 flex-col">
-											{#if inventoryVarianceRows.length === 0}
-												<div
-													class="flex min-h-70 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-6 py-10 text-center"
-												>
-													<div>
-														<div
-															class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gray-100"
-														>
-															<Package size={32} class="text-pink-600" />
-														</div>
-														<h4 class="mt-6 text-base font-semibold text-gray-900">
-															No inventory variance
-														</h4>
-														<p class="mt-2 max-w-sm text-sm leading-6 text-gray-600">
-															All tracked items are aligned with their EOM counts in the selected
-															range.
-														</p>
-													</div>
-												</div>
-											{:else if filteredInventoryVarianceRows.length === 0}
-												<div
-													class="flex min-h-70 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-6 py-10 text-center"
-												>
-													<div>
-														<div
-															class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gray-100"
-														>
-															<Search size={32} class="text-pink-600" />
-														</div>
-														<h4 class="mt-6 text-base font-semibold text-gray-900">
-															No matches found
-														</h4>
-														<p class="mt-2 max-w-sm text-sm leading-6 text-gray-600">
-															Try a different item name, category, or count value.
-														</p>
-													</div>
-												</div>
-											{:else}
-												<div class="flex flex-1 flex-col gap-2">
-													{#each paginatedVarianceItems as item}
-														<button type="button" onclick={() => (borrowDetail = { kind: 'item', subject: item })} class="w-full cursor-pointer rounded-lg border border-gray-200 bg-gray-50 p-4 text-left transition hover:border-pink-300 hover:bg-pink-50/40">
-															<div class="flex items-start justify-between gap-4">
-																<div class="min-w-0 flex-1">
-																	<p class="truncate text-sm font-semibold text-gray-900">
-																		{item.name}
-																	</p>
-																	<p class="text-xs text-gray-600">{item.category}</p>
-																	<div class="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
-																		<span
-																			class="rounded-full bg-white px-2 py-1 ring-1 ring-gray-200"
-																			>Current {item.quantity}</span
-																		>
-																		<span
-																			class="rounded-full bg-white px-2 py-1 ring-1 ring-gray-200"
-																			>EOM {item.eomCount}</span
-																		>
-																	</div>
-																</div>
-																<div class="text-right">
-																	<p
-																		class="text-lg font-bold {item.variance > 0
-																			? 'text-emerald-700'
-																			: 'text-rose-700'}"
-																	>
-																		{item.variance > 0 ? '+' : ''}{numberFmt.format(item.variance)}
-																	</p>
-																	<span
-																		class="inline-flex rounded-full px-2 py-1 text-xs font-medium {item.variance >
-																		0
-																			? 'bg-emerald-100 text-emerald-700'
-																			: 'bg-rose-100 text-rose-700'}"
-																	>
-																		{item.variance > 0 ? 'Over' : 'Short'}
-																	</span>
-																</div>
-															</div>
-														</button>
-													{/each}
-
-													{#if varianceItemsTotalPages > 1}
-														<div
-															class="mt-auto flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-2"
-														>
-															<p class="text-xs text-gray-600">
-																Showing {(varianceItemsPage - 1) * INVENTORY_PAGE_SIZE +
-																	1}-{Math.min(
-																	varianceItemsPage * INVENTORY_PAGE_SIZE,
-																	filteredInventoryVarianceRows.length
-																)} of {filteredInventoryVarianceRows.length} items
-															</p>
-															<div class="flex items-center gap-1.5">
-																<button
-																	type="button"
-																	onclick={() =>
-																		(varianceItemsPage = Math.max(1, varianceItemsPage - 1))}
-																	disabled={varianceItemsPage === 1}
-																	class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-																	aria-label="Previous variance items page"
-																>
-																	<svg
-																		class="h-4 w-4"
-																		viewBox="0 0 20 20"
-																		fill="currentColor"
-																		aria-hidden="true"
-																	>
-																		<path
-																			fill-rule="evenodd"
-																			d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z"
-																			clip-rule="evenodd"
-																		/>
-																	</svg>
-																</button>
-																<nav
-																	class="isolate inline-flex items-center gap-1"
-																	aria-label="Variance items pagination"
-																>
-																	{#each varianceItemsPageTokens as token}
-																		{#if token === 'ellipsis'}
-																			<span
-																				class="inline-flex h-8 min-w-8 items-center justify-center px-1 text-xs font-medium text-gray-500"
-																				>...</span
-																			>
-																		{:else}
-																			<button
-																				type="button"
-																				onclick={() => (varianceItemsPage = token)}
-																				class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-xs font-semibold {varianceItemsPage ===
-																				token
-																					? 'bg-pink-600 text-white shadow-sm'
-																					: 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100'}"
-																			>
-																				{token}
-																			</button>
-																		{/if}
-																	{/each}
-																</nav>
-																<button
-																	type="button"
-																	onclick={() =>
-																		(varianceItemsPage = Math.min(
-																			varianceItemsTotalPages,
-																			varianceItemsPage + 1
-																		))}
-																	disabled={varianceItemsPage === varianceItemsTotalPages}
-																	class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-																	aria-label="Next variance items page"
-																>
-																	<svg
-																		class="h-4 w-4"
-																		viewBox="0 0 20 20"
-																		fill="currentColor"
-																		aria-hidden="true"
-																	>
-																		<path
-																			fill-rule="evenodd"
-																			d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
-																			clip-rule="evenodd"
-																		/>
-																	</svg>
-																</button>
-															</div>
-														</div>
-													{/if}
-												</div>
-											{/if}
-										</div>
-									</div>
-
-									<div
-										class="flex h-full flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
-									>
-										<div class="flex items-center justify-between gap-4">
-											<div>
-												<h3 class="text-lg font-semibold text-gray-900">Related Requests</h3>
-												<p class="mt-1 text-xs text-gray-600">
-													Latest request linked to each variance item
-												</p>
-											</div>
-											<p class="text-xs text-gray-500">
-												{filteredRelatedRequestRows.length} of {inventoryVarianceRows.length} records
-											</p>
-										</div>
-
-										<div class="mt-3">
-											<label
-												for="related-requests-search"
-												class="mb-1 block text-xs font-medium text-gray-600"
-												>Search related requests</label
-											>
-											<div class="relative">
-												<Search
-													size={16}
-													class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-gray-400"
-												/>
-												<input
-													id="related-requests-search"
-													type="text"
-													bind:value={relatedRequestsQuery}
-													placeholder="Search by request ID, student, status, or item"
-													class="w-full rounded-lg border border-gray-300 bg-white py-2 pr-9 pl-9 text-sm text-gray-900 placeholder:text-gray-400 focus:border-pink-500 focus:ring-2 focus:ring-pink-200 focus:outline-none"
-												/>
-												{#if relatedRequestsQuery}
-													<button
-														type="button"
-														onclick={() => (relatedRequestsQuery = '')}
-														class="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
-														aria-label="Clear related requests search"
-													>
-														<X size={14} />
-													</button>
-												{/if}
-											</div>
-										</div>
-
-										<div class="mt-4 flex flex-1 flex-col">
-											{#if inventoryVarianceRows.length === 0}
-												<div
-													class="flex min-h-70 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-6 py-10 text-center"
-												>
-													<div>
-														<div
-															class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gray-100"
-														>
-															<Package size={32} class="text-pink-600" />
-														</div>
-														<h4 class="mt-6 text-base font-semibold text-gray-900">
-															No request context
-														</h4>
-														<p class="mt-2 max-w-sm text-sm leading-6 text-gray-600">
-															Request context will appear here once inventory items are linked to
-															borrowing activity.
-														</p>
-													</div>
-												</div>
-											{:else if filteredRelatedRequestRows.length === 0}
-												<div
-													class="flex min-h-70 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-6 py-10 text-center"
-												>
-													<div>
-														<div
-															class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gray-100"
-														>
-															<Search size={32} class="text-pink-600" />
-														</div>
-														<h4 class="mt-6 text-base font-semibold text-gray-900">
-															No matches found
-														</h4>
-														<p class="mt-2 max-w-sm text-sm leading-6 text-gray-600">
-															Try a different item name or related count.
-														</p>
-													</div>
-												</div>
-											{:else}
-												<div class="flex flex-1 flex-col gap-2">
-													{#each paginatedRelatedRequestRows as item}
-														{@const driver = report.inventory.varianceDrivers.find(
-															(row) => row.id === item._id
-														)}
-														<button type="button" onclick={() => (borrowDetail = { kind: 'item', subject: item })} class="w-full cursor-pointer rounded-lg border border-gray-200 bg-gray-50 p-4 text-left transition hover:border-pink-300 hover:bg-pink-50/40">
-															<div class="flex items-start justify-between gap-4">
-																<div class="min-w-0 flex-1">
-																	<p class="truncate text-sm font-semibold text-gray-900">
-																		{driver?.latestRequestId
-																			? `REQ-${driver.latestRequestId.slice(-6).toUpperCase()}`
-																			: 'N/A'}
-																	</p>
-																	<p class="text-xs text-gray-600">
-																		{driver?.studentName || 'Unknown student'}
-																	</p>
-																	<p class="mt-2 text-xs text-gray-500">
-																		{driver?.latestRequestDate
-																			? new Date(driver.latestRequestDate).toLocaleDateString(
-																					'en-US',
-																					{ month: 'short', day: 'numeric', year: 'numeric' }
-																				)
-																			: 'No request date'}
-																		{#if driver?.latestRequestStatus && driver.latestRequestStatus !== 'approved_instructor'}
-																			&middot; {driver.latestRequestStatus}
-																		{/if}
-																	</p>
-																</div>
-																<div class="text-right">
-																	<p class="text-sm font-medium text-gray-900">{item.name}</p>
-																	<p class="text-xs text-gray-600">
-																		{driver?.requestCount ?? 0} requests
-																	</p>
-																	<p class="mt-1 text-xs text-gray-500">
-																		{driver?.totalBorrowedQuantity ?? 0} total borrowed
-																	</p>
-																</div>
-															</div>
-														</button>
-													{/each}
-
-													{#if relatedRequestsTotalPages > 1}
-														<div
-															class="mt-auto flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-2"
-														>
-															<p class="text-xs text-gray-600">
-																Showing {(relatedRequestsPage - 1) * INVENTORY_PAGE_SIZE +
-																	1}-{Math.min(
-																	relatedRequestsPage * INVENTORY_PAGE_SIZE,
-																	filteredRelatedRequestRows.length
-																)} of {filteredRelatedRequestRows.length} items
-															</p>
-															<div class="flex items-center gap-1.5">
-																<button
-																	type="button"
-																	onclick={() =>
-																		(relatedRequestsPage = Math.max(1, relatedRequestsPage - 1))}
-																	disabled={relatedRequestsPage === 1}
-																	class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-																	aria-label="Previous related requests page"
-																>
-																	<svg
-																		class="h-4 w-4"
-																		viewBox="0 0 20 20"
-																		fill="currentColor"
-																		aria-hidden="true"
-																	>
-																		<path
-																			fill-rule="evenodd"
-																			d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z"
-																			clip-rule="evenodd"
-																		/>
-																	</svg>
-																</button>
-																<nav
-																	class="isolate inline-flex items-center gap-1"
-																	aria-label="Related requests pagination"
-																>
-																	{#each relatedRequestsPageTokens as token}
-																		{#if token === 'ellipsis'}
-																			<span
-																				class="inline-flex h-8 min-w-8 items-center justify-center px-1 text-xs font-medium text-gray-500"
-																				>...</span
-																			>
-																		{:else}
-																			<button
-																				type="button"
-																				onclick={() => (relatedRequestsPage = token)}
-																				class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-xs font-semibold {relatedRequestsPage ===
-																				token
-																					? 'bg-pink-600 text-white shadow-sm'
-																					: 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100'}"
-																			>
-																				{token}
-																			</button>
-																		{/if}
-																	{/each}
-																</nav>
-																<button
-																	type="button"
-																	onclick={() =>
-																		(relatedRequestsPage = Math.min(
-																			relatedRequestsTotalPages,
-																			relatedRequestsPage + 1
-																		))}
-																	disabled={relatedRequestsPage === relatedRequestsTotalPages}
-																	class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-																	aria-label="Next related requests page"
-																>
-																	<svg
-																		class="h-4 w-4"
-																		viewBox="0 0 20 20"
-																		fill="currentColor"
-																		aria-hidden="true"
-																	>
-																		<path
-																			fill-rule="evenodd"
-																			d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
-																			clip-rule="evenodd"
-																		/>
-																	</svg>
-																</button>
-															</div>
-														</div>
-													{/if}
-												</div>
-											{/if}
-										</div>
-									</div>
-								</div>
-							</div>
+							<InventoryVarianceReport refreshKey={report?.meta?.generatedAt ?? null} userName={exportUserName} />
 
 							<div class="mt-6 space-y-6">
 								<StockAdjustmentsTable adjustments={report.inventory.stockAdjustments} />

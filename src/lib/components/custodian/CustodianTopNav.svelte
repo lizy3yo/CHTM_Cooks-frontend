@@ -6,7 +6,7 @@
 	import { themeStore } from '$lib/stores/theme';
 	import { toastStore } from '$lib/stores/toast';
 	import { sidebarCollapsed, mobileSidebarOpen } from '$lib/stores/custodian';
-	import { notificationsAPI, type NotificationRecord } from '$lib/api/notifications';
+	import { notificationsAPI, watchNotifications, type NotificationRecord } from '$lib/api/notifications';
 	import { Moon, Sun, HelpCircle, Bell, ChevronDown, LogOut, User, Settings, CalendarDays, History, ScanLine, X, CheckCircle2 } from 'lucide-svelte';
 	import SignOutModal from '$lib/components/ui/SignOutModal.svelte';
 	import logo from '$lib/assets/CHTM_LOGO.png';
@@ -89,12 +89,15 @@
 	let now = $state(new Date());
 	let ticker: ReturnType<typeof setInterval>;
 	let notificationTicker: ReturnType<typeof setInterval>;
+	let stopWatchingNotifications: (() => void) | undefined;
 
 	onMount(() => {
 		ticker = setInterval(() => { now = new Date(); }, 1000);
 		void loadNotifications();
+		// Refresh the moment a notification arrives; the timer is only a safety net.
+		stopWatchingNotifications = watchNotifications(() => void loadNotifications(true));
 		notificationTicker = setInterval(() => {
-			void loadNotifications();
+			void loadNotifications(true);
 		}, 60000);
 		document.body.style.paddingTop = '4rem';
 		return () => { document.body.style.paddingTop = ''; };
@@ -102,6 +105,7 @@
 	onDestroy(() => {
 		clearInterval(ticker);
 		clearInterval(notificationTicker);
+		stopWatchingNotifications?.();
 		document.body.style.paddingTop = '';
 	});
 
@@ -149,10 +153,10 @@
 		return `${diffDays}d ago`;
 	}
 
-	async function loadNotifications() {
+	async function loadNotifications(force = false) {
 		loadingNotifications = true;
 		try {
-			const data = await notificationsAPI.list(5, 0);
+			const data = await notificationsAPI.list(5, 0, { forceRefresh: force });
 			recentNotifications = data.notifications;
 			unreadCount = data.unreadCount;
 		} catch {

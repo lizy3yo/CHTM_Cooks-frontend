@@ -10,6 +10,7 @@
 		type BorrowRequestRecord,
 		type BorrowRequestStatus
 	} from '$lib/api/borrowRequests';
+	import { approverName } from '$lib/utils/requestTimeline';
 	import { catalogAPI } from '$lib/api/catalog';
 	import { DeltaSync } from '$lib/api/deltaSync';
 	import { classCodesAPI, type ClassCodeResponse } from '$lib/api/classCodes';
@@ -299,7 +300,7 @@
 			resolvedDate: formatDateTime(record.resolvedAt),
 			lastReminderAt: formatDateTime(record.lastReminderAt),
 			reminderCount: record.reminderCount || 0,
-			approvedBy: record.instructor?.fullName || 'Instructor',
+			approvedBy: approverName(record) || 'Instructor',
 			rejectionReason: record.rejectReason,
 			rejectionNotes: record.rejectionNotes,
 			approvedDate: formatDateTime(record.approvedAt),

@@ -235,12 +235,12 @@ export const replacementObligationsAPI = {
 	async resolveObligation(
 		id: string,
 		resolution: ResolveReplacementObligationRequest
-	): Promise<{ success: boolean; message: string }> {
+	): Promise<{ success: boolean; message: string; settled?: number; surplus?: number }> {
 		const res = await fetch(
 			`/api/replacement-obligations/${id}`,
 			getFetchOptions('PATCH', resolution)
 		);
-		const data = await handleResponse<{ success: boolean; message: string }>(res);
+		const data = await handleResponse<{ success: boolean; message: string; settled?: number; surplus?: number }>(res);
 		invalidateAllCaches();
 		return data;
 	},

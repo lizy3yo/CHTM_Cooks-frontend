@@ -25,6 +25,13 @@
 
 	const totalUnits = $derived(filtered.reduce((s, d) => s + (d.quantity || 0), 0));
 	const uniqueDonors = $derived(new Set(filtered.map((d) => d.donorName)).size);
+	const totalValue = $derived(filtered.reduce((s, d) => s + (d.totalValue ?? 0), 0));
+	const undeclared = $derived(filtered.filter((d) => d.totalValue === null || d.totalValue === undefined).length);
+
+	const pesoFmt = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
+	function peso(amount: number | null | undefined): string {
+		return amount === null || amount === undefined ? '—' : pesoFmt.format(amount);
+	}
 
 	const totalPages = $derived(Math.max(1, Math.ceil(filtered.length / pageSize)));
 	const paged = $derived(filtered.slice((page - 1) * pageSize, page * pageSize));
@@ -58,6 +65,12 @@
 			<span class="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-600/10">
 				Units received: {totalUnits}
 			</span>
+			<span
+				class="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-600/10"
+				title={undeclared ? `${undeclared} donation${undeclared === 1 ? ' has' : 's have'} no declared cost` : undefined}
+			>
+				Donated value: {peso(totalValue)}
+			</span>
 		</div>
 	</div>
 
@@ -80,6 +93,8 @@
 					<th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600">Donor</th>
 					<th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600">Item</th>
 					<th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600">Quantity</th>
+					<th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600">Value</th>
+					<th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600">Deed</th>
 					<th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600">Purpose / Notes</th>
 					<th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600">Receipt</th>
 					<th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600">Date</th>
@@ -88,7 +103,7 @@
 			<tbody class="divide-y divide-gray-200 bg-white">
 				{#if filtered.length === 0}
 					<tr>
-						<td colspan="6" class="px-4 py-12 text-center">
+						<td colspan="8" class="px-4 py-12 text-center">
 							<div class="flex flex-col items-center justify-center">
 								<div class="mb-2 rounded-full bg-gray-100 p-3 text-gray-400">
 									<Heart class="h-6 w-6" />
@@ -116,6 +131,21 @@
 							<td class="px-4 py-3 text-sm text-gray-700">{d.itemName}</td>
 							<td class="px-4 py-3 text-sm font-bold text-emerald-700">
 								+{d.quantity}{d.unit ? ` ${d.unit}` : ''}
+							</td>
+							<td class="px-4 py-3 text-sm whitespace-nowrap">
+								<div class="font-semibold text-gray-900">{peso(d.totalValue)}</div>
+								{#if d.unitCost !== null && d.unitCost !== undefined}
+									<div class="text-xs text-gray-500">{peso(d.unitCost)} each</div>
+								{/if}
+							</td>
+							<td class="px-4 py-3">
+								<span
+									class="inline-block rounded-full px-2 py-0.5 text-xs font-semibold {d.deedStatus === 'signed'
+										? 'bg-emerald-100 text-emerald-800'
+										: 'bg-amber-100 text-amber-800'}"
+								>
+									{d.deedStatus === 'signed' ? 'Signed' : 'Pending'}
+								</span>
 							</td>
 							<td class="px-4 py-3 text-sm text-gray-600">
 								{#if d.purpose}

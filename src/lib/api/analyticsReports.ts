@@ -212,6 +212,10 @@ export interface DonationRecord {
 	inventoryAction: 'new_item' | 'add_to_existing';
 	date?: string | null;
 	createdAt: string;
+	/** Declared cost of one unit, and of the whole donation; null when not declared. */
+	unitCost?: number | null;
+	totalValue?: number | null;
+	deedStatus?: 'pending' | 'signed';
 }
 
 export interface ReplacementSummary {
@@ -368,7 +372,7 @@ interface CacheEntry {
 }
 
 const CLIENT_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours - aligned with server cache and session timeout
-const CLIENT_CACHE_VERSION = 'v12';
+const CLIENT_CACHE_VERSION = 'v13';
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<AnalyticsReport>>();
 

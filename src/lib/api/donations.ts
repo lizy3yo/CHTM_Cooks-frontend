@@ -25,6 +25,13 @@ export interface DonationResponse {
 	picture?: string | null;
 	/** Name of the staff member who logged the donation. */
 	recordedBy?: string | null;
+	/** Declared cost of one unit, and of the whole donation; null when not declared. */
+	unitCost?: number | null;
+	totalValue?: number | null;
+	/** Deed of donation: pending until the signed copy is uploaded. */
+	deedStatus?: 'pending' | 'signed';
+	deedFileUrl?: string | null;
+	deedSignedAt?: string | null;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -38,6 +45,7 @@ export interface CreateDonationNewItemRequest {
 	purpose: string;
 	date: string;
 	notes?: string;
+	unitCost?: number;
 	// Inventory item fields
 	itemName: string;
 	category: string;
@@ -56,6 +64,7 @@ export interface CreateDonationAddToExistingRequest {
 	purpose: string;
 	date: string;
 	notes?: string;
+	unitCost?: number;
 	inventoryItemId: string;
 }
 
@@ -244,6 +253,16 @@ export const donationsAPI = {
 	 */
 	async update(id: string, payload: UpdateDonationRequest): Promise<DonationResponse> {
 		const res = await fetch(`/api/donations/${id}`, getFetchOptions('PUT', payload));
+		const data = await handleResponse<DonationResponse>(res);
+		invalidateAllCaches();
+		return data;
+	},
+
+	/**
+	 * Record the uploaded signed deed of donation, marking the deed as signed.
+	 */
+	async attachDeed(id: string, fileUrl: string): Promise<DonationResponse> {
+		const res = await fetch(`/api/donations/${id}/deed`, getFetchOptions('POST', { fileUrl }));
 		const data = await handleResponse<DonationResponse>(res);
 		invalidateAllCaches();
 		return data;

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import SpreadsheetImportModal, { type ImportColumn } from '$lib/components/ui/SpreadsheetImportModal.svelte';
+	import { importsAPI, type UserImportRow } from '$lib/api/imports';
 	import { onMount } from 'svelte';
 	import {
 		Search,
@@ -40,7 +42,6 @@
 
 	// ─── Modal state ─────────────────────────────────────────────────────────────
 	let showCreateModal = $state(false);
-	let showBulkImportModal = $state(false);
 
 	// ─── Users list state ────────────────────────────────────────────────────────
 	let users = $state<UserResponse[]>([]);
@@ -91,13 +92,24 @@
 	// ─── Dropdown open tracking ──────────────────────────────────────────────────
 	let openDropdown = $state<string | null>(null);
 
-	// ─── Bulk import ─────────────────────────────────────────────────────────────
-	let bulkFile = $state<File | null>(null);
-	let bulkPreview = $state<Array<Record<string, string>>>([]);
-	let bulkImporting = $state(false);
-	let bulkProgress = $state(0);
-	let bulkErrors = $state<string[]>([]);
-	let isDragging = $state(false);
+	// ─── Import students / instructors ───────────────────────────────────────────
+	/** Which kind of account the open import dialog creates; null when closed. */
+	let importRole = $state<'student' | 'instructor' | null>(null);
+	/** Every imported account starts on this password; the superadmin chooses it. */
+	let temporaryPassword = $state('');
+
+	const NAME_COLUMNS: ImportColumn[] = [
+		{ key: 'firstName', label: 'First Name', required: true, example: 'Juan', aliases: ['Given Name'] },
+		{ key: 'lastName', label: 'Last Name', required: true, example: 'Dela Cruz', aliases: ['Surname', 'Family Name'] },
+		{ key: 'email', label: 'Email', required: true, type: 'email', example: 'juan.delacruz@gordoncollege.edu.ph', aliases: ['Email Address'] }
+	];
+	const STUDENT_IMPORT_COLUMNS: ImportColumn[] = [
+		...NAME_COLUMNS,
+		{ key: 'yearLevel', label: 'Year Level', required: true, example: '2nd Year', aliases: ['Year'] },
+		{ key: 'block', label: 'Block', required: true, example: 'A', aliases: ['Block Section'] },
+		{ key: 'courseCode', label: 'Course Code', example: 'HM-201', aliases: ['Class'] },
+		{ key: 'section', label: 'Section', example: 'BSHM 2A', aliases: ['Class Section'] }
+	];
 
 	// ─── SSE cleanup ─────────────────────────────────────────────────────────────
 	let unsubscribeSSE: (() => void) | null = null;
@@ -455,122 +467,15 @@
 		toastStore.info(`Password reset link sent to ${user.email}`, 'Reset Sent');
 	}
 
-	// ─── Bulk import ─────────────────────────────────────────────────────────────
-	function parseCsvLine(line: string): string[] {
-		const result: string[] = [];
-		let current = '';
-		let inQuotes = false;
-		for (const ch of line) {
-			if (ch === '"') {
-				inQuotes = !inQuotes;
-			} else if (ch === ',' && !inQuotes) {
-				result.push(current.trim());
-				current = '';
-			} else {
-				current += ch;
-			}
-		}
-		result.push(current.trim());
-		return result;
+	// ─── Import students / instructors (Excel / CSV) ────────────────────────────
+	async function importUserRows(rows: Record<string, string | number | undefined>[]): Promise<string> {
+		const role = importRole!;
+		const r = await importsAPI.users(role, rows as unknown as UserImportRow[], temporaryPassword);
+		const noun = role === 'student' ? 'student' : 'instructor';
+		return `${r.imported} ${noun} account${r.imported === 1 ? '' : 's'} created${r.enrolled ? `, ${r.enrolled} enrolled into a class` : ''}. They sign in with the temporary password you set.`;
 	}
 
-	function handleFileSelect(file: File) {
-		bulkFile = file;
-		bulkPreview = [];
-		bulkErrors = [];
-		const reader = new FileReader();
-		reader.onload = (e) => {
-			const text = (e.target?.result as string) || '';
-			const lines = text.split(/\r?\n/).filter((l) => l.trim());
-			if (lines.length < 2) {
-				bulkErrors = ['File must have a header row and at least one data row.'];
-				return;
-			}
-			const headers = parseCsvLine(lines[0]).map((h) => h.toLowerCase().replace(/\s/g, '_'));
-			const rows: Array<Record<string, string>> = [];
-			const errs: string[] = [];
-			for (let i = 1; i < lines.length; i++) {
-				const vals = parseCsvLine(lines[i]);
-				if (vals.length < headers.length) {
-					errs.push(`Row ${i + 1}: insufficient columns`);
-					continue;
-				}
-				const row: Record<string, string> = {};
-				headers.forEach((h, idx) => {
-					row[h] = vals[idx] || '';
-				});
-				if (!row.email) {
-					errs.push(`Row ${i + 1}: email is required`);
-					continue;
-				}
-				if (!row.first_name) {
-					errs.push(`Row ${i + 1}: first_name is required`);
-					continue;
-				}
-				if (!row.last_name) {
-					errs.push(`Row ${i + 1}: last_name is required`);
-					continue;
-				}
-				rows.push(row);
-			}
-			bulkPreview = rows;
-			bulkErrors = errs;
-		};
-		reader.readAsText(file);
-	}
-
-	function handleDrop(e: DragEvent) {
-		e.preventDefault();
-		isDragging = false;
-		const file = e.dataTransfer?.files[0];
-		if (file) handleFileSelect(file);
-	}
-
-	function downloadTemplate() {
-		const csv =
-			'first_name,last_name,email,password,role,year_level,block\nJuan,dela Cruz,juan@example.com,Password123!,student,3rd Year,A\nMaria,Santos,maria@example.com,Password123!,instructor,,';
-		const blob = new Blob([csv], { type: 'text/csv' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = 'user_import_template.csv';
-		a.click();
-		URL.revokeObjectURL(url);
-	}
-
-	async function handleBulkImport() {
-		if (!bulkPreview.length) return;
-		bulkImporting = true;
-		bulkProgress = 0;
-		const errors: string[] = [];
-		for (let i = 0; i < bulkPreview.length; i++) {
-			const row = bulkPreview[i];
-			try {
-				await usersAPI.create({
-					firstName: row.first_name,
-					lastName: row.last_name,
-					email: row.email.toLowerCase(),
-					password: row.password || 'TempPass123!',
-					role: (row.role as UserRole) || 'student',
-					yearLevel: row.year_level || undefined,
-					block: row.block || undefined
-				});
-			} catch (e: any) {
-				errors.push(`Row ${i + 2}: ${e.message}`);
-			}
-			bulkProgress = Math.round(((i + 1) / bulkPreview.length) * 100);
-		}
-		bulkImporting = false;
-		if (errors.length) {
-			bulkErrors = [...bulkErrors, ...errors];
-			toastStore.warning(`Import complete with ${errors.length} error(s).`, 'Partial Import');
-		} else {
-			toastStore.success(`Successfully imported ${bulkPreview.length} users.`, 'Import Complete');
-		}
-		bulkFile = null;
-		bulkPreview = [];
-		bulkProgress = 0;
-		showBulkImportModal = false;
+	async function refreshAfterImport(): Promise<void> {
 		await loadUsers();
 		await loadStats();
 	}
@@ -796,214 +701,35 @@
 	</div>
 {/if}
 
-<!-- ─── Bulk Import Modal ────────────────────────────────────────────────────── -->
-{#if showBulkImportModal}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-		onclick={(e) => {
-			if (e.target === e.currentTarget) showBulkImportModal = false;
-		}}
-		role="presentation"
-	>
-		<div
-			class="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl"
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby="bulk-import-modal-title"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
-			<div class="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
-				<div>
-					<h2 id="bulk-import-modal-title" class="text-xl font-semibold text-gray-900">Bulk Import Users</h2>
-					<p class="mt-0.5 text-sm text-gray-500">Import multiple users at once using a CSV file</p>
-				</div>
-				<button
-					type="button"
-					onclick={() => (showBulkImportModal = false)}
-					class="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-					aria-label="Close bulk import dialog"
-				>
-					<X size={20} />
-				</button>
-			</div>
-			<div class="p-6 space-y-6">
-				<!-- Drop zone -->
-				<div>
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div
-						class="rounded-xl border-2 border-dashed p-10 text-center transition-colors {isDragging
-							? 'border-pink-400 bg-pink-50'
-							: 'border-gray-300 bg-gray-50 hover:border-pink-300 hover:bg-pink-50/50'}"
-						ondragover={(e) => {
-							e.preventDefault();
-							isDragging = true;
-						}}
-						ondragleave={() => (isDragging = false)}
-						ondrop={handleDrop}
-						role="region"
-						aria-label="File drop zone for CSV upload"
-					>
-						<Upload
-							size={40}
-							class="mx-auto {isDragging ? 'text-pink-500' : 'text-gray-400'}"
-							aria-hidden="true"
-						/>
-						<p class="mt-3 text-sm font-semibold text-gray-800">Drop your CSV file here, or</p>
-						<label
-							for="bulk-file-input"
-							class="mt-3 inline-block cursor-pointer rounded-lg bg-pink-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-pink-700"
-						>
-							Browse File
-							<input
-								id="bulk-file-input"
-								type="file"
-								accept=".csv,.xlsx"
-								class="sr-only"
-								onchange={(e) => {
-									const f = (e.target as HTMLInputElement).files?.[0];
-									if (f) handleFileSelect(f);
-								}}
-							/>
-						</label>
-						<p class="mt-2 text-xs text-gray-400">Supports .csv files · max 10 MB</p>
-						{#if bulkFile}<p class="mt-2 text-sm font-medium text-pink-700">
-								Selected: {bulkFile.name}
-							</p>{/if}
-					</div>
-
-					<!-- Template -->
-					<div class="mt-4 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
-						<Download size={18} class="mt-0.5 shrink-0 text-blue-600" aria-hidden="true" />
-						<div class="flex-1">
-							<p class="text-sm font-semibold text-blue-900">CSV Template</p>
-							<p class="mt-0.5 text-xs text-blue-700">
-								Download the template to ensure correct column formatting
-							</p>
-							<p class="mt-1 font-mono text-xs text-blue-600">
-								first_name, last_name, email, password, role, year_level, block
-							</p>
-						</div>
-						<button
-							type="button"
-							onclick={downloadTemplate}
-							class="shrink-0 rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-50"
-							aria-label="Download CSV template"
-						>
-							Download
-						</button>
-					</div>
-				</div>
-
-				<!-- Parse errors -->
-				{#if bulkErrors.length}
-					<div class="rounded-xl border border-red-200 bg-red-50 p-4" role="alert" aria-live="polite">
-						<p class="text-sm font-semibold text-red-900">Validation Errors ({bulkErrors.length})</p>
-						<ul class="mt-2 space-y-1">
-							{#each bulkErrors as err}<li class="text-xs text-red-700">• {err}</li>{/each}
-						</ul>
-					</div>
-				{/if}
-
-				<!-- Preview -->
-				{#if bulkPreview.length}
-					<div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-						<div class="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-							<div>
-								<h3 class="font-semibold text-gray-900">
-									Preview — {bulkPreview.length} user{bulkPreview.length !== 1 ? 's' : ''} ready
-								</h3>
-								<p class="mt-0.5 text-xs text-gray-500">Review before importing</p>
-							</div>
-							<div class="flex gap-2">
-								<button
-									type="button"
-									onclick={() => {
-										bulkFile = null;
-										bulkPreview = [];
-									}}
-									class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-									aria-label="Clear preview"
-								>
-									Clear
-								</button>
-								<button
-									type="button"
-									onclick={handleBulkImport}
-									disabled={bulkImporting}
-									class="inline-flex items-center gap-2 rounded-lg bg-pink-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-pink-700 disabled:opacity-60"
-									aria-label="Import all users"
-								>
-									{#if bulkImporting}
-										<RefreshCw size={15} class="animate-spin" aria-hidden="true" />Importing {bulkProgress}%
-									{:else}
-										<Upload size={15} aria-hidden="true" />Import All
-									{/if}
-								</button>
-							</div>
-						</div>
-
-						{#if bulkImporting}
-							<div
-								class="border-b border-pink-100 bg-pink-50 px-6 py-3"
-								role="status"
-								aria-live="polite"
-								aria-label="Import progress"
-							>
-								<div class="mb-1.5 flex items-center justify-between text-xs text-pink-700">
-									<span>Importing users…</span><span>{bulkProgress}%</span>
-								</div>
-								<div class="h-1.5 w-full overflow-hidden rounded-full bg-pink-100">
-									<div
-										class="h-full rounded-full bg-pink-500 transition-all duration-300"
-										style="width: {bulkProgress}%"
-										role="progressbar"
-										aria-valuenow={bulkProgress}
-										aria-valuemin="0"
-										aria-valuemax="100"
-									></div>
-								</div>
-							</div>
-						{/if}
-
-						<div class="overflow-x-auto">
-							<table class="w-full text-sm">
-								<thead class="bg-gray-50">
-									<tr>
-										{#each Object.keys(bulkPreview[0]) as key}
-											<th
-												scope="col"
-												class="px-4 py-3 text-left text-xs font-semibold tracking-wider text-gray-500 uppercase"
-												>{key.replace(/_/g, ' ')}</th
-											>
-										{/each}
-									</tr>
-								</thead>
-								<tbody class="divide-y divide-gray-100">
-									{#each bulkPreview.slice(0, 10) as row}
-										<tr class="hover:bg-gray-50">
-											{#each Object.values(row) as val}
-												<td class="max-w-[150px] truncate px-4 py-3 text-gray-700">{val || '—'}</td>
-											{/each}
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
-						{#if bulkPreview.length > 10}
-							<div
-								class="border-t border-gray-200 bg-gray-50 px-6 py-3 text-center text-xs text-gray-500"
-							>
-								… and {bulkPreview.length - 10} more rows
-							</div>
-						{/if}
-					</div>
-				{/if}
-			</div>
+<!-- ─── Import Modal ─────────────────────────────────────────────────────────── -->
+{#if importRole}
+	{#snippet passwordField()}
+		<div>
+			<label for="import-temp-password" class="block text-sm font-semibold text-gray-900">Temporary password</label>
+			<p class="mt-0.5 text-xs text-gray-500">Every imported account starts on this password. At least 8 characters.</p>
+			<input
+				id="import-temp-password"
+				type="text"
+				bind:value={temporaryPassword}
+				autocomplete="off"
+				placeholder="Enter a temporary password"
+				class="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-100 focus:outline-none"
+			/>
 		</div>
-	</div>
+	{/snippet}
+	<SpreadsheetImportModal
+		title={importRole === 'student' ? 'Import Students' : 'Import Instructors'}
+		description={importRole === 'student'
+			? 'Create student accounts. Add a course code and section to enrol a student into that class.'
+			: 'Create instructor accounts. Import instructors before the class codes that name them.'}
+		columns={importRole === 'student' ? STUDENT_IMPORT_COLUMNS : NAME_COLUMNS}
+		templateName={importRole === 'student' ? 'students_import_template' : 'instructors_import_template'}
+		extra={passwordField}
+		ready={temporaryPassword.trim().length >= 8}
+		onImport={importUserRows}
+		onImported={refreshAfterImport}
+		onClose={() => (importRole = null)}
+	/>
 {/if}
 
 <!-- ─── Edit User Modal ───────────────────────────────────────────────────────── -->
@@ -1377,16 +1103,17 @@
 					<div class="flex gap-2">
 						<button
 							type="button"
-							onclick={() => {
-								bulkFile = null;
-								bulkPreview = [];
-								bulkErrors = [];
-								showBulkImportModal = true;
-							}}
+							onclick={() => (importRole = 'student')}
 							class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-							aria-label="Import users"
 						>
-							<Upload size={16} aria-hidden="true" />Import
+							<Upload size={16} aria-hidden="true" />Import Students
+						</button>
+						<button
+							type="button"
+							onclick={() => (importRole = 'instructor')}
+							class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+						>
+							<Upload size={16} aria-hidden="true" />Import Instructors
 						</button>
 						<button
 							type="button"
