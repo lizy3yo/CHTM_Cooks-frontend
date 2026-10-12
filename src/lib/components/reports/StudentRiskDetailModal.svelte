@@ -1,10 +1,12 @@
 <script lang="ts">
-	import { X, User, ShieldCheck } from 'lucide-svelte';
+	import { X, User, ShieldCheck, Package } from 'lucide-svelte';
 	import type { BorrowEntry } from './BorrowingDetailModal.svelte';
+	import { inventoryReportsAPI, type ReturnedItemRow } from '$lib/api/inventoryReports';
 
 	interface Props {
 		open: boolean;
 		student: {
+			_id?: string;
 			studentName?: string;
 			studentEmail?: string;
 			trustScore?: number;
@@ -33,6 +35,60 @@
 	});
 
 	const score = $derived(Math.round(student?.trustScore ?? 0));
+
+	// ── Return history ──────────────────────────────────────────────────────
+	// Every item the student has handed back, all time, with what condition it
+	// came back in. Loaded when the window opens; the score above does not wait.
+	type ConditionFilter = 'all' | 'good' | 'damaged' | 'missing';
+
+	let returns = $state.raw<ReturnedItemRow[]>([]);
+	let returnsLoading = $state(false);
+	let returnsError = $state(false);
+	let returnsFilter = $state<ConditionFilter>('all');
+	let returnsShown = $state(PAGE_SIZE);
+	let returnsFor = '';
+
+	$effect(() => {
+		const id = open ? (student?._id ?? '') : '';
+		if (!id || id === returnsFor) {
+			if (!id) returnsFor = '';
+			return;
+		}
+		returnsFor = id;
+		returns = [];
+		returnsError = false;
+		returnsLoading = true;
+		returnsFilter = 'all';
+		returnsShown = PAGE_SIZE;
+
+		inventoryReportsAPI
+			.returnedItems({ from: '2000-01-01', studentIds: [id] })
+			.then((report) => {
+				// Ignore an answer for a student the window has moved on from.
+				if (returnsFor === id) returns = report.rows;
+			})
+			.catch(() => {
+				if (returnsFor === id) returnsError = true;
+			})
+			.finally(() => {
+				if (returnsFor === id) returnsLoading = false;
+			});
+	});
+
+	const returnTotals = $derived({
+		good: returns.reduce((sum, r) => sum + r.good, 0),
+		damaged: returns.reduce((sum, r) => sum + r.damaged, 0),
+		missing: returns.reduce((sum, r) => sum + r.missing, 0)
+	});
+	const filteredReturns = $derived(
+		returnsFilter === 'all' ? returns : returns.filter((r) => r[returnsFilter as 'good' | 'damaged' | 'missing'] > 0)
+	);
+
+	const CONDITION_CLASS: Record<ReturnedItemRow['condition'], string> = {
+		good: 'bg-emerald-100 text-emerald-800',
+		damaged: 'bg-amber-100 text-amber-800',
+		missing: 'bg-rose-100 text-rose-800'
+	};
 	const items = $derived.by(() => {
 		if (!open || !student) return [];
 		return entries.filter(
@@ -72,7 +128,7 @@
 	<div class="fixed inset-0 z-50 overflow-y-auto">
 		<button type="button" class="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-label="Close" onclick={onClose}></button>
 		<div class="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4">
-			<div class="animate-scaleIn relative w-full max-w-lg overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+			<div class="animate-scaleIn relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
 				<div class="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
 					<div class="flex min-w-0 items-start gap-3">
 						<div class="mt-0.5 rounded-full bg-pink-100 p-2.5 text-pink-600"><User class="h-5 w-5" /></div>
@@ -84,7 +140,7 @@
 					<button type="button" onclick={onClose} class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600" aria-label="Close"><X class="h-5 w-5" /></button>
 				</div>
 
-				<div class="space-y-4 px-5 py-4 sm:px-6">
+				<div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 sm:px-6">
 					<!-- Trust score -->
 					<div class="rounded-xl border border-gray-200 p-4">
 						<div class="flex items-center justify-between">
@@ -115,6 +171,76 @@
 							</div>
 						{/each}
 					</dl>
+
+					<!-- Return history: what came back good, damaged or missing -->
+					<div class="border-t border-gray-100 pt-3">
+						<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Return history (all time)</p>
+						<div class="grid grid-cols-3 gap-2" role="group" aria-label="Filter return history by condition">
+							{#each [
+								{ id: 'good', label: 'Good', value: returnTotals.good, cls: 'text-emerald-700', on: 'border-emerald-300 bg-emerald-50' },
+								{ id: 'damaged', label: 'Damaged', value: returnTotals.damaged, cls: 'text-amber-700', on: 'border-amber-300 bg-amber-50' },
+								{ id: 'missing', label: 'Missing', value: returnTotals.missing, cls: 'text-rose-700', on: 'border-rose-300 bg-rose-50' }
+							] as tile (tile.id)}
+								<button
+									type="button"
+									aria-pressed={returnsFilter === tile.id}
+									onclick={() => {
+										returnsFilter = returnsFilter === tile.id ? 'all' : (tile.id as ConditionFilter);
+										returnsShown = PAGE_SIZE;
+									}}
+									class="rounded-xl border p-3 text-center transition hover:bg-gray-50 {returnsFilter === tile.id ? tile.on : 'border-gray-200 bg-white'}"
+								>
+									<span class="block text-lg font-bold {tile.cls}">{returnsLoading ? '…' : tile.value}</span>
+									<span class="mt-0.5 block text-[11px] font-medium uppercase tracking-wide text-gray-500">{tile.label} units</span>
+								</button>
+							{/each}
+						</div>
+
+						{#if returnsLoading}
+							<p class="py-4 text-center text-sm text-gray-400">Loading return history…</p>
+						{:else if returnsError}
+							<p class="py-4 text-center text-sm text-rose-600">Could not load the return history.</p>
+						{:else if filteredReturns.length === 0}
+							<p class="py-4 text-center text-sm text-gray-400">
+								{returns.length === 0 ? 'No items have been returned and inspected yet.' : `No ${returnsFilter} items.`}
+							</p>
+						{:else}
+							<div class="mt-2 max-h-[34vh] space-y-2 overflow-y-auto pr-1">
+								{#each filteredReturns.slice(0, returnsShown) as r (r.id)}
+									<div class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-2.5">
+										{#if r.picture}
+											<img src={r.picture} alt={r.itemName} loading="lazy" class="h-11 w-11 shrink-0 rounded-lg border border-gray-200 object-cover" />
+										{:else}
+											<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 text-gray-400" aria-hidden="true">
+												<Package class="h-5 w-5" />
+											</div>
+										{/if}
+										<div class="min-w-0 flex-1">
+											<p class="truncate text-sm font-medium text-gray-900" title={r.itemName}>{r.itemName}</p>
+											<p class="truncate text-xs text-gray-500">
+												{r.requestCode} · {r.returnedAt ? fmtDate(r.returnedAt) : 'Return date not recorded'}{r.daysLate > 0 ? ` · ${r.daysLate} ${r.daysLate === 1 ? 'day' : 'days'} late` : ''}
+											</p>
+											<p class="mt-0.5 text-xs text-gray-600">
+												{r.good} good{r.damaged ? ` · ${r.damaged} damaged` : ''}{r.missing ? ` · ${r.missing} missing` : ''} of {r.quantity}
+											</p>
+										</div>
+										<span class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize {CONDITION_CLASS[r.condition] ?? CONDITION_CLASS.good}">
+											{r.condition}
+										</span>
+									</div>
+								{/each}
+								{#if filteredReturns.length > returnsShown}
+									<button
+										type="button"
+										onclick={() => (returnsShown += PAGE_SIZE)}
+										class="w-full rounded-lg border border-gray-200 py-2 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
+									>
+										Show {Math.min(PAGE_SIZE, filteredReturns.length - returnsShown)} more · {filteredReturns.length - returnsShown} remaining
+									</button>
+								{/if}
+							</div>
+						{/if}
+					</div>
 
 					<!-- Borrowed items -->
 					<div class="border-t border-gray-100 pt-3">
