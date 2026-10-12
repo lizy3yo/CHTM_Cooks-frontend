@@ -251,8 +251,15 @@
 							<div class="max-h-[34vh] space-y-2 overflow-y-auto pr-1">
 								<!-- Static SVG icons: rows repeat, and an icon component per row made opening slow. -->
 								{#each items.slice(0, shown) as e (e.id)}
-									<div class="flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white p-2.5">
-										<div class="min-w-0">
+									<div class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-2.5">
+										{#if e.picture}
+											<img src={e.picture} alt={e.name} loading="lazy" class="h-10 w-10 shrink-0 rounded-lg border border-gray-200 object-cover" />
+										{:else}
+											<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 text-gray-400" aria-hidden="true">
+												<Package class="h-4 w-4" />
+											</div>
+										{/if}
+										<div class="min-w-0 flex-1">
 											<p class="flex items-center gap-1.5 truncate text-sm font-medium text-gray-900"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="h-3.5 w-3.5 shrink-0 text-gray-400"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></svg>{e.name}</p>
 											<p class="mt-0.5 flex items-center gap-1.5 text-xs text-gray-400"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="h-3 w-3"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>{fmtDate(e.requestDate)} <span class="text-gray-300">·</span> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="h-3 w-3"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>{shortReq(e.requestId)}</p>
 										</div>

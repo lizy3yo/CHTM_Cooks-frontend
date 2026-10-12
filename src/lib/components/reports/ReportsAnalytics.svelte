@@ -1558,7 +1558,14 @@
 													{#if borrowedView === 'item'}
 														{#each paginatedBorrowedItemTotals as item (item.id)}
 															<button type="button" onclick={() => (borrowDetail = { kind: 'item', subject: item })} class="w-full cursor-pointer rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition hover:border-pink-300 hover:bg-pink-50/40">
-																<div class="flex items-center justify-between">
+																<div class="flex items-center justify-between gap-3">
+																	{#if item.picture}
+																		<img src={item.picture} alt={item.name} loading="lazy" class="h-10 w-10 shrink-0 rounded-lg border border-gray-200 object-cover" />
+																	{:else}
+																		<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 text-gray-400" aria-hidden="true">
+																			<Package class="h-4 w-4" />
+																		</div>
+																	{/if}
 																	<div class="min-w-0 flex-1">
 																		<p class="truncate text-sm font-medium text-gray-900">{item.name}</p>
 																		<p class="text-xs text-gray-600">{item.category}</p>
@@ -1573,7 +1580,14 @@
 													{:else}
 													{#each paginatedBorrowedItems as item}
 														<button type="button" onclick={() => (borrowDetail = { kind: 'entry', subject: item })} class="w-full cursor-pointer rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition hover:border-pink-300 hover:bg-pink-50/40">
-															<div class="flex items-center justify-between">
+															<div class="flex items-center justify-between gap-3">
+																{#if item.picture}
+																	<img src={item.picture} alt={item.name} loading="lazy" class="h-10 w-10 shrink-0 rounded-lg border border-gray-200 object-cover" />
+																{:else}
+																	<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 text-gray-400" aria-hidden="true">
+																		<Package class="h-4 w-4" />
+																	</div>
+																{/if}
 																<div class="min-w-0 flex-1">
 																	<p class="truncate text-sm font-medium text-gray-900">
 																		{item.name}

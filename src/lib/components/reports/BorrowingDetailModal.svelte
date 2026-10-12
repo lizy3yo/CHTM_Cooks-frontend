@@ -9,6 +9,8 @@
 		quantity: number;
 		studentName: string;
 		studentEmail: string;
+		/** The item's photo; null when it has none. */
+		picture?: string | null;
 	};
 </script>
 
@@ -172,7 +174,14 @@
 							<div class="max-h-[36vh] space-y-2 overflow-y-auto pr-1">
 								{#each requestItems as e (e.id)}
 									<div class="flex items-center justify-between gap-3 rounded-lg border p-2.5 {e.name === subject.name && e.quantity === subject.quantity ? 'border-pink-300 bg-pink-50/40' : 'border-gray-200 bg-white'}">
-										<div class="min-w-0">
+										{#if e.picture}
+											<img src={e.picture} alt={e.name} loading="lazy" class="h-10 w-10 shrink-0 rounded-lg border border-gray-200 object-cover" />
+										{:else}
+											<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 text-gray-400" aria-hidden="true">
+												<Package class="h-4 w-4" />
+											</div>
+										{/if}
+										<div class="min-w-0 flex-1">
 											<p class="flex items-center gap-1.5 truncate text-sm font-medium text-gray-900">
 												<Layers class="h-3.5 w-3.5 shrink-0 text-gray-400" />{e.name}
 											</p>
@@ -215,7 +224,16 @@
 								{#each rows.slice(0, shown) as e (e.id)}
 									<div class="rounded-lg border border-gray-200 bg-white p-3">
 										<div class="flex items-start justify-between gap-3">
-											<div class="min-w-0">
+											{#if kind === 'borrower'}
+												{#if e.picture}
+													<img src={e.picture} alt={e.name} loading="lazy" class="h-10 w-10 shrink-0 rounded-lg border border-gray-200 object-cover" />
+												{:else}
+													<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 text-gray-400" aria-hidden="true">
+														<Package class="h-4 w-4" />
+													</div>
+												{/if}
+											{/if}
+											<div class="min-w-0 flex-1">
 												{#if kind === 'item'}
 													<p class="flex items-center gap-1.5 truncate text-sm font-medium text-gray-900">
 														<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="h-3.5 w-3.5 shrink-0 text-gray-400"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>{e.studentName}
