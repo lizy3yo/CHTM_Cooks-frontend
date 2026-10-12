@@ -203,6 +203,8 @@
 	 * The requests behind one summary card. The window opens at once and the
 	 * list fills in when it arrives, since the cards only hold counts.
 	 */
+	let processedTicket = 0;
+
 	function processedDetail(title: string, statuses: BorrowRequestStatus[]): ReportDetail {
 		const build = (rows: BorrowRequestRecord[] | null, total: number | null): ReportDetail => ({
 			title,
@@ -223,15 +225,20 @@
 			]
 		});
 
+		// The store wraps what it is given, so the window is recognised by a
+		// ticket and its title rather than by comparing objects.
+		const ticket = ++processedTicket;
+		const stillShowing = () => ticket === processedTicket && reportDetail.current?.title === title;
+
 		const pending = build(null, null);
 		borrowRequestsAPI
 			.list({ statuses, page: 1, limit: 100 })
 			.then((response) => {
 				// Only fill the window if it is still showing this card.
-				if (reportDetail.current === pending) openReportDetail(build(response.requests, response.total));
+				if (stillShowing()) openReportDetail(build(response.requests, response.total));
 			})
 			.catch(() => {
-				if (reportDetail.current === pending) openReportDetail(build([], 0));
+				if (stillShowing()) openReportDetail(build([], 0));
 			});
 
 		return pending;
