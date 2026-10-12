@@ -4,6 +4,7 @@
 	import type { BorrowRequestRecord, BorrowRequestStatus } from '$lib/api/borrowRequests';
 	import { catalogAPI } from '$lib/api/catalog';
 	import { toastStore } from '$lib/stores/toast';
+	import { opensDetail, openReportDetail, reportDetail, detailDate, requestCode, statusBadge, DETAIL_HOVER, type ReportDetail } from './reportDetail.svelte';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import { 
@@ -197,12 +198,53 @@
 		showDetailModal = false;
 		selectedRequest = null;
 	}
+
+	/**
+	 * The requests behind one summary card. The window opens at once and the
+	 * list fills in when it arrives, since the cards only hold counts.
+	 */
+	function processedDetail(title: string, statuses: BorrowRequestStatus[]): ReportDetail {
+		const build = (rows: BorrowRequestRecord[] | null, total: number | null): ReportDetail => ({
+			title,
+			subtitle: 'Finalized borrow requests, newest first',
+			stat: { label: 'Requests', value: total === null ? '…' : String(total) },
+			sections: [
+				{
+					title: rows && total !== null && total > rows.length ? `Latest ${rows.length} requests` : 'Requests',
+					empty: rows === null ? 'Loading the requests…' : 'No requests in this group.',
+					rows: (rows ?? []).map((r) => ({
+						picture: r.items[0]?.picture || itemPictureCache.get(r.items[0]?.itemId ?? '') || null,
+						title: r.student?.fullName || [r.student?.firstName, r.student?.lastName].filter(Boolean).join(' ') || 'Unknown student',
+						subtitle: r.items.map((item) => `${item.name} ×${item.quantity}`).join(', '),
+						meta: `${requestCode(r.id)} · borrowed ${detailDate(r.borrowDate)}`,
+						badge: statusBadge(r.status)
+					}))
+				}
+			]
+		});
+
+		const pending = build(null, null);
+		borrowRequestsAPI
+			.list({ statuses, page: 1, limit: 100 })
+			.then((response) => {
+				// Only fill the window if it is still showing this card.
+				if (reportDetail.current === pending) openReportDetail(build(response.requests, response.total));
+			})
+			.catch(() => {
+				if (reportDetail.current === pending) openReportDetail(build([], 0));
+			});
+
+		return pending;
+	}
 </script>
 
 <div class="space-y-6">
 	<!-- KPI summary strip -->
 	<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-		<div class="rounded-xl border border-gray-250 bg-white p-5 shadow-sm">
+		<div
+			class="rounded-xl border border-gray-250 bg-white p-5 shadow-sm {DETAIL_HOVER}"
+			{...opensDetail(() => processedDetail('All processed requests', processedStatuses), 'View all processed requests')}
+		>
 			<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Total Processed</p>
 			{#if statsLoading}
 				<div class="mt-2 h-9 w-16 animate-pulse rounded bg-gray-200"></div>
@@ -212,7 +254,10 @@
 			<p class="mt-1 text-xs text-gray-500">Overall finalized requests</p>
 		</div>
 
-		<div class="rounded-xl border border-gray-255 bg-white p-5 shadow-sm">
+		<div
+			class="rounded-xl border border-gray-255 bg-white p-5 shadow-sm {DETAIL_HOVER}"
+			{...opensDetail(() => processedDetail('Returned requests', ['returned']), 'View returned requests')}
+		>
 			<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Returned</p>
 			{#if statsLoading}
 				<div class="mt-2 h-9 w-16 animate-pulse rounded bg-gray-200"></div>
@@ -222,7 +267,10 @@
 			<p class="mt-1 text-xs text-gray-500">Successfully returned</p>
 		</div>
 
-		<div class="rounded-xl border border-gray-255 bg-white p-5 shadow-sm">
+		<div
+			class="rounded-xl border border-gray-255 bg-white p-5 shadow-sm {DETAIL_HOVER}"
+			{...opensDetail(() => processedDetail('Resolved requests', ['resolved']), 'View resolved requests')}
+		>
 			<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Resolved</p>
 			{#if statsLoading}
 				<div class="mt-2 h-9 w-16 animate-pulse rounded bg-gray-200"></div>
@@ -232,7 +280,10 @@
 			<p class="mt-1 text-xs text-gray-500">Obligations resolved</p>
 		</div>
 
-		<div class="rounded-xl border border-gray-255 bg-white p-5 shadow-sm">
+		<div
+			class="rounded-xl border border-gray-255 bg-white p-5 shadow-sm {DETAIL_HOVER}"
+			{...opensDetail(() => processedDetail('Cancelled requests', ['cancelled']), 'View cancelled requests')}
+		>
 			<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Cancelled</p>
 			{#if statsLoading}
 				<div class="mt-2 h-9 w-16 animate-pulse rounded bg-gray-200"></div>
@@ -242,7 +293,10 @@
 			<p class="mt-1 text-xs text-gray-500">Cancelled by student</p>
 		</div>
 
-		<div class="rounded-xl border border-gray-255 bg-white p-5 shadow-sm">
+		<div
+			class="rounded-xl border border-gray-255 bg-white p-5 shadow-sm {DETAIL_HOVER}"
+			{...opensDetail(() => processedDetail('Declined requests', ['rejected']), 'View declined requests')}
+		>
 			<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Declined</p>
 			{#if statsLoading}
 				<div class="mt-2 h-9 w-16 animate-pulse rounded bg-gray-200"></div>

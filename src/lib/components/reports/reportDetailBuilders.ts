@@ -363,3 +363,125 @@ export function studentsDetail(
 		]
 	};
 }
+
+// ── Summary cards ───────────────────────────────────────────────────────────
+
+/** The returned lines behind one Returned Items card. */
+export function returnedGroupDetail(
+	title: string,
+	subtitle: string,
+	rows: ReturnedItemRow[],
+	stat: { label: string; value: string; tone?: DetailTone },
+	right: (row: ReturnedItemRow) => string = (row) => `×${row.quantity}`
+): ReportDetail {
+	return {
+		title,
+		subtitle,
+		stat,
+		fields: [
+			{ label: 'Requests', value: new Set(rows.map((r) => r.requestId)).size },
+			{ label: 'Students', value: new Set(rows.map((r) => r.studentId ?? r.studentName)).size }
+		],
+		sections: [
+			{
+				title: 'Returned items',
+				empty: 'Nothing in this group for the selected range.',
+				rows: rows.map((row) => ({
+					picture: row.picture ?? null,
+					title: row.itemName,
+					subtitle: `${row.studentName} · ${row.requestCode}`,
+					meta: `Returned ${detailDate(row.returnedAt)}${row.daysLate > 0 ? ` · ${plural(row.daysLate, 'day')} late` : ''}`,
+					right: right(row),
+					badge: CONDITION[row.condition] ?? CONDITION.good
+				}))
+			}
+		]
+	};
+}
+
+/** The walk-ins behind one Walk-in card. */
+export function walkInGroupDetail(title: string, subtitle: string, transactions: WalkInReportTransaction[], tone: DetailTone = 'neutral'): ReportDetail {
+	const status: Record<string, { label: string; tone: DetailTone }> = {
+		borrowed: { label: 'Borrowed', tone: 'info' },
+		returned: { label: 'Returned', tone: 'good' },
+		missing: { label: 'Item issue', tone: 'bad' }
+	};
+
+	return {
+		title,
+		subtitle,
+		stat: { label: 'Walk-ins', value: String(transactions.length), tone },
+		fields: [
+			{ label: 'People', value: new Set(transactions.map((t) => t.studentId || t.studentName)).size },
+			{ label: 'Units', value: transactions.reduce((sum, t) => sum + t.items.reduce((n, item) => n + item.quantity, 0), 0) }
+		],
+		sections: [
+			{
+				title: 'Walk-ins',
+				empty: 'No walk-ins in this group for the selected range.',
+				rows: transactions.map((t) => ({
+					picture: t.items[0]?.picture ?? null,
+					title: t.studentName || 'Unknown',
+					subtitle: t.items.map((item) => `${item.name} ×${item.quantity}`).join(', '),
+					meta: `${t.id} · borrowed ${detailDate(t.borrowDate)}${t.classCode ? ` · ${t.classCode}` : ''}`,
+					badge: status[t.status] ?? { label: t.status, tone: 'neutral' as DetailTone }
+				}))
+			}
+		]
+	};
+}
+
+/** The Over or Under entries behind a variance card. */
+export function varianceGroupDetail(over: boolean, monthLabel: string, entries: (VarianceOverEntry | VarianceUnderEntry)[]): ReportDetail {
+	const units = entries.reduce((sum, e) => sum + e.quantity, 0);
+
+	return {
+		title: over ? `Over in ${monthLabel}` : 'Under, still open',
+		subtitle: over ? 'Stock gained since the month began' : 'Units that should be on the shelf and are not',
+		stat: { label: over ? 'Units gained' : 'Units not on the shelf', value: `${over ? '+' : '−'}${units}`, tone: over ? 'good' : 'bad' },
+		fields: [
+			{ label: 'Entries', value: entries.length },
+			{ label: 'Items', value: new Set(entries.map((e) => e.itemId ?? e.itemName)).size }
+		],
+		sections: [
+			{
+				title: 'Entries',
+				empty: over ? 'Nothing was added this month.' : 'Nothing is missing from the shelf.',
+				rows: entries.map((e) => ({
+					picture: e.picture ?? null,
+					title: e.itemName,
+					subtitle: [e.person, e.reference].filter(Boolean).join(' · ') || (e.category ?? 'Uncategorized'),
+					meta: [detailDate(e.date), e.reason].filter(Boolean).join(' · '),
+					right: `${over ? '+' : '−'}${e.quantity}`
+				}))
+			}
+		]
+	};
+}
+
+/** Students behind a Damage & Missing History card. */
+export function incidentStudentsDetail(
+	title: string,
+	subtitle: string,
+	students: { studentName: string; email: string | null; damaged: number; missing: number; pending: number; outstandingUnits: number }[],
+	stat: { label: string; value: string; tone?: DetailTone },
+	right: (s: { damaged: number; missing: number; pending: number; outstandingUnits: number }) => string
+): ReportDetail {
+	return {
+		title,
+		subtitle,
+		stat,
+		sections: [
+			{
+				title: 'Students',
+				empty: 'No students in this group.',
+				rows: students.map((s) => ({
+					title: s.studentName,
+					subtitle: s.email ?? undefined,
+					meta: `${s.damaged} damaged · ${s.missing} missing · ${s.pending} pending`,
+					right: right(s)
+				}))
+			}
+		]
+	};
+}

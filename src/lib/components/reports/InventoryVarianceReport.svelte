@@ -10,8 +10,8 @@
 	 */
 	import { untrack } from 'svelte';
 	import { Search, Download, AlertCircle, ChevronLeft, ChevronRight, Scale, TriangleAlert, Package } from 'lucide-svelte';
-	import { openReportDetail, DETAIL_HOVER } from './reportDetail.svelte';
-	import { overEntryDetail, underEntryDetail } from './reportDetailBuilders';
+	import { openReportDetail, opensDetail, detailDate, DETAIL_HOVER } from './reportDetail.svelte';
+	import { overEntryDetail, underEntryDetail, varianceGroupDetail } from './reportDetailBuilders';
 	import {
 		inventoryReportsAPI,
 		type InventoryVarianceReport,
@@ -164,6 +164,36 @@
 			exporting = false;
 		}
 	}
+
+	/** What the month's starting count is made of. */
+	function startingCountDetail() {
+		const summary = report?.summary;
+		return {
+			title: `Starting count, ${report?.monthLabel ?? ''}`,
+			subtitle: 'What the storeroom should hold before this month\'s changes',
+			stat: { label: 'Units at the start of the month', value: summary?.startingCount == null ? '—' : summary.startingCount.toLocaleString() },
+			fields: [
+				{ label: 'Counted on', value: detailDate(summary?.startedAt) },
+				{ label: 'How it was set', value: summary?.startingCount == null ? 'Not set yet' : summary.isRestart ? 'Counts were restarted' : 'Previous month was closed' },
+				{ label: 'Gained this month', value: `+${(summary?.overUnits ?? 0).toLocaleString()} units in ${summary?.overEntries ?? 0} entries` },
+				{ label: 'Not on the shelf', value: `−${(summary?.underOpenUnits ?? 0).toLocaleString()} units still open` },
+				{ label: 'Items needing a recount', value: report?.unexplained.length ?? 0 },
+				{ label: 'Month closed', value: report?.closing ? detailDate(report.closing.closedAt) : 'Not yet' }
+			],
+			sections: (report?.unexplained.length ?? 0)
+				? [
+						{
+							title: 'Items needing a recount',
+							rows: (report?.unexplained ?? []).map((u) => ({
+								title: u.itemName,
+								subtitle: 'The count changed with no recorded cause',
+								right: `${u.difference > 0 ? '+' : '−'}${Math.abs(u.difference)}`
+							}))
+						}
+					]
+				: []
+		};
+	}
 </script>
 
 <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm" aria-labelledby="variance-title">
@@ -223,7 +253,10 @@
 		</div>
 	{:else if report}
 		<dl class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-			<div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+			<div
+				class="rounded-xl border border-gray-200 bg-gray-50 p-4 {DETAIL_HOVER}"
+				{...opensDetail(() => startingCountDetail(), 'View details for the starting count')}
+			>
 				<dt class="text-sm text-gray-600">Starting count, {report.monthLabel}</dt>
 				<dd class="mt-1 text-2xl font-bold text-gray-900">
 					{report.summary.startingCount === null ? '—' : report.summary.startingCount.toLocaleString()}
@@ -238,7 +271,10 @@
 					{/if}
 				</p>
 			</div>
-			<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+			<div
+				class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 {DETAIL_HOVER}"
+				{...opensDetail(() => varianceGroupDetail(true, report?.monthLabel ?? '', report?.over ?? []), 'View everything gained this month')}
+			>
 				<dt class="text-sm text-emerald-800">Over this month</dt>
 				<dd class="mt-1 text-2xl font-bold text-emerald-700">+{report.summary.overUnits.toLocaleString()}</dd>
 				<p class="mt-1 text-xs text-emerald-800">
@@ -249,7 +285,13 @@
 					{/if}
 				</p>
 			</div>
-			<div class="rounded-xl border border-red-200 bg-red-50 p-4">
+			<div
+				class="rounded-xl border border-red-200 bg-red-50 p-4 {DETAIL_HOVER}"
+				{...opensDetail(
+					() => varianceGroupDetail(false, report?.monthLabel ?? '', (report?.under ?? []).filter((e) => e.open)),
+					'View everything not on the shelf'
+				)}
+			>
 				<dt class="text-sm text-red-800">{report.isCurrentMonth ? 'Under, still open' : 'Under carried forward'}</dt>
 				<dd class="mt-1 text-2xl font-bold text-red-700">
 					−{(report.isCurrentMonth ? report.summary.underOpenUnits : (report.closing?.underCarried ?? 0)).toLocaleString()}

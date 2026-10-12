@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Users, Search } from 'lucide-svelte';
 	import { opensDetail, DETAIL_HOVER } from './reportDetail.svelte';
-	import { walkInDetail } from './reportDetailBuilders';
+	import { walkInDetail, walkInGroupDetail } from './reportDetailBuilders';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import type { WalkInSummary, WalkInReportTransaction } from '$lib/api/analyticsReports';
 
@@ -80,19 +80,40 @@
 	</p>
 
 	<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-		<div class="rounded-xl border border-gray-200 bg-white p-4">
+		<div
+			class="rounded-xl border border-gray-200 bg-white p-4 {DETAIL_HOVER}"
+			{...opensDetail(() => walkInGroupDetail('All walk-ins', 'Walk-in transactions in the selected range', data?.transactions ?? []), 'View all walk-ins')}
+		>
 			<p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Total</p>
 			<p class="mt-1 text-2xl font-bold text-gray-900">{stats.total}</p>
 		</div>
-		<div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+		<div
+			class="rounded-xl border border-amber-200 bg-amber-50 p-4 {DETAIL_HOVER}"
+			{...opensDetail(
+				() => walkInGroupDetail('Currently out', 'Walk-ins not yet returned', (data?.transactions ?? []).filter((t) => t.status === 'borrowed'), 'warn'),
+				'View walk-ins currently out'
+			)}
+		>
 			<p class="text-xs font-semibold uppercase tracking-wide text-amber-700">Currently Out</p>
 			<p class="mt-1 text-2xl font-bold text-amber-700">{stats.out}</p>
 		</div>
-		<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+		<div
+			class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 {DETAIL_HOVER}"
+			{...opensDetail(
+				() => walkInGroupDetail('Returned', 'Walk-ins that have been returned', (data?.transactions ?? []).filter((t) => t.status === 'returned'), 'good'),
+				'View returned walk-ins'
+			)}
+		>
 			<p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Returned</p>
 			<p class="mt-1 text-2xl font-bold text-emerald-700">{stats.returned}</p>
 		</div>
-		<div class="rounded-xl border border-rose-200 bg-rose-50 p-4">
+		<div
+			class="rounded-xl border border-rose-200 bg-rose-50 p-4 {DETAIL_HOVER}"
+			{...opensDetail(
+				() => walkInGroupDetail('Issues', 'Walk-ins with a damaged or missing item', (data?.transactions ?? []).filter((t) => t.status === 'missing'), 'bad'),
+				'View walk-ins with issues'
+			)}
+		>
 			<p class="text-xs font-semibold uppercase tracking-wide text-rose-700">Issues</p>
 			<p class="mt-1 text-2xl font-bold text-rose-700">{stats.issues}</p>
 		</div>

@@ -13,7 +13,7 @@
 	import { toastStore } from '$lib/stores/toast';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import { opensDetail, DETAIL_HOVER } from './reportDetail.svelte';
-	import { returnedItemDetail } from './reportDetailBuilders';
+	import { returnedItemDetail, returnedGroupDetail } from './reportDetailBuilders';
 
 	interface Props {
 		/** The report's selected range (yyyy-mm-dd); null means the current month. */
@@ -149,14 +149,27 @@
 		{@const s = report.summary}
 		<dl class="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-6">
 			{#each [
-				{ label: 'Requests returned', value: s.requests, cls: 'text-gray-900' },
-				{ label: 'Good units', value: s.good, cls: 'text-emerald-700' },
-				{ label: 'Damaged units', value: s.damaged, cls: s.damaged ? 'text-amber-700' : 'text-gray-900' },
-				{ label: 'Missing units', value: s.missing, cls: s.missing ? 'text-red-700' : 'text-gray-900' },
-				{ label: 'Returned late', value: s.lateRequests, cls: s.lateRequests ? 'text-red-700' : 'text-gray-900' },
-				{ label: 'Average days kept', value: s.avgDaysKept ?? '—', cls: 'text-gray-900' }
+				{ label: 'Requests returned', value: s.requests, cls: 'text-gray-900', keep: (r: ReturnedItemRow) => true, tone: 'neutral' as const, right: (r: ReturnedItemRow) => `×${r.quantity}` },
+				{ label: 'Good units', value: s.good, cls: 'text-emerald-700', keep: (r: ReturnedItemRow) => r.good > 0, tone: 'good' as const, right: (r: ReturnedItemRow) => `${r.good} good` },
+				{ label: 'Damaged units', value: s.damaged, cls: s.damaged ? 'text-amber-700' : 'text-gray-900', keep: (r: ReturnedItemRow) => r.damaged > 0, tone: 'warn' as const, right: (r: ReturnedItemRow) => `${r.damaged} damaged` },
+				{ label: 'Missing units', value: s.missing, cls: s.missing ? 'text-red-700' : 'text-gray-900', keep: (r: ReturnedItemRow) => r.missing > 0, tone: 'bad' as const, right: (r: ReturnedItemRow) => `${r.missing} missing` },
+				{ label: 'Returned late', value: s.lateRequests, cls: s.lateRequests ? 'text-red-700' : 'text-gray-900', keep: (r: ReturnedItemRow) => r.daysLate > 0, tone: 'bad' as const, right: (r: ReturnedItemRow) => `${r.daysLate}d late` },
+				{ label: 'Average days kept', value: s.avgDaysKept ?? '—', cls: 'text-gray-900', keep: (r: ReturnedItemRow) => r.daysKept !== null, tone: 'neutral' as const, right: (r: ReturnedItemRow) => `${r.daysKept}d` }
 			] as m (m.label)}
-				<div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+				<div
+					class="rounded-xl border border-gray-200 bg-gray-50 p-4 {DETAIL_HOVER}"
+					{...opensDetail(
+						() =>
+							returnedGroupDetail(
+								m.label,
+								'Returned items in the selected range',
+								(report?.rows ?? []).filter(m.keep),
+								{ label: m.label, value: String(m.value), tone: m.tone },
+								m.right
+							),
+						`View details for ${m.label}`
+					)}
+				>
 					<dt class="text-sm text-gray-600">{m.label}</dt>
 					<dd class="mt-1 text-2xl font-bold {m.cls}">{m.value}</dd>
 				</div>

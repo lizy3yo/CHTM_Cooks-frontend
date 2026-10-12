@@ -1435,7 +1435,13 @@
 												)}
 											</p>
 										</div>
-										<div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+										<div
+											class="rounded-xl border border-gray-200 bg-gray-50 p-4 {DETAIL_HOVER}"
+											{...opensDetail(
+												() => requestsDetail('Average Items per Request', `Every request line in ${formatRangeLabel()}`, detailEntries),
+												'View the requests behind the average items per request'
+											)}
+										>
 											<p class="text-sm text-gray-600">Avg Items / Request</p>
 											<p class="mt-2 text-2xl font-bold text-pink-700">
 												{(
@@ -1445,7 +1451,13 @@
 												).toFixed(1)}
 											</p>
 										</div>
-										<div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+										<div
+											class="rounded-xl border border-gray-200 bg-gray-50 p-4 {DETAIL_HOVER}"
+											{...opensDetail(
+												() => requestsDetail('Average Quantity per Request', `Every request line in ${formatRangeLabel()}`, detailEntries),
+												'View the requests behind the average quantity per request'
+											)}
+										>
 											<p class="text-sm text-gray-600">Avg Quantity / Request</p>
 											<p class="mt-2 text-2xl font-bold text-purple-700">
 												{(
@@ -1929,7 +1941,19 @@
 													{numberFmt.format(studentTrustScores.length)}
 												</p>
 											</div>
-											<div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+											<div
+												class="rounded-xl border border-gray-200 bg-gray-50 p-4 {DETAIL_HOVER}"
+												{...opensDetail(
+													() =>
+														studentsDetail(
+															'Average Trust Score',
+															'Every student score that makes up the average, highest first',
+															[...studentTrustScores].sort((a, b) => (b.trustScore ?? 0) - (a.trustScore ?? 0)),
+															(s) => ({ right: String(Math.round(s.trustScore ?? 0)), ...trustLine(s) })
+														),
+													'View the scores behind the average trust score'
+												)}
+											>
 												<p class="text-sm text-gray-600">Average Trust Score</p>
 												<p class="mt-2 text-2xl font-bold text-pink-700">{averageTrustScore}</p>
 											</div>

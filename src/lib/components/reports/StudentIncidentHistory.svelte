@@ -18,6 +18,8 @@
 	import { toastStore } from '$lib/stores/toast';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import StudentIncidentModal from './StudentIncidentModal.svelte';
+	import { opensDetail, openReportDetail, detailDate, DETAIL_HOVER } from './reportDetail.svelte';
+	import { incidentStudentsDetail } from './reportDetailBuilders';
 
 	interface Props {
 		/** The report's class filter; applies to both scopes. */
@@ -142,6 +144,51 @@
 	}
 
 	const aging = $derived(report?.replacementAging);
+
+	/** What lies behind one Replacement Aging card. */
+	function agingDetail(label: string, value: number) {
+		const pastDue = label === 'Past due date';
+		const owing = (report?.students ?? []).filter((s) => s.pending > 0).sort((a, b) => b.outstandingUnits - a.outstandingUnits);
+
+		return {
+			title: pastDue ? 'Replacements past their due date' : `Open replacements: ${label}`,
+			subtitle: 'Replacements students still owe',
+			stat: { label, value: String(value), tone: value ? ('bad' as const) : ('good' as const) },
+			fields: [
+				{ label: 'Open', value: aging?.open },
+				{ label: 'Up to 7 days', value: aging?.within7Days },
+				{ label: '8 to 30 days', value: aging?.within30Days },
+				{ label: 'Over 30 days', value: aging?.over30Days },
+				{ label: 'Past due date', value: aging?.pastDue }
+			],
+			sections: pastDue
+				? [
+						{
+							title: 'Past due',
+							empty: 'No replacements are past their due date.',
+							rows: (aging?.pastDueItems ?? []).map((p) => ({
+								picture: p.picture ?? null,
+								title: p.itemName,
+								subtitle: p.studentName,
+								meta: `Due ${detailDate(p.dueDate)} · ${p.type}`,
+								right: `${p.daysPastDue}d`
+							}))
+						}
+					]
+				: [
+						{
+							title: 'Students who still owe a replacement',
+							empty: 'No one owes a replacement.',
+							rows: owing.map((s) => ({
+								title: s.studentName,
+								subtitle: s.email ?? undefined,
+								meta: `${s.pending} pending`,
+								right: `${s.outstandingUnits} units`
+							}))
+						}
+					]
+		};
+	}
 </script>
 
 <!-- ── Damage & Missing History ─────────────────────────────────────────── -->
@@ -200,12 +247,25 @@
 		<!-- Totals -->
 		<dl class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
 			{#each [
-				{ label: 'Students involved', value: report.totals.students, cls: 'text-gray-900' },
-				{ label: 'Damaged items', value: report.totals.damaged, cls: 'text-amber-700' },
-				{ label: 'Missing items', value: report.totals.missing, cls: 'text-red-700' },
-				{ label: 'Pending replacements', value: report.totals.pending, cls: report.totals.pending ? 'text-rose-700' : 'text-gray-900' }
+				{ label: 'Students involved', value: report.totals.students, cls: 'text-gray-900', key: 'total' as const, tone: 'neutral' as const },
+				{ label: 'Damaged items', value: report.totals.damaged, cls: 'text-amber-700', key: 'damaged' as const, tone: 'warn' as const },
+				{ label: 'Missing items', value: report.totals.missing, cls: 'text-red-700', key: 'missing' as const, tone: 'bad' as const },
+				{ label: 'Pending replacements', value: report.totals.pending, cls: report.totals.pending ? 'text-rose-700' : 'text-gray-900', key: 'pending' as const, tone: 'bad' as const }
 			] as m (m.label)}
-				<div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+				<div
+					class="rounded-xl border border-gray-200 bg-gray-50 p-4 {DETAIL_HOVER}"
+					{...opensDetail(
+						() =>
+							incidentStudentsDetail(
+								m.label,
+								'Students behind this number',
+								(report?.students ?? []).filter((s) => s[m.key] > 0).sort((a, b) => b[m.key] - a[m.key]),
+								{ label: m.label, value: String(m.value), tone: m.tone },
+								(s) => String(m.key === 'total' ? s.damaged + s.missing : s[m.key])
+							),
+						`View details for ${m.label}`
+					)}
+				>
 					<dt class="text-sm text-gray-600">{m.label}</dt>
 					<dd class="mt-1 text-2xl font-bold {m.cls}">{m.value}</dd>
 				</div>
@@ -325,7 +385,10 @@
 				{ label: 'Over 30 days', value: aging.over30Days, cls: aging.over30Days ? 'text-orange-700' : 'text-gray-900' },
 				{ label: 'Past due date', value: aging.pastDue, cls: aging.pastDue ? 'text-red-700' : 'text-gray-900' }
 			] as m (m.label)}
-				<div class="rounded-xl border p-4 {m.label === 'Past due date' && aging.pastDue ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}">
+				<div
+					class="rounded-xl border p-4 {DETAIL_HOVER} {m.label === 'Past due date' && aging.pastDue ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}"
+					{...opensDetail(() => agingDetail(m.label, m.value), `View details for ${m.label}`)}
+				>
 					<dt class="text-sm text-gray-600">{m.label}</dt>
 					<dd class="mt-1 text-2xl font-bold {m.cls}">{m.value}</dd>
 				</div>
