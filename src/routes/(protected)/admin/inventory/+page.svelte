@@ -59,7 +59,8 @@
 	// Check for cached data before mounting to avoid unnecessary loading states
 	const cachedStore = browser ? get(inventoryStore) : null;
 	const hasCachedData =
-		cachedStore && cachedStore.items.length > 0 && inventoryStore.isItemsCacheValid();
+		// Stale data still paints instantly; onMount revalidates it in the background.
+		!!cachedStore && cachedStore.items.length > 0;
 
 	// Data from store with client-side caching
 	let items = $state<InventoryItem[]>(hasCachedData ? cachedStore!.items : []);
@@ -637,6 +638,7 @@
 				// For item updates, do optimistic single-item update
 				if (
 					event.entityType === 'item' &&
+					!!event.entityId &&
 					(event.action === 'item_updated' || event.action === 'item_created')
 				) {
 					console.log('[INVENTORY-SSE] 🎯 Performing optimistic single-item update');

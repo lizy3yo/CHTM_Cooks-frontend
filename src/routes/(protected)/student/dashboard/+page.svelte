@@ -5,6 +5,7 @@
 	import { user, authStore, justLoggedIn } from '$lib/stores/auth';
 	import { toastStore } from '$lib/stores/toast';
 	import { borrowRequestsAPI, type BorrowRequestRecord } from '$lib/api/borrowRequests';
+	import { subscribeToTopics } from '$lib/api/realtime';
 	import { statisticsAPI, type StudentStatisticsData } from '$lib/api/statistics';
 	import { notificationsAPI, type NotificationRecord } from '$lib/api/notifications';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
@@ -152,10 +153,11 @@
 		allRequests = initialRequests.requests.map(mapToCard);
 	}
 
-	async function loadDashboard(force = false) {
+	/** `background` re-reads without putting the skeletons back up. */
+	async function loadDashboard(force = false, background = false) {
 		const hasCache = !!performanceStats && allRequests.length > 0;
 
-		if (force || !hasCache) {
+		if (!background && (force || !hasCache)) {
 			trustScoreLoading = true;
 			cardsLoading = true;
 			returnPerfHealthReplLoading = true;
@@ -468,12 +470,21 @@
 			currentTime = new Date();
 		}, 60_000);
 
-		const POLLING_INTERVAL_MS = 30_000;
+		// Live: the hub reports changes to this student's requests, replacement
+		// cases and notifications. Each read below resolves from cache unless
+		// its data was flagged, so the timer is only a slow safety net.
+		const unsubscribe = subscribeToTopics(
+			['borrow_request_change', 'replacement_obligation_change', 'notification_change'],
+			() => void loadDashboard(false, true)
+		);
+
+		const POLLING_INTERVAL_MS = 120_000;
 		const pollingId = setInterval(() => {
-			void refreshStatistics();
+			void loadDashboard(false, true);
 		}, POLLING_INTERVAL_MS);
 
 		return () => {
+			unsubscribe();
 			clearInterval(clockId);
 			clearInterval(pollingId);
 		};

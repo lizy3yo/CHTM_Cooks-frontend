@@ -4,8 +4,8 @@
  * and in-flight request deduplication — mirroring the users.ts API client.
  */
 
-import { browser } from '$app/environment';
-import { subscribeToTopic, type RealtimeReason } from './realtime';
+import { subscribeToTopic, type RealtimeReason, type RealtimeTopic } from './realtime';
+import { QueryCache } from './queryCache';
 import { getApiErrorMessage } from './session';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -116,16 +116,12 @@ interface ApiError {
 	message?: string;
 }
 
-interface CacheEntry<T> {
-	data: T;
-	expiresAt: number;
-}
-
-const CLIENT_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes (shorter — realtime keeps it fresh)
-const listCache = new Map<string, CacheEntry<ClassCodesListResponse>>();
-const detailCache = new Map<string, CacheEntry<ClassCodeResponse>>();
-const statsCache = new Map<string, CacheEntry<ClassCodeStats>>();
-const inFlight = new Map<string, Promise<unknown>>();
+// Kept until the realtime hub reports a class change (or a roster change,
+// which alters enrolment counts), then revalidated on next use.
+const CLASS_TOPICS: RealtimeTopic[] = ['class_code_change', 'user_change'];
+const listCache = new QueryCache<ClassCodesListResponse>({ topics: CLASS_TOPICS });
+const detailCache = new QueryCache<ClassCodeResponse>({ topics: CLASS_TOPICS });
+const statsCache = new QueryCache<ClassCodeStats>({ topics: CLASS_TOPICS });
 
 function getFetchOptions(method: string, body?: unknown): RequestInit {
 	const options: RequestInit = {
@@ -149,22 +145,6 @@ async function handleResponse<T>(response: Response): Promise<T> {
 	return payload;
 }
 
-function getFreshCache<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
-	if (!browser) return null;
-	const entry = cache.get(key);
-	if (!entry) return null;
-	if (Date.now() > entry.expiresAt) {
-		cache.delete(key);
-		return null;
-	}
-	return entry.data;
-}
-
-function setCache<T>(cache: Map<string, CacheEntry<T>>, key: string, data: T): void {
-	if (!browser) return;
-	cache.set(key, { data, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
-}
-
 function buildListCacheKey(params: {
 	search?: string;
 	semester?: string;
@@ -184,10 +164,9 @@ function buildListCacheKey(params: {
 }
 
 function invalidateAllCaches(): void {
-	listCache.clear();
-	detailCache.clear();
-	statsCache.clear();
-	inFlight.clear();
+	listCache.markStale();
+	detailCache.markStale();
+	statsCache.markStale();
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -218,59 +197,27 @@ export const classCodesAPI = {
 
 		const query = searchParams.toString();
 		const url = `/api/class-codes${query ? `?${query}` : ''}`;
-		const cacheKey = buildListCacheKey(params);
-		const inFlightKey = `list:${cacheKey}`;
-
-		if (!params.forceRefresh) {
-			const cached = getFreshCache(listCache, cacheKey);
-			if (cached) return cached;
-
-			const existing = inFlight.get(inFlightKey) as Promise<ClassCodesListResponse> | undefined;
-			if (existing) return existing;
-		}
-
-		const req = (async () => {
-			const res = await fetch(url, getFetchOptions('GET'));
-			const data = await handleResponse<ClassCodesListResponse>(res);
-			setCache(listCache, cacheKey, data);
-			return data;
-		})();
-
-		inFlight.set(inFlightKey, req);
-		try {
-			return await req;
-		} finally {
-			inFlight.delete(inFlightKey);
-		}
+		return listCache.fetch(
+			buildListCacheKey(params),
+			async () => {
+				const res = await fetch(url, getFetchOptions('GET'));
+				return handleResponse<ClassCodesListResponse>(res);
+			},
+			{ force: params.forceRefresh }
+		);
 	},
 
 	/**
 	 * Fetch a single class code by ID (with optional population)
 	 */
 	async getById(classCodeId: string, populate = false): Promise<ClassCodeResponse> {
-		const cacheKey = `${classCodeId}:${populate}`;
-		const inFlightKey = `detail:${cacheKey}`;
-
-		const cached = getFreshCache(detailCache, cacheKey);
-		if (cached) return cached;
-
-		const existing = inFlight.get(inFlightKey) as Promise<ClassCodeResponse> | undefined;
-		if (existing) return existing;
-
 		const url = `/api/class-codes/${classCodeId}${populate ? '?populate=true' : ''}`;
-		const req = (async () => {
+
+		return detailCache.fetch(`${classCodeId}:${populate}`, async () => {
 			const res = await fetch(url, getFetchOptions('GET'));
 			const data = await handleResponse<{ classCode: ClassCodeResponse }>(res);
-			setCache(detailCache, cacheKey, data.classCode);
 			return data.classCode;
-		})();
-
-		inFlight.set(inFlightKey, req);
-		try {
-			return await req;
-		} finally {
-			inFlight.delete(inFlightKey);
-		}
+		});
 	},
 
 	/**
@@ -353,20 +300,19 @@ export const classCodesAPI = {
 	 * Get aggregated statistics
 	 */
 	async getStats(forceRefresh = false): Promise<ClassCodeStats> {
-		const cacheKey = 'stats';
-
-		if (!forceRefresh) {
-			const cached = getFreshCache(statsCache, cacheKey);
-			if (cached) return cached;
-		}
-
 		const url = forceRefresh
 			? `/api/class-codes/stats?_t=${Date.now()}`
 			: '/api/class-codes/stats';
-		const res = await fetch(url, getFetchOptions('GET'));
-		const data = await handleResponse<{ stats: ClassCodeStats }>(res);
-		setCache(statsCache, cacheKey, data.stats);
-		return data.stats;
+
+		return statsCache.fetch(
+			'stats',
+			async () => {
+				const res = await fetch(url, getFetchOptions('GET'));
+				const data = await handleResponse<{ stats: ClassCodeStats }>(res);
+				return data.stats;
+			},
+			{ force: forceRefresh }
+		);
 	},
 
 	/**
@@ -395,10 +341,10 @@ export const classCodesAPI = {
 		page?: number;
 		limit?: number;
 	} = {}): ClassCodesListResponse | null {
-		return getFreshCache(listCache, buildListCacheKey(params));
+		return listCache.peek(buildListCacheKey(params));
 	},
 
 	peekCachedStats(): ClassCodeStats | null {
-		return getFreshCache(statsCache, 'stats');
+		return statsCache.peek('stats');
 	}
 };

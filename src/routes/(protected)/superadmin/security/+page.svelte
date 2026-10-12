@@ -93,14 +93,21 @@
 			void loadFailedLogins();
 		}, 30_000);
 
+		// Live: accounts created, edited or deactivated elsewhere show at once.
+		const unsubscribeUsers = usersAPI.subscribeToChanges((event) => {
+			if (event.reason !== 'connect') void loadUsers(true);
+		});
+
 		return () => {
+			unsubscribeUsers();
 			if (_pollInterval !== null) clearInterval(_pollInterval);
 		};
 	});
 
 	// ─── Data loaders ─────────────────────────────────────────────────────────────
-	async function loadUsers() {
-		loading = true;
+	/** `background` keeps the table on screen while it is re-read. */
+	async function loadUsers(background = false) {
+		if (!background) loading = true;
 		try {
 			const res = await usersAPI.getAll({ limit: 500, forceRefresh: true });
 			allUsers = res.users;

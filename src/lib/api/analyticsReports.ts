@@ -5,6 +5,8 @@
 
 import { browser } from '$app/environment';
 import { getApiErrorMessage } from './session';
+import { subscribeToTopics, type RealtimeTopic } from './realtime';
+import { QueryCache } from './queryCache';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -397,99 +399,58 @@ export interface AnalyticsReport {
 	};
 }
 
-interface CacheEntry {
-	data: AnalyticsReport;
-	expiresAt: number;
-}
+/**
+ * Everything a report is computed from. When any of these move, the realtime
+ * hub marks the cached reports stale; they stay on screen and are recomputed
+ * the next time one is asked for.
+ */
+const ANALYTICS_TOPICS: RealtimeTopic[] = [
+	'borrow_request_change',
+	'inventory_change',
+	'replacement_obligation_change',
+	'walk_in_change',
+	'donation_change'
+];
 
-const CLIENT_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours - aligned with server cache and session timeout
 const CLIENT_CACHE_VERSION = 'v14';
-const cache = new Map<string, CacheEntry>();
-const inFlight = new Map<string, Promise<AnalyticsReport>>();
+const cache = new QueryCache<AnalyticsReport>({ topics: ANALYTICS_TOPICS, maxEntries: 60 });
 
 function buildAnalyticsCacheKey(period: AnalyticsPeriod, from?: string, to?: string, classCodeId?: string, instructorId?: string, studentId?: string, custodianId?: string): string {
 	return `analytics:${CLIENT_CACHE_VERSION}:${period}:${from ?? ''}:${to ?? ''}:${classCodeId ?? ''}:${instructorId ?? ''}:${studentId ?? ''}:${custodianId ?? ''}`;
 }
 
-function getCached(key: string): AnalyticsReport | null {
-	if (!browser) return null;
-	const entry = cache.get(key);
-	if (!entry || Date.now() > entry.expiresAt) {
-		cache.delete(key);
-		return null;
-	}
-	return entry.data;
-}
-
-function setCached(key: string, data: AnalyticsReport): void {
-	if (!browser) return;
-	cache.set(key, { data, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
-}
-
+/** Flag every cached report as out of date; the next read recomputes it. */
 export function clearAnalyticsCache(): void {
-	cache.clear();
-	inFlight.clear();
-	// clear lightweight summary caches as well
-	if (typeof summaryCache !== 'undefined') summaryCache.clear();
-	if (typeof inFlightSummary !== 'undefined') inFlightSummary.clear();
+	cache.markStale();
+	summaryCache.markStale();
 }
 
 export function peekCachedAnalytics(opts: FetchAnalyticsOptions = {}): AnalyticsReport | null {
 	const { period = 'month', from, to, classCodeId, instructorId, studentId, custodianId } = opts;
 	const cacheKey = buildAnalyticsCacheKey(period, from, to, classCodeId, instructorId, studentId, custodianId);
-	return getCached(cacheKey);
+	return cache.peek(cacheKey);
 }
 
 // Lightweight summary cache (stale-while-revalidate friendly)
-const SUMMARY_CACHE_TTL_MS = 60 * 1000; // 1 minute
 const SUMMARY_CACHE_VERSION = 'sv1';
-const summaryCache = new Map<string, { data: Partial<AnalyticsReport>; expiresAt: number }>();
-const inFlightSummary = new Map<string, Promise<Partial<AnalyticsReport>>>();
+const summaryCache = new QueryCache<Partial<AnalyticsReport>>({
+	topics: ANALYTICS_TOPICS,
+	maxEntries: 60
+});
 
 function buildAnalyticsSummaryCacheKey(period: AnalyticsPeriod, from?: string, to?: string, classCodeId?: string, instructorId?: string, studentId?: string, custodianId?: string): string {
 	return `analytics:summary:${SUMMARY_CACHE_VERSION}:${period}:${from ?? ''}:${to ?? ''}:${classCodeId ?? ''}:${instructorId ?? ''}:${studentId ?? ''}:${custodianId ?? ''}`;
 }
 
-function getCachedSummary(key: string): Partial<AnalyticsReport> | null {
-	if (!browser) return null;
-	const entry = summaryCache.get(key);
-	if (!entry || Date.now() > entry.expiresAt) {
-		summaryCache.delete(key);
-		return null;
-	}
-	return entry.data;
-}
-
-function setCachedSummary(key: string, data: Partial<AnalyticsReport>): void {
-	if (!browser) return;
-	summaryCache.set(key, { data, expiresAt: Date.now() + SUMMARY_CACHE_TTL_MS });
-}
-
 export function peekCachedAnalyticsSummary(opts: FetchAnalyticsOptions = {}): Partial<AnalyticsReport> | null {
 	const { period = 'month', from, to, classCodeId, instructorId, studentId, custodianId } = opts;
 	const cacheKey = buildAnalyticsSummaryCacheKey(period, from, to, classCodeId, instructorId, studentId, custodianId);
-	return getCachedSummary(cacheKey);
+	return summaryCache.peek(cacheKey);
 }
 
 export async function fetchAnalyticsSummary(opts: FetchAnalyticsOptions = {}): Promise<Partial<AnalyticsReport>> {
 	const { period = 'month', from, to, classCodeId, instructorId, studentId, custodianId, forceRefresh = false } = opts;
 	const cacheKey = buildAnalyticsSummaryCacheKey(period, from, to, classCodeId, instructorId, studentId, custodianId);
-
-	console.log('[Analytics API] Fetching analytics summary...', { period, from, to, classCodeId, instructorId, studentId, custodianId, forceRefresh });
-
-	if (!forceRefresh) {
-		const cached = getCachedSummary(cacheKey);
-		if (cached) {
-			console.log('[Analytics API] Returning cached summary');
-			return cached;
-		}
-
-		const existing = inFlightSummary.get(cacheKey);
-		if (existing) {
-			console.log('[Analytics API] Returning in-flight summary request');
-			return existing;
-		}
-	}
 
 	const params = new URLSearchParams({ period });
 	if (from) params.set('from', from);
@@ -500,28 +461,23 @@ export async function fetchAnalyticsSummary(opts: FetchAnalyticsOptions = {}): P
 	if (custodianId) params.set('custodian_id', custodianId);
 	if (forceRefresh) params.set('_t', String(Date.now()));
 
-	const request = (async () => {
-		const res = await fetch(`/api/reports/analytics/summary?${params}`, {
-			credentials: 'include',
-			signal: AbortSignal.timeout(15000)
-		});
+	return summaryCache.fetch(
+		cacheKey,
+		async () => {
+			const res = await fetch(`/api/reports/analytics/summary?${params}`, {
+				credentials: 'include',
+				signal: AbortSignal.timeout(15000)
+			});
 
-		if (!res.ok) {
-			const body = await res.json().catch(() => ({})) as { error?: string };
-			throw new Error(await getApiErrorMessage(res, body.error ?? `Summary request failed: ${res.status}`));
-		}
+			if (!res.ok) {
+				const body = await res.json().catch(() => ({})) as { error?: string };
+				throw new Error(await getApiErrorMessage(res, body.error ?? `Summary request failed: ${res.status}`));
+			}
 
-		const data = (await res.json()) as Partial<AnalyticsReport>;
-		setCachedSummary(cacheKey, data);
-		return data;
-	})();
-
-	inFlightSummary.set(cacheKey, request);
-	try {
-		return await request;
-	} finally {
-		inFlightSummary.delete(cacheKey);
-	}
+			return (await res.json()) as Partial<AnalyticsReport>;
+		},
+		{ force: forceRefresh }
+	);
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
@@ -639,20 +595,6 @@ export async function fetchAnalytics(opts: FetchAnalyticsOptions = {}): Promise<
 
 	console.log('[Analytics API] Fetching analytics...', { period, from, to, classCodeId, instructorId, studentId, custodianId, forceRefresh });
 
-	if (!forceRefresh) {
-		const cached = getCached(cacheKey);
-		if (cached) {
-			console.log('[Analytics API] Returning cached data');
-			return cached;
-		}
-
-		const existingRequest = inFlight.get(cacheKey);
-		if (existingRequest) {
-			console.log('[Analytics API] Returning in-flight request');
-			return existingRequest;
-		}
-	}
-
 	const params = new URLSearchParams({ period });
 	if (from) params.set('from', from);
 	if (to) params.set('to', to);
@@ -662,7 +604,7 @@ export async function fetchAnalytics(opts: FetchAnalyticsOptions = {}): Promise<
 	if (custodianId) params.set('custodian_id', custodianId);
 	if (forceRefresh) params.set('_t', String(Date.now()));
 
-	const requestPromise = (async () => {
+	const load = async (): Promise<AnalyticsReport> => {
 		// Retry logic for transient failures
 		let lastError: Error | null = null;
 		const maxRetries = 1; // Reduced from 2
@@ -687,7 +629,6 @@ export async function fetchAnalytics(opts: FetchAnalyticsOptions = {}): Promise<
 
 				const data = normalizeAnalyticsReport((await res.json()) as AnalyticsReport);
 				console.log('[Analytics API] Data normalized successfully');
-				setCached(cacheKey, data);
 				return data;
 			} catch (error) {
 				console.error('[Analytics API] Fetch error:', error);
@@ -704,105 +645,39 @@ export async function fetchAnalytics(opts: FetchAnalyticsOptions = {}): Promise<
 		}
 
 		throw lastError ?? new Error('Analytics request failed');
-	})();
+	};
 
-	inFlight.set(cacheKey, requestPromise);
-	try {
-		return await requestPromise;
-	} finally {
-		inFlight.delete(cacheKey);
-	}
+	return cache.fetch(cacheKey, load, { force: forceRefresh });
 }
 
-// ── SSE subscription ──────────────────────────────────────────────────────────
-
-/** How often to poll the change signature (ms). */
-const SIGNATURE_POLL_MS = 5000;
+// ── Live updates ──────────────────────────────────────────────────────────────
 
 /**
- * Last signature seen in this browser session. Module-level (not per-component)
- * so a change made on another page — e.g. adjusting stock in Inventory — is
- * detected the moment a reports page mounts, instead of serving the stale cache.
+ * Run `onRefresh` when anything a report is built from changes.
+ *
+ * Rides the shared realtime hub — no stream or poll of its own. Only a real
+ * change triggers it: the report is the heaviest read in the app, so it is
+ * never refetched merely because the connection was re-established. Changes
+ * made while no report page was open are not lost either: the hub marks the
+ * cached reports stale as they happen, so the next read is fresh.
  */
-let knownSignature: string | null = null;
-
 export function subscribeToAnalyticsChanges(onRefresh: () => void): () => void {
 	if (!browser) return () => {};
 
-	let es: EventSource | null = null;
-	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-	let pollTimer: ReturnType<typeof setInterval> | null = null;
-	let stopped = false;
 
-	const scheduleRefresh = () => {
-		if (refreshTimer) return;
+	const unsubscribe = subscribeToTopics(ANALYTICS_TOPICS, (reason) => {
+		if (reason !== 'change' || refreshTimer) return;
+
+		// One refetch for a burst of related changes.
 		refreshTimer = setTimeout(() => {
 			refreshTimer = null;
-			clearAnalyticsCache();
 			onRefresh();
 		}, 300);
-	};
-
-	function connect() {
-		if (stopped) return;
-		es = new EventSource('/api/reports/analytics/stream', { withCredentials: true });
-
-		es.addEventListener('analytics_change', () => {
-			scheduleRefresh();
-		});
-
-		es.addEventListener('error', () => {
-			es?.close();
-			if (!stopped) {
-				reconnectTimer = setTimeout(connect, 5000);
-			}
-		});
-	}
-
-	/**
-	 * Polling fallback. The SSE loop is skipped on single-worker PHP dev servers
-	 * (it would block every other request), so this cheap signature check is what
-	 * actually delivers near-real-time updates in development — and it also covers
-	 * proxies that silently drop long-lived SSE connections in production.
-	 */
-	async function checkSignature() {
-		if (stopped || document.hidden) return;
-		try {
-			const res = await fetch('/api/reports/analytics/signature', { credentials: 'include' });
-			if (!res.ok) return;
-			const { signature } = (await res.json()) as { signature?: string };
-			if (!signature) return;
-			if (knownSignature === null) {
-				knownSignature = signature;
-				return;
-			}
-			if (signature !== knownSignature) {
-				knownSignature = signature;
-				scheduleRefresh();
-			}
-		} catch {
-			// Network hiccup — try again on the next tick.
-		}
-	}
-
-	// Re-check as soon as the tab regains focus so a background change shows immediately.
-	const onVisible = () => {
-		if (!document.hidden) void checkSignature();
-	};
-
-	connect();
-	void checkSignature();
-	pollTimer = setInterval(() => void checkSignature(), SIGNATURE_POLL_MS);
-	document.addEventListener('visibilitychange', onVisible);
+	});
 
 	return () => {
-		stopped = true;
-		if (reconnectTimer) clearTimeout(reconnectTimer);
+		unsubscribe();
 		if (refreshTimer) clearTimeout(refreshTimer);
-		if (pollTimer) clearInterval(pollTimer);
-		document.removeEventListener('visibilitychange', onVisible);
-		es?.close();
 	};
 }
-

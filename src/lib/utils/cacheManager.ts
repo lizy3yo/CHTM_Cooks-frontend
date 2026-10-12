@@ -11,6 +11,8 @@ import { catalogAPI } from '$lib/api/catalog';
 import { clearAnalyticsCache } from '$lib/api/analyticsReports';
 import { profileApi } from '$lib/api/profile';
 import { profileStore } from '$lib/stores/profile';
+import { inventoryStore } from '$lib/stores/inventory';
+import { clearAllQueryCaches } from '$lib/api/queryCache';
 import { requestCartStore } from '$lib/stores/requestCart';
 import { clearAllCaches as clearOfflineDBCaches } from '$lib/api/offline/offlineFirst';
 
@@ -35,6 +37,12 @@ export function clearAllApplicationCaches(): void {
 	try { inventoryActivityLogsAPI.invalidateCache(); } catch (e) { console.error('[CacheManager] inventoryActivityLogsAPI clear error', e); }
 	try { catalogAPI.invalidateCache(); } catch (e) { console.error('[CacheManager] catalogAPI clear error', e); }
 	try { clearAnalyticsCache(); } catch (e) { console.error('[CacheManager] clearAnalyticsCache error', e); }
+
+	// Every cache built on QueryCache, including any the list above misses.
+	// The calls above only mark entries stale; this drops the data itself so
+	// nothing fetched for one account can be painted for the next.
+	try { clearAllQueryCaches(); } catch (e) { console.error('[CacheManager] query cache clear error', e); }
+	try { inventoryStore.reset(); } catch (e) { console.error('[CacheManager] inventoryStore reset error', e); }
 
 	// 2. Client Stores & Profile Caches
 	try { profileApi.clearCache(); } catch (e) { console.error('[CacheManager] profileApi clear error', e); }

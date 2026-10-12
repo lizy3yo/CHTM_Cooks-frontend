@@ -549,15 +549,18 @@
 		// Sequential data offload loading using Promise.allSettled
 		(async () => {
 			try {
-				await replacementObligationsAPI.reconcile();
+				// Housekeeping only; nothing below waits on it.
+				void replacementObligationsAPI.reconcile();
 
 				// 1. Load Cards
 				if (!hasObligationsCache || !hasDonationsCache) {
 					cardsLoading = true;
 				}
 				const cardsResult = await Promise.allSettled([
-					replacementObligationsAPI.getObligations({ limit: 500 }, { forceRefresh: true }),
-					donationsAPI.getAll({ limit: 200, forceRefresh: true })
+					// Served from cache while current; the realtime hub flags
+					// either list the moment it changes.
+					replacementObligationsAPI.getObligations({ limit: 500 }),
+					donationsAPI.getAll({ limit: 200 })
 				]);
 				if (cardsResult[0].status === 'fulfilled') {
 					obligations = cardsResult[0].value.obligations;

@@ -1750,7 +1750,8 @@
 
 				// Revalidate in background (same as catalog) - this keeps data fresh without blocking UI
 				console.log('[MOUNT] 🔄 Revalidating catalog in background...');
-				loadAvailableEquipment({ forceRefresh: true }).then(() => {
+				// Resolves from cache unless the realtime hub has flagged a change.
+				loadAvailableEquipment().then(() => {
 					console.log('[MOUNT] ✅ Background revalidation complete');
 				});
 			} else {

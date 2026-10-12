@@ -163,9 +163,20 @@
 		}
 	});
 
+	// Live: the history follows requests as they are processed elsewhere.
+	onMount(() =>
+		borrowRequestsAPI.subscribeToChanges(() => {
+			fetchRequests().catch((err) => {
+				console.error('[REQUEST-HISTORY] Failed to refresh request history:', err);
+			});
+		})
+	);
+
 	async function fetchRequests() {
-		// Fetch with a high limit to compile all-time student history locally
-		const res = await borrowRequestsAPI.list({ limit: 1000 }, { forceRefresh: true });
+		// Fetch with a high limit to compile all-time student history locally.
+		// Served from cache while current; a stale copy is brought up to date
+		// with only the rows that changed.
+		const res = await borrowRequestsAPI.list({ limit: 1000 });
 		requests = res.requests;
 		totalRequestsCount = res.total;
 	}

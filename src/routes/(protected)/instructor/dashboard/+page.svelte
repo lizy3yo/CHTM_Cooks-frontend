@@ -194,13 +194,22 @@
 			loading = false;
 		}
 
-		void loadDashboard(true, true);
+		// Reads resolve from cache unless the realtime hub has flagged a change.
+		void loadDashboard();
+
+		// Live: new requests and status changes update the dashboard as they happen.
+		const unsubscribe = borrowRequestsAPI.subscribeToChanges(
+			() => void loadDashboard(false, true)
+		);
 
 		const id = setInterval(() => {
 			currentTime = new Date();
 		}, 60_000);
 
-		return () => clearInterval(id);
+		return () => {
+			unsubscribe();
+			clearInterval(id);
+		};
 	});
 </script>
 

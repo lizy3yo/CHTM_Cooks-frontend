@@ -3,8 +3,8 @@
  * Professional, industry-standard API for user management with client-side caching and SSE
  */
 
-import { browser } from '$app/environment';
-import { subscribeToTopic, type RealtimeReason } from './realtime';
+import { subscribeToTopic, type RealtimeReason, type RealtimeTopic } from './realtime';
+import { QueryCache } from './queryCache';
 import { getApiErrorMessage } from './session';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -95,15 +95,16 @@ interface ApiError {
 	message?: string;
 }
 
-interface CacheEntry<T> {
-	data: T;
-	expiresAt: number;
-}
-
-const CLIENT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes for user data
-const listCache = new Map<string, CacheEntry<UsersListResponse>>();
-const detailCache = new Map<string, CacheEntry<UserResponse>>();
 const inFlight = new Map<string, Promise<unknown>>();
+
+// Entries are kept until the realtime hub reports a change, then revalidated
+// on next use; requests already in flight when it changes are not reused.
+const CACHE_OPTIONS = {
+	topics: ['user_change'] as RealtimeTopic[],
+	onStale: () => inFlight.clear()
+};
+const listCache = new QueryCache<UsersListResponse>(CACHE_OPTIONS);
+const detailCache = new QueryCache<UserResponse>(CACHE_OPTIONS);
 
 function getFetchOptions(method: string, body?: unknown): RequestInit {
 	const options: RequestInit = {
@@ -127,20 +128,12 @@ async function handleResponse<T>(response: Response): Promise<T> {
 	return payload;
 }
 
-function getFreshCache<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
-	if (!browser) return null;
-	const entry = cache.get(key);
-	if (!entry) return null;
-	if (Date.now() > entry.expiresAt) {
-		cache.delete(key);
-		return null;
-	}
-	return entry.data;
+function getFreshCache<T>(cache: QueryCache<T>, key: string): T | null {
+	return cache.getFresh(key);
 }
 
-function setCache<T>(cache: Map<string, CacheEntry<T>>, key: string, data: T): void {
-	if (!browser) return;
-	cache.set(key, { data, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
+function setCache<T>(cache: QueryCache<T>, key: string, data: T): void {
+	cache.set(key, data);
 }
 
 function buildListCacheKey(params: {
@@ -158,9 +151,8 @@ function buildListCacheKey(params: {
 }
 
 function invalidateAllCaches(): void {
-	listCache.clear();
-	detailCache.clear();
-	inFlight.clear();
+	listCache.markStale();
+	detailCache.markStale();
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -299,11 +291,11 @@ export const usersAPI = {
 		page?: number;
 		limit?: number;
 	} = {}): UsersListResponse | null {
-		return getFreshCache(listCache, buildListCacheKey(params));
+		return listCache.peek(buildListCacheKey(params));
 	},
 
 	peekCachedUser(userId: string): UserResponse | null {
-		return getFreshCache(detailCache, userId);
+		return detailCache.peek(userId);
 	},
 
 	invalidateCache(): void {

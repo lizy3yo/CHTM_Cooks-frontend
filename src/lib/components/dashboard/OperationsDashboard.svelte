@@ -74,8 +74,6 @@
 	}
 
 	// ── State ─────────────────────────────────────────────────────────────────
-	/** Monthly analytics older than this are refetched in the background. */
-	const ANALYTICS_MAX_AGE_MS = 60_000;
 	const QUEUE_PREVIEW = 5;
 
 	function getMonthRange() {
@@ -195,9 +193,9 @@
 	}
 
 	// ── Data loading ──────────────────────────────────────────────────────────
-	async function loadOverview(): Promise<void> {
+	async function loadOverview(force = false): Promise<void> {
 		try {
-			overview = await fetchOperationsOverview();
+			overview = await fetchOperationsOverview({ forceRefresh: force });
 			overviewError = false;
 		} catch (err) {
 			console.error('[Operations Dashboard] Live snapshot failed:', err);
@@ -218,13 +216,8 @@
 		}
 	}
 
-	function reportIsStale(): boolean {
-		if (!report?.meta?.generatedAt) return true;
-		return Date.now() - new Date(report.meta.generatedAt).getTime() > ANALYTICS_MAX_AGE_MS;
-	}
-
 	async function refreshAll(forceReport: boolean): Promise<void> {
-		await Promise.all([loadOverview(), loadReport(forceReport)]);
+		await Promise.all([loadOverview(forceReport), loadReport(forceReport)]);
 	}
 
 	async function manualRefresh(): Promise<void> {
@@ -251,10 +244,11 @@
 			authStore.clearJustLoggedIn();
 		}
 
-		// Stale-while-revalidate: cached data is already on screen; the live
-		// snapshot is always refetched, monthly analytics only when stale.
+		// Stale-while-revalidate: cached data is already on screen. Both reads
+		// hit the network only if the realtime hub has reported a change since
+		// (or the copy has simply aged out); otherwise they resolve instantly.
 		void loadOverview();
-		void loadReport(reportIsStale());
+		void loadReport(false);
 
 		const unsubscribeChanges = subscribeToAnalyticsChanges(scheduleRefresh);
 

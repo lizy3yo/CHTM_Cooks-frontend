@@ -1,5 +1,5 @@
-import { browser } from '$app/environment';
 import { subscribeToTopic } from './realtime';
+import { QueryCache } from './queryCache';
 import { getApiErrorMessage } from './session';
 
 export type BorrowRequestStatus =
@@ -220,15 +220,12 @@ interface RequestOptions {
 	forceRefresh?: boolean;
 }
 
-interface CacheEntry<T> {
-	data: T;
-	expiresAt: number;
-}
-
-const CLIENT_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
-const listCache = new Map<string, CacheEntry<BorrowRequestListResponse>>();
-const detailCache = new Map<string, CacheEntry<BorrowRequestRecord>>();
-const inFlight = new Map<string, Promise<unknown>>();
+/**
+ * Marked stale by the realtime hub the moment any request changes, so entries
+ * stay available for an instant repaint and are revalidated on next use.
+ */
+const listCache = new QueryCache<BorrowRequestListResponse>({ topics: ['borrow_request_change'] });
+const detailCache = new QueryCache<BorrowRequestRecord>({ topics: ['borrow_request_change'] });
 
 function getFetchOptions(method: string, body?: unknown): RequestInit {
 	const options: RequestInit = {
@@ -265,35 +262,6 @@ async function handleResponse<T>(response: Response): Promise<T> {
 	return payload;
 }
 
-function getFreshCache<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
-	if (!browser) {
-		return null;
-	}
-
-	const entry = cache.get(key);
-	if (!entry) {
-		return null;
-	}
-
-	if (Date.now() > entry.expiresAt) {
-		cache.delete(key);
-		return null;
-	}
-
-	return entry.data;
-}
-
-function setCache<T>(cache: Map<string, CacheEntry<T>>, key: string, data: T): void {
-	if (!browser) {
-		return;
-	}
-
-	cache.set(key, {
-		data,
-		expiresAt: Date.now() + CLIENT_CACHE_TTL_MS
-	});
-}
-
 function buildListCacheKey(params: {
 	status?: BorrowRequestStatus;
 	statuses?: BorrowRequestStatus[];
@@ -317,9 +285,100 @@ function buildListCacheKey(params: {
 }
 
 function invalidateAllCaches(): void {
-	listCache.clear();
-	detailCache.clear();
-	inFlight.clear();
+	listCache.markStale();
+	detailCache.markStale();
+}
+
+/** Put a record a mutation just returned straight into the detail cache. */
+function rememberDetail(record: BorrowRequestRecord): void {
+	detailCache.set(record.id, record);
+}
+
+/**
+ * Fold a delta (rows changed since a watermark) into the cached full list, so
+ * the cache follows the page instead of going stale behind it. Returns false
+ * when the delta cannot be applied and the entry must be re-read in full.
+ */
+function mergeDeltaIntoCache(
+	cacheKey: string,
+	delta: BorrowRequestListResponse,
+	sortBy: 'createdAt' | 'returnDate' = 'createdAt'
+): boolean {
+	const cached = listCache.peek(cacheKey);
+	if (!cached) return false;
+
+	// A `since` read cannot express deletion; a shrinking total is the signal.
+	if (delta.total < cached.total) return false;
+
+	const byId = new Map(cached.requests.map((record) => [record.id, record]));
+	for (const record of delta.requests) {
+		byId.set(record.id, record);
+	}
+
+	// Rows beyond the page size were never in this entry to begin with.
+	if (byId.size !== delta.total) return false;
+
+	// Keep the server's ordering (newest first) so a merged list reads the
+	// same as a freshly fetched one.
+	const stamp = (record: BorrowRequestRecord) => Date.parse(String(record[sortBy] ?? '')) || 0;
+	const requests = [...byId.values()].sort((left, right) => stamp(right) - stamp(left));
+
+	listCache.set(cacheKey, {
+		...cached,
+		requests,
+		total: delta.total,
+		syncedAt: delta.syncedAt
+	});
+	return true;
+}
+
+const deltaInFlight = new Map<string, Promise<BorrowRequestListResponse | null>>();
+
+/**
+ * Bring a stale cached list up to date by reading only the rows that changed
+ * since it was fetched, instead of downloading the whole list again. Returns
+ * null whenever that cannot be done safely, and the caller reads in full.
+ */
+async function revalidateWithDelta(
+	cacheKey: string,
+	query: URLSearchParams,
+	sortBy?: 'createdAt' | 'returnDate'
+): Promise<BorrowRequestListResponse | null> {
+	const cached = listCache.peek(cacheKey);
+
+	// Only a complete list can be patched: a page of a longer list would need
+	// rows it never held.
+	if (!cached?.syncedAt || cached.requests.length !== cached.total) return null;
+
+	const pending = deltaInFlight.get(cacheKey);
+	if (pending) return pending;
+
+	const request = (async () => {
+		try {
+			const deltaQuery = new URLSearchParams(query);
+			deltaQuery.set('since', cached.syncedAt as string);
+
+			const response = await fetch(`/api/borrow-requests?${deltaQuery}`, getFetchOptions('GET'));
+			const delta = await handleResponse<BorrowRequestListResponse>(response);
+
+			// A server that ignored `since` sent everything; take it as is.
+			if (!delta.isDelta) {
+				listCache.set(cacheKey, delta);
+				return delta;
+			}
+
+			return mergeDeltaIntoCache(cacheKey, delta, sortBy) ? listCache.peek(cacheKey) : null;
+		} catch {
+			return null;
+		}
+	})();
+
+	deltaInFlight.set(cacheKey, request);
+	try {
+		return await request;
+	} finally {
+		deltaInFlight.delete(cacheKey);
+	}
 }
 
 export const borrowRequestsAPI = {
@@ -354,76 +413,43 @@ export const borrowRequestsAPI = {
 
 		const url = `/api/borrow-requests${query.toString() ? `?${query.toString()}` : ''}`;
 		const cacheKey = buildListCacheKey(params);
-		const inFlightKey = `list:${cacheKey}`;
 
-		if (!options.forceRefresh && !params.since) {
-			const cached = getFreshCache(listCache, cacheKey);
-			if (cached) {
-				return cached;
-			}
-
-			const existingRequest = inFlight.get(inFlightKey) as Promise<BorrowRequestListResponse> | undefined;
-			if (existingRequest) {
-				return existingRequest;
-			}
-		}
-
-		const requestPromise = (async () => {
-			const response = await fetch(url, getFetchOptions('GET'));
-			const data = await handleResponse<BorrowRequestListResponse>(response);
-
-			// Never cache a delta under the full-list key: peekCachedList would
-			// then hand a caller a couple of changed rows as if that were the
-			// entire list. Deltas are merged by the caller, not cached here.
-			if (!params.since) {
-				setCache(listCache, cacheKey, data);
-			}
-
-			return data;
-		})();
-
-		// Deltas stay out of the in-flight map: the key does not encode `since`,
-		// so sharing it would let a caller expecting the full list receive a
-		// handful of changed rows instead.
+		// Deltas bypass the cache lookup — the caller merges them itself — but
+		// are folded into the cached full list so it never falls behind.
 		if (params.since) {
-			return await requestPromise;
+			const response = await fetch(url, getFetchOptions('GET'));
+			const delta = await handleResponse<BorrowRequestListResponse>(response);
+			if (!mergeDeltaIntoCache(cacheKey, delta, params.sortBy)) {
+				listCache.markStale(cacheKey);
+			}
+			return delta;
 		}
 
-		inFlight.set(inFlightKey, requestPromise);
-		try {
-			return await requestPromise;
-		} finally {
-			inFlight.delete(inFlightKey);
+		// Stale but complete: fetch just what changed since it was read.
+		if (!options.forceRefresh && listCache.getFresh(cacheKey) === null) {
+			const revalidated = await revalidateWithDelta(cacheKey, query, params.sortBy);
+			if (revalidated) return revalidated;
 		}
+
+		return listCache.fetch(
+			cacheKey,
+			async () => {
+				const response = await fetch(url, getFetchOptions('GET'));
+				return handleResponse<BorrowRequestListResponse>(response);
+			},
+			{ force: options.forceRefresh }
+		);
 	},
 
 	async getById(id: string, options: RequestOptions = {}): Promise<BorrowRequestRecord> {
-		const inFlightKey = `detail:${id}`;
-		if (!options.forceRefresh) {
-			const cached = getFreshCache(detailCache, id);
-			if (cached) {
-				return cached;
-			}
-
-			const existingRequest = inFlight.get(inFlightKey) as Promise<BorrowRequestRecord> | undefined;
-			if (existingRequest) {
-				return existingRequest;
-			}
-		}
-
-		const requestPromise = (async () => {
-			const response = await fetch(`/api/borrow-requests/${id}`, getFetchOptions('GET'));
-			const data = await handleResponse<BorrowRequestRecord>(response);
-			setCache(detailCache, id, data);
-			return data;
-		})();
-
-		inFlight.set(inFlightKey, requestPromise);
-		try {
-			return await requestPromise;
-		} finally {
-			inFlight.delete(inFlightKey);
-		}
+		return detailCache.fetch(
+			id,
+			async () => {
+				const response = await fetch(`/api/borrow-requests/${id}`, getFetchOptions('GET'));
+				return handleResponse<BorrowRequestRecord>(response);
+			},
+			{ force: options.forceRefresh }
+		);
 	},
 
 	async create(payload: CreateBorrowRequestInput): Promise<BorrowRequestRecord> {
@@ -435,7 +461,7 @@ export const borrowRequestsAPI = {
 		const response = await fetch('/api/borrow-requests', getFetchOptions('POST', payload));
 		const data = await handleResponse<BorrowRequestRecord>(response);
 		invalidateAllCaches();
-		setCache(detailCache, data.id, data);
+		rememberDetail(data);
 		return data;
 	},
 
@@ -443,7 +469,7 @@ export const borrowRequestsAPI = {
 		const response = await fetch(`/api/borrow-requests/${id}/approve`, getFetchOptions('POST'));
 		const data = await handleResponse<BorrowRequestRecord>(response);
 		invalidateAllCaches();
-		setCache(detailCache, id, data);
+		rememberDetail(data);
 		return data;
 	},
 
@@ -454,7 +480,7 @@ export const borrowRequestsAPI = {
 		);
 		const data = await handleResponse<BorrowRequestRecord>(response);
 		invalidateAllCaches();
-		setCache(detailCache, id, data);
+		rememberDetail(data);
 		return data;
 	},
 
@@ -462,7 +488,7 @@ export const borrowRequestsAPI = {
 		const response = await fetch(`/api/borrow-requests/${id}`, getFetchOptions('DELETE'));
 		const data = await handleResponse<BorrowRequestRecord>(response);
 		invalidateAllCaches();
-		setCache(detailCache, id, data);
+		rememberDetail(data);
 		return data;
 	},
 
@@ -473,7 +499,7 @@ export const borrowRequestsAPI = {
 		);
 		const data = await handleResponse<BorrowRequestRecord>(response);
 		invalidateAllCaches();
-		setCache(detailCache, id, data);
+		rememberDetail(data);
 		return data;
 	},
 
@@ -493,7 +519,7 @@ export const borrowRequestsAPI = {
 		const response = await fetch(`/api/borrow-requests/${id}/release`, getFetchOptions('POST'));
 		const data = await handleResponse<BorrowRequestRecord>(response);
 		invalidateAllCaches();
-		setCache(detailCache, id, data);
+		rememberDetail(data);
 		return data;
 	},
 
@@ -501,7 +527,7 @@ export const borrowRequestsAPI = {
 		const response = await fetch(`/api/borrow-requests/${id}/pickup`, getFetchOptions('POST'));
 		const data = await handleResponse<BorrowRequestRecord>(response);
 		invalidateAllCaches();
-		setCache(detailCache, id, data);
+		rememberDetail(data);
 		return data;
 	},
 
@@ -509,7 +535,7 @@ export const borrowRequestsAPI = {
 		const response = await fetch(`/api/borrow-requests/${id}/return`, getFetchOptions('POST'));
 		const data = await handleResponse<BorrowRequestRecord>(response);
 		invalidateAllCaches();
-		setCache(detailCache, id, data);
+		rememberDetail(data);
 		return data;
 	},
 
@@ -517,7 +543,7 @@ export const borrowRequestsAPI = {
 		const response = await fetch(`/api/borrow-requests/${id}/missing`, getFetchOptions('POST'));
 		const data = await handleResponse<BorrowRequestRecord>(response);
 		invalidateAllCaches();
-		setCache(detailCache, id, data);
+		rememberDetail(data);
 		return data;
 	},
 
@@ -557,11 +583,23 @@ export const borrowRequestsAPI = {
 		page?: number;
 		limit?: number;
 	} = {}): BorrowRequestListResponse | null {
-		return getFreshCache(listCache, buildListCacheKey(params));
+		return listCache.peek(buildListCacheKey(params));
+	},
+
+	/** Whether the cached list for these params is known to be current. */
+	isCachedListFresh(params: {
+		status?: BorrowRequestStatus;
+		statuses?: BorrowRequestStatus[];
+		search?: string;
+		sortBy?: 'createdAt' | 'returnDate';
+		page?: number;
+		limit?: number;
+	} = {}): boolean {
+		return listCache.isFresh(buildListCacheKey(params));
 	},
 
 	peekCachedDetail(id: string): BorrowRequestRecord | null {
-		return getFreshCache(detailCache, id);
+		return detailCache.peek(id);
 	},
 
 	invalidateCache(): void {

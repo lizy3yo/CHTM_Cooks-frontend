@@ -1,5 +1,5 @@
-import { browser } from '$app/environment';
 import { getApiErrorMessage } from './session';
+import { QueryCache } from './queryCache';
 
 /**
  * Live operational snapshot for staff dashboards — `GET /api/dashboard/operations`.
@@ -44,37 +44,39 @@ export interface OperationsOverview {
 	generatedAt: string;
 }
 
+const SNAPSHOT_KEY = 'overview';
+
 /**
- * Kept only so a revisit paints instantly; callers always revalidate in the
- * background, so this never decides what the user ultimately sees.
+ * A revisit paints from this instantly. The realtime hub marks it stale the
+ * moment a request or replacement case changes; "overdue" also moves with the
+ * clock alone, so it is never trusted for more than a minute regardless.
  */
-let lastSnapshot: OperationsOverview | null = null;
-let inFlight: Promise<OperationsOverview> | null = null;
+const snapshotCache = new QueryCache<OperationsOverview>({
+	topics: ['borrow_request_change', 'replacement_obligation_change'],
+	staleAfterMs: 60_000
+});
 
 export function peekCachedOperationsOverview(): OperationsOverview | null {
-	return browser ? lastSnapshot : null;
+	return snapshotCache.peek(SNAPSHOT_KEY);
 }
 
-export async function fetchOperationsOverview(): Promise<OperationsOverview> {
-	// Collapse bursts (e.g. several realtime events at once) into one request.
-	if (inFlight) return inFlight;
-
-	inFlight = (async () => {
-		const res = await fetch('/api/dashboard/operations', {
-			credentials: 'include',
-			cache: 'no-store'
-		});
-		const body = (await res.json().catch(() => ({}))) as OperationsOverview & { error?: string };
-		if (!res.ok) {
-			throw new Error(await getApiErrorMessage(res, body.error ?? `Request failed: ${res.status}`));
-		}
-		lastSnapshot = body;
-		return body;
-	})();
-
-	try {
-		return await inFlight;
-	} finally {
-		inFlight = null;
-	}
+export async function fetchOperationsOverview(
+	options: { forceRefresh?: boolean } = {}
+): Promise<OperationsOverview> {
+	// Concurrent callers (e.g. several realtime events at once) share one request.
+	return snapshotCache.fetch(
+		SNAPSHOT_KEY,
+		async () => {
+			const res = await fetch('/api/dashboard/operations', {
+				credentials: 'include',
+				cache: 'no-store'
+			});
+			const body = (await res.json().catch(() => ({}))) as OperationsOverview & { error?: string };
+			if (!res.ok) {
+				throw new Error(await getApiErrorMessage(res, body.error ?? `Request failed: ${res.status}`));
+			}
+			return body;
+		},
+		{ force: options.forceRefresh }
+	);
 }

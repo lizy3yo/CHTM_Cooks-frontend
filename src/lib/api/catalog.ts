@@ -1,6 +1,6 @@
-import { browser } from '$app/environment';
 import type { InventoryItem, InventoryCategory } from './inventory';
 import { getApiErrorMessage } from './session';
+import { QueryCache } from './queryCache';
 
 /**
  * Catalog API - Professional catalog data management
@@ -61,14 +61,15 @@ interface CatalogRequestOptions {
 	forceRefresh?: boolean;
 }
 
-interface CatalogCacheEntry {
-	data: CatalogResponse;
-	expiresAt: number;
-}
-
-const CATALOG_CLIENT_CACHE_TTL_MS = 60 * 1000;
-const catalogResponseCache = new Map<string, CatalogCacheEntry>();
-const catalogInFlightRequests = new Map<string, Promise<CatalogResponse>>();
+/**
+ * The catalog is the largest payload in the app, so it is worth holding on to.
+ * Availability moves with stock edits and with requests being picked up or
+ * returned; either marks it stale, and it is revalidated on next use.
+ */
+const catalogCache = new QueryCache<CatalogResponse>({
+	topics: ['inventory_change', 'borrow_request_change', 'donation_change'],
+	maxEntries: 40
+});
 
 function buildCatalogQuery(filters: CatalogFilters = {}): string {
 	const params = new URLSearchParams();
@@ -90,21 +91,9 @@ function buildCatalogCacheKey(filters: CatalogFilters = {}): string {
 	return query || 'default';
 }
 
-function getFreshCatalogFromClientCache(filters: CatalogFilters = {}): CatalogResponse | null {
-	if (!browser) return null;
-	// Do not return long-cached results for active search queries to guarantee fresh search
-	if (filters.search && filters.search.trim() !== '') return null;
-
-	const cacheKey = buildCatalogCacheKey(filters);
-	const entry = catalogResponseCache.get(cacheKey);
-
-	if (!entry) return null;
-	if (Date.now() > entry.expiresAt) {
-		catalogResponseCache.delete(cacheKey);
-		return null;
-	}
-
-	return entry.data;
+/** Search results are always read live, never served from the cache. */
+function isSearch(filters: CatalogFilters): boolean {
+	return !!filters.search && filters.search.trim() !== '';
 }
 
 /**
@@ -173,39 +162,14 @@ export const catalogAPI = {
 			const url = `/api/inventory/catalog${query ? `?${query}` : ''}${options.forceRefresh ? `${query ? '&' : '?'}_t=${Date.now()}` : ''}`;
 			const cacheKey = buildCatalogCacheKey(filters);
 
-			if (!options.forceRefresh) {
-				const cached = getFreshCatalogFromClientCache(filters);
-				if (cached) {
-					return cached;
-				}
-
-				const inFlight = catalogInFlightRequests.get(cacheKey);
-				if (inFlight) {
-					return inFlight;
-				}
-			}
-
-			const requestPromise = (async () => {
-				const response = await fetch(url, getFetchOptions('GET'));
-				const data = await handleResponse<CatalogResponse>(response);
-
-				if (browser) {
-					catalogResponseCache.set(cacheKey, {
-						data,
-						expiresAt: Date.now() + CATALOG_CLIENT_CACHE_TTL_MS
-					});
-				}
-
-				return data;
-			})();
-
-			catalogInFlightRequests.set(cacheKey, requestPromise);
-
-			try {
-				return await requestPromise;
-			} finally {
-				catalogInFlightRequests.delete(cacheKey);
-			}
+			return await catalogCache.fetch(
+				cacheKey,
+				async () => {
+					const response = await fetch(url, getFetchOptions('GET'));
+					return handleResponse<CatalogResponse>(response);
+				},
+				{ force: options.forceRefresh || isSearch(filters) }
+			);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Failed to fetch catalog';
 			throw new Error(message);
@@ -217,12 +181,12 @@ export const catalogAPI = {
 	 * Useful for instant render when revisiting the page.
 	 */
 	peekCachedCatalog(filters: CatalogFilters = {}): CatalogResponse | null {
-		return getFreshCatalogFromClientCache(filters);
+		if (isSearch(filters)) return null;
+		return catalogCache.peek(buildCatalogCacheKey(filters));
 	},
 
 	invalidateCache(): void {
-		catalogResponseCache.clear();
-		catalogInFlightRequests.clear();
+		catalogCache.markStale();
 	},
 
 	/**

@@ -256,6 +256,22 @@
 
 	async function loadRequests(forceRefresh = false): Promise<void> {
 		await loadRequestsProgressive(forceRefresh);
+		adoptSyncBaseline();
+	}
+
+	/**
+	 * Record the list just loaded as the baseline for incremental sync, so the
+	 * next realtime event fetches only the rows that changed rather than the
+	 * whole list again. Skipped when the read failed and the cache is not current.
+	 */
+	function adoptSyncBaseline(): void {
+		if (!borrowRequestsAPI.isCachedListFresh({})) return;
+
+		const cached = borrowRequestsAPI.peekCachedList({});
+		if (!cached) return;
+
+		syncedRecords = cached.requests;
+		requestSync.prime(cached);
 	}
 
 	function hydrateRequestsFromClientCache(): boolean {
@@ -338,7 +354,7 @@
 				const cached = borrowRequestsAPI.peekCachedList({});
 				if (cached) {
 					syncedRecords = cached.requests;
-					await requestSync.sync(syncedRecords);
+					requestSync.prime(cached);
 				}
 				syncSelectedRequestWithLatestData();
 				return;

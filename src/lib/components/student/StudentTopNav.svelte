@@ -60,9 +60,10 @@
 		
 		// Set up periodic refresh for notifications
 		// Refresh the moment a notification arrives; the timer is only a safety net.
-		stopWatchingNotifications = watchNotifications(() => void loadNotifications(true));
+		stopWatchingNotifications = watchNotifications(() => void loadNotifications());
+		// Safety net only: this resolves from cache unless the hub flagged a change.
 		notificationTicker = setInterval(() => {
-			void loadNotifications(true);
+			void loadNotifications();
 		}, 60000);
 		
 		// Refresh catalog data every 5 minutes to keep images up-to-date

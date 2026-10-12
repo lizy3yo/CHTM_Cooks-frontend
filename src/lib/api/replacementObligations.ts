@@ -5,8 +5,8 @@
  * Credentials are sent via httpOnly cookies (credentials: 'include').
  */
 
-import { browser } from '$app/environment';
-import { subscribeToTopic } from './realtime';
+import { subscribeToTopic, type RealtimeTopic } from './realtime';
+import { QueryCache } from './queryCache';
 import { getApiErrorMessage } from './session';
 
 export type ObligationType = 'missing' | 'damaged';
@@ -66,17 +66,19 @@ interface RequestOptions {
 	forceRefresh?: boolean;
 }
 
-interface CacheEntry<T> {
-	data: T;
-	expiresAt: number;
-}
-
 // ─── Client-side cache ───────────────────────────────────────────────────────
 
-const CLIENT_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
-const listCache = new Map<string, CacheEntry<ReplacementObligationsListResponse>>();
-const detailCache = new Map<string, CacheEntry<{ obligation: ReplacementObligation }>>();
 const inFlight = new Map<string, Promise<unknown>>();
+
+// Entries are kept until the realtime hub reports a change, then revalidated
+// on next use; requests already in flight when it changes are not reused.
+// Obligations are created by a return inspection, so request changes count too.
+const CACHE_OPTIONS = {
+	topics: ['replacement_obligation_change', 'borrow_request_change'] as RealtimeTopic[],
+	onStale: () => inFlight.clear()
+};
+const listCache = new QueryCache<ReplacementObligationsListResponse>(CACHE_OPTIONS);
+const detailCache = new QueryCache<{ obligation: ReplacementObligation }>(CACHE_OPTIONS);
 
 function getFetchOptions(method: string, body?: unknown): RequestInit {
 	const opts: RequestInit = {
@@ -100,20 +102,12 @@ async function handleResponse<T>(response: Response): Promise<T> {
 	return payload;
 }
 
-function getFreshCache<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
-	if (!browser) return null;
-	const entry = cache.get(key);
-	if (!entry) return null;
-	if (Date.now() > entry.expiresAt) {
-		cache.delete(key);
-		return null;
-	}
-	return entry.data;
+function getFreshCache<T>(cache: QueryCache<T>, key: string): T | null {
+	return cache.getFresh(key);
 }
 
-function setCache<T>(cache: Map<string, CacheEntry<T>>, key: string, data: T): void {
-	if (!browser) return;
-	cache.set(key, { data, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
+function setCache<T>(cache: QueryCache<T>, key: string, data: T): void {
+	cache.set(key, data);
 }
 
 function buildListCacheKey(
@@ -133,9 +127,8 @@ function buildListCacheKey(
 }
 
 function invalidateAllCaches(): void {
-	listCache.clear();
-	detailCache.clear();
-	inFlight.clear();
+	listCache.markStale();
+	detailCache.markStale();
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -281,11 +274,11 @@ export const replacementObligationsAPI = {
 			limit?: number;
 		} = {}
 	): ReplacementObligationsListResponse | null {
-		return getFreshCache(listCache, buildListCacheKey(params));
+		return listCache.peek(buildListCacheKey(params));
 	},
 
 	peekCachedObligation(id: string): { obligation: ReplacementObligation } | null {
-		return getFreshCache(detailCache, id);
+		return detailCache.peek(id);
 	},
 
 	invalidateCache(): void {

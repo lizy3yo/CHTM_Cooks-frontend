@@ -3,8 +3,8 @@
  * Item-based donations — client-side cache + SSE subscription.
  */
 
-import { browser } from '$app/environment';
-import { subscribeToTopic } from './realtime';
+import { subscribeToTopic, type RealtimeTopic } from './realtime';
+import { QueryCache } from './queryCache';
 import { getApiErrorMessage } from './session';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -143,15 +143,16 @@ interface ApiError {
 	message?: string;
 }
 
-interface CacheEntry<T> {
-	data: T;
-	expiresAt: number;
-}
-
-const CLIENT_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
-const listCache = new Map<string, CacheEntry<DonationsListResponse>>();
-const detailCache = new Map<string, CacheEntry<{ donation: DonationResponse }>>();
 const inFlight = new Map<string, Promise<unknown>>();
+
+// Entries are kept until the realtime hub reports a change, then revalidated
+// on next use; requests already in flight when it changes are not reused.
+const CACHE_OPTIONS = {
+	topics: ['donation_change'] as RealtimeTopic[],
+	onStale: () => inFlight.clear()
+};
+const listCache = new QueryCache<DonationsListResponse>(CACHE_OPTIONS);
+const detailCache = new QueryCache<{ donation: DonationResponse }>(CACHE_OPTIONS);
 
 function getFetchOptions(method: string, body?: unknown): RequestInit {
 	const options: RequestInit = {
@@ -172,20 +173,12 @@ async function handleResponse<T>(response: Response): Promise<T> {
 	return payload;
 }
 
-function getFreshCache<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
-	if (!browser) return null;
-	const entry = cache.get(key);
-	if (!entry) return null;
-	if (Date.now() > entry.expiresAt) {
-		cache.delete(key);
-		return null;
-	}
-	return entry.data;
+function getFreshCache<T>(cache: QueryCache<T>, key: string): T | null {
+	return cache.getFresh(key);
 }
 
-function setCache<T>(cache: Map<string, CacheEntry<T>>, key: string, data: T): void {
-	if (!browser) return;
-	cache.set(key, { data, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
+function setCache<T>(cache: QueryCache<T>, key: string, data: T): void {
+	cache.set(key, data);
 }
 
 function buildListCacheKey(params: { search?: string; page?: number; limit?: number }): string {
@@ -193,9 +186,8 @@ function buildListCacheKey(params: { search?: string; page?: number; limit?: num
 }
 
 function invalidateAllCaches(): void {
-	listCache.clear();
-	detailCache.clear();
-	inFlight.clear();
+	listCache.markStale();
+	detailCache.markStale();
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -358,11 +350,11 @@ export const donationsAPI = {
 	peekCachedDonations(
 		params: { search?: string; page?: number; limit?: number } = {}
 	): DonationsListResponse | null {
-		return getFreshCache(listCache, buildListCacheKey(params));
+		return listCache.peek(buildListCacheKey(params));
 	},
 
 	peekCachedDonation(id: string): { donation: DonationResponse } | null {
-		return getFreshCache(detailCache, id);
+		return detailCache.peek(id);
 	},
 
 	invalidateCache(): void {

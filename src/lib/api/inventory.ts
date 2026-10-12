@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import { subscribeToTopic, type RealtimeReason } from './realtime';
+import { QueryCache } from './queryCache';
 import { getApiErrorMessage } from './session';
 
 /** Stock figures for one calendar day. */
@@ -153,18 +154,19 @@ async function refreshAccessToken(): Promise<boolean> {
 }
 
 async function fetchWithAuthRetry(url: string, options: RequestInit, retryOnUnauthorized = true): Promise<Response> {
-	const response = await fetch(url, options);
+	let response = await fetch(url, options);
 
-	if (response.status !== 401 || !retryOnUnauthorized) {
-		return response;
+	if (response.status === 401 && retryOnUnauthorized && (await refreshAccessToken())) {
+		response = await fetch(url, options);
 	}
 
-	const refreshed = await refreshAccessToken();
-	if (!refreshed) {
-		return response;
+	// Our own write: flag cached reads at once instead of waiting for the
+	// realtime hub to report it a moment later.
+	if (response.ok && options.method && options.method !== 'GET') {
+		markInventoryCachesStale();
 	}
 
-	return await fetch(url, options);
+	return response;
 }
 
 /**
@@ -183,24 +185,30 @@ async function handleResponse<T>(response: Response): Promise<T> {
 /**
  * Inventory Items API
  */
-const CLIENT_CACHE_TTL_MS = 2 * 60 * 1000;
-const listCache = new Map<string, { data: any, expiresAt: number }>();
-const inFlight = new Map<string, Promise<any>>();
+type InventoryListResponse = {
+	items: InventoryItem[];
+	total: number;
+	page: number;
+	limit: number;
+	pages: number;
+};
 
-function getFreshCache<T>(cache: Map<string, { data: T, expiresAt: number }>, key: string): T | null {
-	if (!browser) return null;
-	const entry = cache.get(key);
-	if (!entry) return null;
-	if (Date.now() > entry.expiresAt) {
-		cache.delete(key);
-		return null;
-	}
-	return entry.data;
-}
+/**
+ * Stock moves when items are edited and when requests are picked up or
+ * returned, so both topics mark the list stale. Entries are kept for an instant
+ * repaint and revalidated on next use.
+ */
+const listCache = new QueryCache<InventoryListResponse>({
+	topics: ['inventory_change', 'borrow_request_change', 'donation_change']
+});
 
-function setCache<T>(cache: Map<string, { data: T, expiresAt: number }>, key: string, data: T): void {
-	if (!browser) return;
-	cache.set(key, { data, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
+const categoriesCache = new QueryCache<{ categories: InventoryCategory[]; total: number }>({
+	topics: ['inventory_change']
+});
+
+function markInventoryCachesStale(): void {
+	listCache.markStale();
+	categoriesCache.markStale();
 }
 
 export const inventoryItemsAPI = {
@@ -213,12 +221,11 @@ export const inventoryItemsAPI = {
 		limit?: number;
 	}): { items: InventoryItem[]; total: number; page: number; limit: number; pages: number } | null {
 		const key = JSON.stringify(params || {});
-		return getFreshCache(listCache, key);
+		return listCache.peek(key);
 	},
-	
+
 	invalidateCache() {
-		listCache.clear();
-		inFlight.clear();
+		listCache.markStale();
 	},
 	/**
 	 * Clear a recorded stock discrepancy after a physical recount, optionally
@@ -233,8 +240,7 @@ export const inventoryItemsAPI = {
 			getFetchOptions('POST', input)
 		);
 		const item = await handleResponse<InventoryItem>(response);
-		listCache.clear();
-		inFlight.clear();
+		listCache.markStale();
 		return item;
 	},
 
@@ -283,27 +289,14 @@ export const inventoryItemsAPI = {
 			dates: params?.dates
 		});
 		
-		if (!params?.forceRefresh) {
-			const cached = getFreshCache<{ items: InventoryItem[]; total: number; page: number; limit: number; pages: number }>(listCache, cacheKey);
-			if (cached) return cached;
-			const existing = inFlight.get(cacheKey);
-			if (existing) return existing;
-		}
-
-		const req = (async () => {
-			const response = await fetchWithAuthRetry(url, getFetchOptions('GET'));
-			const result = await handleResponse<{ items: InventoryItem[]; total: number; page: number; limit: number; pages: number }>(response);
-			console.log('[INVENTORY-API] ✅ Received', result.items?.length || 0, 'items');
-			setCache(listCache, cacheKey, result);
-			return result;
-		})();
-
-		inFlight.set(cacheKey, req);
-		try {
-			return await req;
-		} finally {
-			inFlight.delete(cacheKey);
-		}
+		return listCache.fetch(
+			cacheKey,
+			async () => {
+				const response = await fetchWithAuthRetry(url, getFetchOptions('GET'));
+				return handleResponse<InventoryListResponse>(response);
+			},
+			{ force: params?.forceRefresh }
+		);
 	},
 
 	/**
@@ -422,9 +415,10 @@ export const inventoryCategoriesAPI = {
 		const query = queryParams.toString();
 		const url = `/api/inventory/categories${query ? `?${query}` : ''}`;
 
-		const response = await fetchWithAuthRetry(url, getFetchOptions('GET'));
-
-		return handleResponse(response);
+		return categoriesCache.fetch(url, async () => {
+			const response = await fetchWithAuthRetry(url, getFetchOptions('GET'));
+			return handleResponse<{ categories: InventoryCategory[]; total: number }>(response);
+		});
 	},
 
 	/**

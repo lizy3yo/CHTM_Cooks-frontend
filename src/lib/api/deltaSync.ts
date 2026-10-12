@@ -53,6 +53,18 @@ export class DeltaSync<TRecord> {
 		this.knownTotal = 0;
 	}
 
+	/**
+	 * Adopt a list the caller has already loaded as the baseline, so the next
+	 * sync is incremental without first re-reading everything. A read with no
+	 * server timestamp cannot be a baseline and is ignored.
+	 */
+	prime(page: { total: number; syncedAt?: string }): void {
+		if (!page.syncedAt) return;
+
+		this.knownTotal = page.total;
+		this.watermark = page.syncedAt;
+	}
+
 	/** True once a baseline exists, i.e. the next sync can be incremental. */
 	get primed(): boolean {
 		return this.watermark !== null;

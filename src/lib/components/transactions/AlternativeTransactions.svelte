@@ -14,7 +14,11 @@
 	import DeedOfDonationModal from './DeedOfDonationModal.svelte';
 	import SpreadsheetImportModal, { type ImportColumn } from '$lib/components/ui/SpreadsheetImportModal.svelte';
 	import { peso } from '$lib/utils/deedOfDonation';
-	import { walkInTransactionsAPI, type WalkInTransactionRecord } from '$lib/api/walkInTransactions';
+	import {
+		walkInTransactionsAPI,
+		watchWalkIns,
+		type WalkInTransactionRecord
+	} from '$lib/api/walkInTransactions';
 	import {
 		Plus,
 		Search,
@@ -813,6 +817,29 @@
 		//    View-only roles never open those forms, so they skip this.
 		if (!readOnly) await loadFormReferences();
 	});
+
+	// Live updates: a walk-in recorded or returned by someone else, or a
+	// donation encoded elsewhere, shows here without a reload.
+	onMount(() => {
+		const stopWalkIns = watchWalkIns(() => void refreshWalkIns());
+		const stopDonations = donationsAPI.subscribeToChanges(() => void refreshDonations());
+
+		return () => {
+			stopWalkIns();
+			stopDonations();
+		};
+	});
+
+	/** Re-read donations quietly; the list on screen stays put while it loads. */
+	async function refreshDonations(): Promise<void> {
+		if (!donationsLoaded) return;
+		try {
+			const res = await donationsAPI.getAll({ limit: 500 });
+			donations = res.donations || [];
+		} catch (err) {
+			console.error('Failed to refresh donations:', err);
+		}
+	}
 
 	async function refreshWalkIns(): Promise<void> {
 		try {

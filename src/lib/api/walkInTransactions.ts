@@ -7,6 +7,8 @@
  */
 
 import { getApiErrorMessage } from './session';
+import { subscribeToTopic, type RealtimeReason } from './realtime';
+import { QueryCache } from './queryCache';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -108,52 +110,71 @@ async function handleResponse<T>(response: Response): Promise<T> {
 	return payload;
 }
 
-// ─── In-memory list cache (stale-while-revalidate) ──────────────────────────
-// Lets the page render the last known list instantly on revisit while it
-// refreshes in the background. Lives until a full page reload.
+// ─── List cache (stale-while-revalidate) ────────────────────────────────────
+// Lets the page render the last known list instantly on revisit. The realtime
+// hub marks it stale when anyone records or returns a walk-in, so a second
+// staff member's screen follows without a reload.
 
 type ListParams = { status?: string; search?: string; limit?: number };
 
-let listCache: { key: string; unfiltered: boolean; data: WalkInsListResponse } | null = null;
+const listCache = new QueryCache<WalkInsListResponse>({ topics: ['walk_in_change'] });
 
 function listKey(params: ListParams): string {
 	return JSON.stringify({ status: params.status ?? '', search: params.search ?? '', limit: params.limit ?? 0 });
 }
 
-// Keep the remembered list in step with a local change. Filtered lists can't be
-// patched safely, so those are dropped and refetched next time.
+function isUnfiltered(key: string): boolean {
+	const params = JSON.parse(key) as { status: string; search: string };
+	return !params.status && !params.search;
+}
+
+// Keep remembered lists in step with a local change. Filtered lists can't be
+// patched safely, so those are left stale and refetched next time.
 function patchCache(update: (list: WalkInTransactionRecord[]) => WalkInTransactionRecord[]): void {
-	if (!listCache) return;
-	if (!listCache.unfiltered) {
-		listCache = null;
-		return;
-	}
-	const walkIns = update(listCache.data.walkIns);
-	listCache = { ...listCache, data: { walkIns, total: walkIns.length } };
+	listCache.markStale();
+	listCache.updateAll((data, key) => {
+		if (!isUnfiltered(key)) return data;
+		const walkIns = update(data.walkIns);
+		return { walkIns, total: walkIns.length };
+	});
+}
+
+/** Run `onChange` whenever walk-in transactions change on the server. */
+export function watchWalkIns(onChange: (reason: RealtimeReason) => void): () => void {
+	return subscribeToTopic('walk_in_change', onChange);
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 export const walkInTransactionsAPI = {
 	/** List walk-in transactions (most recent first). */
-	async list(params: ListParams = {}): Promise<WalkInsListResponse> {
+	async list(
+		params: ListParams = {},
+		options: { forceRefresh?: boolean } = {}
+	): Promise<WalkInsListResponse> {
 		const searchParams = new URLSearchParams();
 		if (params.status) searchParams.set('status', params.status);
 		if (params.search) searchParams.set('search', params.search);
 		if (params.limit) searchParams.set('limit', String(params.limit));
 		const query = searchParams.toString();
-		const res = await fetch(
-			`/api/walk-in-transactions${query ? `?${query}` : ''}`,
-			getFetchOptions('GET')
+
+		return listCache.fetch(
+			listKey(params),
+			async () => {
+				const res = await fetch(
+					`/api/walk-in-transactions${query ? `?${query}` : ''}`,
+					getFetchOptions('GET')
+				);
+				return handleResponse<WalkInsListResponse>(res);
+			},
+			// A typed search is always read live.
+			{ force: options.forceRefresh || !!params.search }
 		);
-		const data = await handleResponse<WalkInsListResponse>(res);
-		listCache = { key: listKey(params), unfiltered: !params.status && !params.search, data };
-		return data;
 	},
 
 	/** Last list fetched with these exact params, or null. Never hits the network. */
 	peekCachedList(params: ListParams = {}): WalkInsListResponse | null {
-		return listCache && listCache.key === listKey(params) ? listCache.data : null;
+		return listCache.peek(listKey(params));
 	},
 
 	/** Record a new walk-in checkout. */

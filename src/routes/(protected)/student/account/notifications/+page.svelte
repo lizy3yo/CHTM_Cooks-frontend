@@ -2,7 +2,11 @@
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { Bell, CheckCheck, ListFilter } from 'lucide-svelte';
-	import { notificationsAPI, type NotificationRecord } from '$lib/api/notifications';
+	import {
+		notificationsAPI,
+		watchNotifications,
+		type NotificationRecord
+	} from '$lib/api/notifications';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 
 	const PAGE_SIZE = 10;
@@ -50,7 +54,7 @@
 			const data = await notificationsAPI.list(200, 0, { forceRefresh: options.forceRefresh });
 			notifications = data.notifications;
 			unreadCount = data.unreadCount;
-			currentPage = 1;
+			if (!background) currentPage = 1;
 		} finally {
 			loading = false;
 		}
@@ -74,11 +78,12 @@
 	}
 
 	$effect(() => {
-		if (initialNotifications) {
-			void loadNotifications({ forceRefresh: true, background: true });
-			return;
-		}
-		void loadNotifications();
+		// With a cached list on screen this only reaches the network when the
+		// realtime hub has flagged it out of date.
+		void loadNotifications({ background: initialNotifications !== null });
+
+		// A notification that arrives while the page is open appears at once.
+		return watchNotifications(() => void loadNotifications({ background: true }));
 	});
 </script>
 

@@ -391,11 +391,12 @@
 		if (cached) {
 			catalogData = cached;
 			isLoading = false;
-			fetchCatalog({ background: true, forceRefresh: true });
+			// Resolves from cache unless the realtime hub has flagged a change.
+			fetchCatalog({ background: true });
 		} else {
 			fetchCatalog();
 		}
-		const interval = setInterval(() => fetchCatalog({ background: true, forceRefresh: true }), 120_000);
+		const interval = setInterval(() => fetchCatalog({ background: true }), 120_000);
 		return () => { clearInterval(interval); clearTimeout(searchTimeout); };
 	});
 

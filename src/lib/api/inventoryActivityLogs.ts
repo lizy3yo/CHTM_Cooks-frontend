@@ -1,5 +1,5 @@
-import { browser } from '$app/environment';
 import { subscribeToTopic } from './realtime';
+import { QueryCache } from './queryCache';
 import { getApiErrorMessage } from './session';
 
 /**
@@ -75,24 +75,22 @@ async function handleResponse<T>(response: Response): Promise<T> {
 	return response.json();
 }
 
-const CLIENT_CACHE_TTL_MS = 2 * 60 * 1000;
-const activityLogsCache = new Map<string, { data: any, expiresAt: number }>();
 const inFlight = new Map<string, Promise<any>>();
 
-function getFreshCache<T>(cache: Map<string, { data: T, expiresAt: number }>, key: string): T | null {
-	if (!browser) return null;
-	const entry = cache.get(key);
-	if (!entry) return null;
-	if (Date.now() > entry.expiresAt) {
-		cache.delete(key);
-		return null;
-	}
-	return entry.data;
+// Entries are kept until the realtime hub reports a change, then revalidated
+// on next use; requests already in flight when it changes are not reused.
+// The log gains a row for stock edits and for stock moved by requests.
+const activityLogsCache = new QueryCache<any>({
+	topics: ['inventory_change', 'borrow_request_change'],
+	onStale: () => inFlight.clear()
+});
+
+function getFreshCache<T>(cache: QueryCache<T>, key: string): T | null {
+	return cache.getFresh(key);
 }
 
-function setCache<T>(cache: Map<string, { data: T, expiresAt: number }>, key: string, data: T): void {
-	if (!browser) return;
-	cache.set(key, { data, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
+function setCache<T>(cache: QueryCache<T>, key: string, data: T): void {
+	cache.set(key, data);
 }
 
 /**
@@ -110,12 +108,11 @@ export const inventoryActivityLogsAPI = {
 		limit?: number;
 	}): { activityLogs: InventoryActivityLogEntry[]; total: number; page: number; limit: number; pages: number } | null {
 		const key = JSON.stringify(params || {});
-		return getFreshCache(activityLogsCache, key);
+		return activityLogsCache.peek(key);
 	},
 
 	invalidateCache() {
-		activityLogsCache.clear();
-		inFlight.clear();
+		activityLogsCache.markStale();
 	},
 
 	/**
@@ -268,7 +265,6 @@ export const deletedItemsAPI = {
 	},
 
 	invalidateCache(): void {
-		activityLogsCache.clear();
-		inFlight.clear();
+		activityLogsCache.markStale();
 	}
 };

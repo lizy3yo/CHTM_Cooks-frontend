@@ -581,8 +581,8 @@
 			isLoading = false;
 			// Load required items into cart after catalog is loaded
 			loadrequiredItemsToCart();
-			// Revalidate in background to keep data fresh.
-			fetchCatalog({ background: true, forceRefresh: true });
+			// Resolves from cache unless the realtime hub has flagged a change.
+			fetchCatalog({ background: true });
 		} else {
 			fetchCatalog();
 		}
@@ -592,8 +592,7 @@
 			() => {
 				// Refresh in background without showing loading state
 				fetchCatalog({
-					background: true,
-					forceRefresh: true
+					background: true
 				}).catch((err) => {
 					console.warn('Background catalog refresh failed:', err);
 				});

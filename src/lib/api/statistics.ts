@@ -12,8 +12,8 @@
  *  3. MongoDB aggregation (computeStudentStatistics service) — source of truth
  */
 
-import { browser } from '$app/environment';
 import { getApiErrorMessage } from './session';
+import { QueryCache } from './queryCache';
 
 // ─── Re-export shared types so consumers import from one place ─────────────────
 
@@ -126,30 +126,11 @@ export interface StudentStatisticsData {
 
 // ─── Internal cache primitives ─────────────────────────────────────────────────
 
-interface CacheEntry {
-	data: StudentStatisticsData;
-	expiresAt: number;
-}
-
-const CLIENT_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
-const cacheByPeriod = new Map<StatisticsPeriod, CacheEntry>();
-const inFlightByPeriod = new Map<StatisticsPeriod, Promise<StudentStatisticsData>>();
-
-function getFreshCache(period: StatisticsPeriod): StudentStatisticsData | null {
-	if (!browser) return null;
-	const entry = cacheByPeriod.get(period);
-	if (!entry) return null;
-	if (Date.now() > entry.expiresAt) {
-		cacheByPeriod.delete(period);
-		return null;
-	}
-	return entry.data;
-}
-
-function setCache(period: StatisticsPeriod, data: StudentStatisticsData): void {
-	if (!browser) return;
-	cacheByPeriod.set(period, { data, expiresAt: Date.now() + CLIENT_CACHE_TTL_MS });
-}
+// A student's figures move with their own requests and replacement cases; the
+// realtime hub marks them stale on either, and they revalidate on next use.
+const cacheByPeriod = new QueryCache<StudentStatisticsData>({
+	topics: ['borrow_request_change', 'replacement_obligation_change']
+});
 
 // ─── HTTP helpers ──────────────────────────────────────────────────────────────
 
@@ -202,29 +183,9 @@ export const statisticsAPI = {
 	async get(options: FetchOptions = {}): Promise<StudentStatisticsData> {
 		const period = options.period ?? '180d';
 
-		if (!options.forceRefresh) {
-			const fresh = getFreshCache(period);
-			if (fresh) return fresh;
-		}
-
-		const existingInFlight = inFlightByPeriod.get(period);
-		if (existingInFlight) return existingInFlight;
-
-		const inFlight = doFetch(period, options.forceRefresh ?? false).then(
-			(data) => {
-				setCache(period, data);
-				inFlightByPeriod.delete(period);
-				return data;
-			},
-			(err) => {
-				inFlightByPeriod.delete(period);
-				throw err;
-			}
-		);
-
-		inFlightByPeriod.set(period, inFlight);
-
-		return inFlight;
+		return cacheByPeriod.fetch(period, () => doFetch(period, options.forceRefresh ?? false), {
+			force: options.forceRefresh
+		});
 	},
 
 	/**
@@ -232,20 +193,14 @@ export const statisticsAPI = {
 	 * Returns `null` if the cache is empty or stale.
 	 */
 	peek(period: StatisticsPeriod = '180d'): StudentStatisticsData | null {
-		return getFreshCache(period);
+		return cacheByPeriod.peek(period);
 	},
 
 	/**
 	 * Evict the in-memory cache so the next `get()` call goes to the network.
 	 */
 	invalidateCache(period?: StatisticsPeriod): void {
-		if (period) {
-			cacheByPeriod.delete(period);
-			inFlightByPeriod.delete(period);
-			return;
-		}
-		cacheByPeriod.clear();
-		inFlightByPeriod.clear();
+		cacheByPeriod.markStale(period);
 	}
 };
 

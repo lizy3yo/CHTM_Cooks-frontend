@@ -1,14 +1,22 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { Bell, CheckCheck } from 'lucide-svelte';
-	import { notificationsAPI, type NotificationRecord } from '$lib/api/notifications';
+	import {
+		notificationsAPI,
+		watchNotifications,
+		type NotificationRecord
+	} from '$lib/api/notifications';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 
 	const PAGE_SIZE = 10;
 
-	let notifications = $state<NotificationRecord[]>([]);
-	let unreadCount = $state(0);
-	let loading = $state(true);
+	// Whatever was loaded last paints immediately on a revisit.
+	const cachedNotifications = browser ? notificationsAPI.peekCachedList(200, 0) : null;
+
+	let notifications = $state<NotificationRecord[]>(cachedNotifications?.notifications ?? []);
+	let unreadCount = $state(cachedNotifications?.unreadCount ?? 0);
+	let loading = $state(!cachedNotifications);
 	let currentPage = $state(1);
 	let filter = $state<'all' | 'unread'>('all');
 
@@ -41,13 +49,14 @@
 			.join('');
 	}
 
-	async function loadNotifications() {
-		loading = true;
+	/** `background` keeps the list on screen while it is re-read. */
+	async function loadNotifications(background = false) {
+		if (!background) loading = true;
 		try {
 			const data = await notificationsAPI.list(200, 0);
 			notifications = data.notifications;
 			unreadCount = data.unreadCount;
-			currentPage = 1;
+			if (!background) currentPage = 1;
 		} finally {
 			loading = false;
 		}
@@ -56,7 +65,7 @@
 	async function markAllAsRead() {
 		if (unreadCount === 0) return;
 		await notificationsAPI.markAllAsRead();
-		await loadNotifications();
+		await loadNotifications(true);
 	}
 
 	async function openNotification(notification: NotificationRecord) {
@@ -67,11 +76,16 @@
 			await goto(notification.link);
 			return;
 		}
-		await loadNotifications();
+		await loadNotifications(true);
 	}
 
 	$effect(() => {
-		void loadNotifications();
+		// With a cached list on screen this only reaches the network when the
+		// realtime hub has flagged it out of date.
+		void loadNotifications(cachedNotifications !== null);
+
+		// A notification that arrives while the page is open appears at once.
+		return watchNotifications(() => void loadNotifications(true));
 	});
 </script>
 

@@ -30,9 +30,10 @@
 		ticker = setInterval(() => { now = new Date(); }, 1000);
 		void loadNotifications();
 		// Refresh the moment a notification arrives; the timer is only a safety net.
-		stopWatchingNotifications = watchNotifications(() => void loadNotifications(true));
+		stopWatchingNotifications = watchNotifications(() => void loadNotifications());
+		// Safety net only: this resolves from cache unless the hub flagged a change.
 		notificationTicker = setInterval(() => {
-			void loadNotifications(true);
+			void loadNotifications();
 		}, 60000);
 		document.body.style.paddingTop = '4rem';
 		return () => { document.body.style.paddingTop = ''; };

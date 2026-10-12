@@ -378,9 +378,7 @@
 			const cached = borrowRequestsAPI.peekCachedList(LIST_PARAMS);
 			if (cached) {
 				syncedRecords = cached.requests;
-				if (!requestSync.primed) {
-					await requestSync.sync(syncedRecords);
-				}
+				requestSync.prime(cached);
 			}
 		}
 	}
@@ -535,7 +533,10 @@
 			borrowedLoading = false;
 			unresolvedLoading = false;
 			historyLoading = false;
-			void loadRequests(true, true); // background revalidation
+			// Revalidate by fetching only what changed since the cached read.
+			syncedRecords = cached.requests;
+			requestSync.prime(cached);
+			void loadRequests(true, true);
 		} else {
 			void loadRequests(true);
 		}
@@ -544,7 +545,10 @@
 			if (mounted) void loadRequests(true, true);
 		};
 
-		// Periodic background refresh every 5 minutes (not 15 seconds).
+		// Live: a student's new request or appeal appears the moment it is filed.
+		const unsubscribe = borrowRequestsAPI.subscribeToChanges(refresh);
+
+		// Slow safety net behind the live subscription.
 		const intervalId = window.setInterval(refresh, 120_000);
 		window.addEventListener('focus', refresh);
 
@@ -556,6 +560,7 @@
 
 		return () => {
 			mounted = false;
+			unsubscribe();
 			window.clearInterval(intervalId);
 			window.removeEventListener('focus', refresh);
 			document.removeEventListener('visibilitychange', onVisibilityChange);

@@ -18,6 +18,7 @@
 	} from 'lucide-svelte';
 	import { inventoryActivityLogsAPI, type InventoryActivityLogEntry } from '$lib/api/inventoryActivityLogs';
 	import { borrowRequestsAPI, type BorrowRequestRecord } from '$lib/api/borrowRequests';
+	import { subscribeToTopics } from '$lib/api/realtime';
 	import { authAuditEventsAPI, type AuthAuditEvent } from '$lib/api/authAuditEvents';
 	import { requestAuditEventsAPI, type RequestAuditEvent } from '$lib/api/requestAuditEvents';
 	import { subscribeToInventoryChanges } from '$lib/api/inventory';
@@ -112,6 +113,14 @@
 
 		unsubscribeInventory = subscribeToInventoryChanges(() => scheduleRefresh());
 
+		// Request and account activity belong in the trail too.
+		const unsubscribeActivity = subscribeToTopics(
+			['borrow_request_change', 'user_change'],
+			(reason) => {
+				if (reason === 'change') scheduleRefresh();
+			}
+		);
+
 		_pollInterval = setInterval(() => { void loadLogs(false, true); }, 30_000);
 
 		const onFocus   = () => { void loadLogs(false, true); };
@@ -121,6 +130,7 @@
 
 		return () => {
 			unsubscribeInventory?.();
+			unsubscribeActivity();
 			if (_pollInterval !== null) clearInterval(_pollInterval);
 			if (refreshTimer !== null) clearTimeout(refreshTimer);
 			window.removeEventListener('focus', onFocus);

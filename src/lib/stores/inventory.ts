@@ -20,6 +20,7 @@
 import { writable, derived } from 'svelte/store';
 import { browser } from '$app/environment';
 import type { InventoryItem, InventoryCategory } from '$lib/api/inventory';
+import { onTopicChange } from '$lib/api/realtime';
 
 interface InventoryCache {
 	items: InventoryItem[];
@@ -199,6 +200,13 @@ function createInventoryStore() {
 }
 
 export const inventoryStore = createInventoryStore();
+
+// Stock changes from other screens too — a pickup, a return, a donation — so
+// the realtime hub flags this cache whether or not an inventory page is open.
+// The items stay available for an instant repaint; the next visit revalidates.
+onTopicChange(['inventory_change', 'borrow_request_change', 'donation_change'], (reason) => {
+	if (reason === 'change') inventoryStore.markStale();
+});
 
 /**
  * Derived stores for convenient access

@@ -75,9 +75,11 @@
 			// refreshes — so after the first load there is usually nothing to
 			// fill. backfillItemPictures() fetches it only when something is
 			// actually missing.
-			const reconcilePromise = replacementObligationsAPI.reconcile();
+			// Housekeeping only — the list does not wait on it. If it resolves
+			// anything, the realtime hub reports that like any other change.
+			void replacementObligationsAPI.reconcile();
 
-			const results = await Promise.allSettled([listPromise, reconcilePromise]);
+			const results = await Promise.allSettled([listPromise]);
 
 			if (loadId !== inFlightLoadId) return;
 
@@ -516,6 +518,22 @@
 
 	async function loadRequests(forceRefresh = false): Promise<void> {
 		await loadRequestsProgressive(forceRefresh);
+		adoptSyncBaseline();
+	}
+
+	/**
+	 * Record the list just loaded as the baseline for incremental sync, so the
+	 * next realtime event fetches only the rows that changed rather than the
+	 * whole list again. Skipped when the read failed and the cache is not current.
+	 */
+	function adoptSyncBaseline(): void {
+		if (!borrowRequestsAPI.isCachedListFresh(LIST_PARAMS)) return;
+
+		const cached = borrowRequestsAPI.peekCachedList(LIST_PARAMS);
+		if (!cached) return;
+
+		syncedRecords = cached.requests;
+		requestSync.prime(cached);
 	}
 
 	async function maybeOpenScannedRequestFromUrl(): Promise<void> {
@@ -681,7 +699,7 @@
 				const cached = borrowRequestsAPI.peekCachedList(LIST_PARAMS);
 				if (cached) {
 					syncedRecords = cached.requests;
-					await requestSync.sync(syncedRecords);
+					requestSync.prime(cached);
 				}
 				return;
 			}
