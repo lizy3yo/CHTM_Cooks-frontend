@@ -100,6 +100,27 @@
 	let pendingLoadTimer: ReturnType<typeof setTimeout> | null = null;
 
 	let activeTab = $state<Tab>('overview');
+
+	// Tab row: which sides have tabs scrolled out of view (drives the edge fades).
+	let tabsNav = $state<HTMLElement | null>(null);
+	let tabsOverflow = $state({ left: false, right: false });
+
+	function updateTabOverflow(): void {
+		if (!tabsNav) return;
+		const { scrollLeft, scrollWidth, clientWidth } = tabsNav;
+		tabsOverflow = {
+			left: scrollLeft > 1,
+			right: scrollLeft + clientWidth < scrollWidth - 1
+		};
+	}
+
+	$effect(() => {
+		if (!tabsNav) return;
+		updateTabOverflow();
+		const observer = new ResizeObserver(updateTabOverflow);
+		observer.observe(tabsNav);
+		return () => observer.disconnect();
+	});
 	let period = $state<AnalyticsPeriod>('month');
 	let datePreset = $state<DatePreset>('mtd');
 	let customFrom = $state(initialFrom);
@@ -1006,21 +1027,39 @@
 	</div>
 
 	<div class="rounded-xl border border-gray-200 bg-white shadow-sm" data-tour={tour('tabs')}>
-		<div class="border-b border-gray-200 px-4">
-			<nav class="flex gap-4 overflow-x-auto" aria-label="Report tabs">
+		<div class="relative border-b border-gray-200 px-2 sm:px-4">
+			<!-- All tabs fit on a desktop. On narrower screens the row scrolls
+			     sideways without a scrollbar; a fade marks the side with more. -->
+			<nav
+				bind:this={tabsNav}
+				onscroll={updateTabOverflow}
+				class="-mb-px flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+				aria-label="Report tabs"
+			>
 				{#each [{ id: 'overview', label: 'Overview', icon: BarChart3 }, { id: 'borrowing', label: 'Borrowing Analytics', icon: Package }, { id: 'inventory', label: 'Inventory', icon: Package }, { id: 'returns', label: 'Returned Items', icon: Package }, { id: 'students', label: 'Student Risk', icon: Users }, { id: 'processed', label: 'Processed Transactions', icon: FileText }, { id: 'walk-in', label: 'Walk-in Transactions', icon: Users }] as tab}
 					<button
-						onclick={() => (activeTab = tab.id as Tab)}
-						class="flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition {activeTab ===
+						onclick={(e) => {
+							activeTab = tab.id as Tab;
+							e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+						}}
+						aria-current={activeTab === tab.id ? 'page' : undefined}
+						class="flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition {activeTab ===
 						tab.id
 							? 'border-pink-600 text-pink-600'
 							: 'border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900'}"
 					>
-						<tab.icon size={16} />
+						<!-- Laptop widths drop the icons so every tab still fits on one row. -->
+						<tab.icon size={16} class="lg:max-2xl:hidden" />
 						{tab.label}
 					</button>
 				{/each}
 			</nav>
+			{#if tabsOverflow.left}
+				<div class="pointer-events-none absolute inset-y-0 left-0 w-10 rounded-tl-xl bg-linear-to-r from-white to-transparent" aria-hidden="true"></div>
+			{/if}
+			{#if tabsOverflow.right}
+				<div class="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-tr-xl bg-linear-to-l from-white to-transparent" aria-hidden="true"></div>
+			{/if}
 		</div>
 
 		{#if (activeTab === 'overview' && overviewLoading) || (activeTab === 'borrowing' && borrowingLoading) || (activeTab === 'inventory' && inventoryLoading) || (activeTab === 'students' && studentRiskLoading)}
