@@ -229,9 +229,9 @@
 									</div>
 								</td>
 								<td class="px-4 py-3 text-right whitespace-nowrap">
-									<span class="font-medium text-gray-900">{row.daysKept ?? '—'}</span>
+									<span class="font-medium text-gray-900">{row.daysKept === null ? '—' : `${row.daysKept} ${row.daysKept === 1 ? 'day' : 'days'}`}</span>
 									{#if row.daysLate > 0}
-										<p class="text-xs font-medium text-red-600">{row.daysLate} late</p>
+										<p class="text-xs font-medium text-red-600">{row.daysLate} {row.daysLate === 1 ? 'day' : 'days'} late</p>
 									{:else}
 										<p class="text-xs text-emerald-600">On time</p>
 									{/if}
