@@ -456,15 +456,20 @@ export const inventoryCategoriesAPI = {
 };
 
 /**
- * Upload an image for inventory item
+ * Upload an image for inventory item. With `purpose: 'deed'` the file is a
+ * signed deed of donation, which may also be a PDF.
  */
-export async function uploadInventoryImage(file: File): Promise<{ success: boolean; url: string; filename: string }> {
+export async function uploadInventoryImage(
+	file: File,
+	purpose?: 'deed'
+): Promise<{ success: boolean; url: string; filename: string }> {
 	if (!browser) {
 		throw new Error('File upload only available in browser');
 	}
 
 	const formData = new FormData();
 	formData.append('file', file);
+	if (purpose) formData.append('purpose', purpose);
 	const maxRetries = 4;
 	let lastError: Error | null = null;
 

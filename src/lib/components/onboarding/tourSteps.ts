@@ -139,7 +139,7 @@ const student: TourStep[] = [
 		target: '[data-tour="student-catalog-search"]',
 		placement: 'bottom',
 		title: 'Find what you need',
-		body: 'Search by name, description, or code to quickly locate an item. Note: you must be enrolled in a class code before you can request equipment.'
+		body: 'Search by name or description to quickly locate an item. Note: you must be enrolled in a class code before you can request equipment.'
 	},
 	{
 		route: '/student/catalog',
@@ -411,7 +411,7 @@ export const studentUnenrolled: TourStep[] = [
 		target: '[data-tour="student-catalog-search"]',
 		placement: 'bottom',
 		title: 'Find what you need',
-		body: 'Search by name, description, or code to see what the lab has. Feel free to note the items you plan to borrow once you can.'
+		body: 'Search by name or description to see what the lab has. Feel free to note the items you plan to borrow once you can.'
 	},
 	{
 		route: '/student/catalog',
@@ -515,7 +515,7 @@ export const studentPending: TourStep[] = [
 		target: '[data-tour="student-catalog-search"]',
 		placement: 'bottom',
 		title: 'Find what you need',
-		body: 'Search by name, description, or code. Once your current request is resolved, requesting reopens and you can add items again.'
+		body: 'Search by name or description. Once your current request is resolved, requesting reopens and you can add items again.'
 	},
 
 	// ── My Requests (the page that matters right now) ────────────────────────
@@ -600,7 +600,7 @@ const instructor: TourStep[] = [
 		target: '[data-tour="instructor-inventory-search"]',
 		placement: 'bottom',
 		title: 'Find an item',
-		body: 'Search by name, description, or code, and filter by category or status to quickly locate any item.'
+		body: 'Search by name or description, and filter by category or status to quickly locate any item.'
 	},
 
 	// ── Student Requests ─────────────────────────────────────────────────────
@@ -770,7 +770,7 @@ const custodian: TourStep[] = [
 		target: '[data-tour="custodian-inventory-search"]',
 		placement: 'bottom',
 		title: 'Find an item',
-		body: 'Search by name, description, or code, and filter by category or status to quickly locate any item.'
+		body: 'Search by name or description, and filter by category or status to quickly locate any item.'
 	},
 
 	// ── Requests & Borrowed Items ────────────────────────────────────────────
@@ -977,7 +977,7 @@ const admin: TourStep[] = [
 		target: '[data-tour="admin-inventory-search"]',
 		placement: 'bottom',
 		title: 'Find an item',
-		body: 'Search by name, description, or code, and narrow the list with the category, status, and sort filters.'
+		body: 'Search by name or description, and narrow the list with the category, status, and sort filters.'
 	},
 
 	// ── Borrow Transactions ──────────────────────────────────────────────────

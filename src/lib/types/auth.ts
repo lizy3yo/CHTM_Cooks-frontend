@@ -14,6 +14,12 @@ export interface UserResponse {
 	yearLevel?: string;
 	block?: string;
 	agreedToTerms?: boolean;
+	/** Registrar's roster fields, for students loaded from the enrollment list. */
+	studentNumber?: string | null;
+	program?: string | null;
+	enrollmentStatus?: string | null;
+	/** True while the account is still on its starting password. */
+	mustChangePassword?: boolean;
 	/**
 	 * When the user finished (or skipped) the guided tour. Null/absent means the
 	 * account has never been through it — true for every newly created or

@@ -668,7 +668,7 @@
 								>
 								<select id="create-block" bind:value={createForm.block} class={inputCls}>
 									<option value="">Select block…</option>
-									<option>A</option><option>B</option><option>C</option><option>D</option>
+									{#each ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as letter (letter)}<option>{letter}</option>{/each}
 								</select>
 								{#if createErrors.block}<p class={errorCls}>{createErrors.block}</p>{/if}
 							</div>
@@ -811,7 +811,7 @@
 									<label for="edit-block" class="block text-sm font-medium text-pink-800">Block</label>
 									<select id="edit-block" bind:value={editForm.block} class={inputCls}>
 										<option value="">Select block…</option>
-										<option>A</option><option>B</option><option>C</option><option>D</option>
+										{#each ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as letter (letter)}<option>{letter}</option>{/each}
 									</select>
 								</div>
 							</div>
@@ -1273,7 +1273,9 @@
 										</td>
 										<td class="px-6 py-4 text-sm text-gray-600">
 											{#if user.yearLevel && user.block}
-												<span class="font-medium">{user.yearLevel}</span> · Block {user.block}
+												<span class="font-medium">{user.yearLevel}</span> · Block {user.block}{#if user.program}
+													· {user.program}{/if}{#if user.enrollmentStatus && user.enrollmentStatus !== 'Officially Enrolled'}
+													· <span class="font-medium text-amber-700">{user.enrollmentStatus}</span>{/if}
 											{:else}
 												<span class="text-gray-400">—</span>
 											{/if}
@@ -1378,7 +1380,8 @@
 											user.isActive
 										)}">{user.isActive ? 'Active' : 'Inactive'}</span
 									>
-									{#if user.yearLevel}<span>{user.yearLevel} · Block {user.block}</span>{/if}
+									{#if user.yearLevel}<span>{user.yearLevel} · Block {user.block}{user.program ? ` · ${user.program}` : ''}</span>{/if}
+									{#if user.enrollmentStatus && user.enrollmentStatus !== 'Officially Enrolled'}<span class="font-medium text-amber-700">{user.enrollmentStatus}</span>{/if}
 									<span>Last login: {timeAgo(user.lastLogin)}</span>
 								</div>
 							</div>

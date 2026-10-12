@@ -32,8 +32,53 @@ export interface DonationResponse {
 	deedStatus?: 'pending' | 'signed';
 	deedFileUrl?: string | null;
 	deedSignedAt?: string | null;
+	/** The deed this line was given under, shared by every item on it. */
+	deed?: DonationDeed | null;
+	/** An amount on an official receipt: recorded, but nothing added to stock. */
+	receiptOnly?: boolean;
 	createdAt: string;
 	updatedAt: string;
+}
+
+export type DonationProgram = 'BSHM' | 'BSTM';
+
+/** One deed of donation: who gave it, for which program, and the signed copy. */
+export interface DonationDeed {
+	id: string;
+	reference: string;
+	representativeName: string;
+	submitterEmail?: string | null;
+	studentId?: string | null;
+	program?: DonationProgram | null;
+	dateDonated?: string | null;
+	orNumber?: string | null;
+	/** The total written on the deed, which may differ from the item prices. */
+	declaredTotal?: number | null;
+	notes?: string | null;
+	/** Signed deed files (PDF or image). */
+	files: string[];
+}
+
+export interface DeedItemInput {
+	itemName: string;
+	quantity: number;
+	unitCost?: number;
+	unit?: string;
+	/** Category a new inventory item is filed under. */
+	toolsOrEquipment?: 'Tools' | 'Equipment';
+}
+
+/** A deed with its items, or with only an OR number and an amount. */
+export interface CreateDeedRequest {
+	representativeName: string;
+	email?: string;
+	program: DonationProgram;
+	dateDonated: string;
+	orNumber?: string;
+	declaredTotal?: number;
+	notes?: string;
+	files?: string[];
+	items: DeedItemInput[];
 }
 
 /** Donation that creates a new inventory item */
@@ -261,9 +306,20 @@ export const donationsAPI = {
 	/**
 	 * Record the uploaded signed deed of donation, marking the deed as signed.
 	 */
-	async attachDeed(id: string, fileUrl: string): Promise<DonationResponse> {
-		const res = await fetch(`/api/donations/${id}/deed`, getFetchOptions('POST', { fileUrl }));
+	async attachDeed(id: string, fileUrls: string | string[]): Promise<DonationResponse> {
+		const body = Array.isArray(fileUrls) ? { fileUrls } : { fileUrl: fileUrls };
+		const res = await fetch(`/api/donations/${id}/deed`, getFetchOptions('POST', body));
 		const data = await handleResponse<DonationResponse>(res);
+		invalidateAllCaches();
+		return data;
+	},
+
+	/**
+	 * Record a deed of donation with all of its items.
+	 */
+	async createDeed(payload: CreateDeedRequest): Promise<{ deed: DonationDeed; donations: DonationResponse[] }> {
+		const res = await fetch('/api/donations/deeds', getFetchOptions('POST', payload));
+		const data = await handleResponse<{ deed: DonationDeed; donations: DonationResponse[] }>(res);
 		invalidateAllCaches();
 		return data;
 	},

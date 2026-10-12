@@ -32,6 +32,12 @@ const ALLOWED_MIME_TYPES = new Set([
 	'image/avif'
 ]);
 
+/**
+ * A signed deed of donation may also be a scanned PDF. Sent with
+ * `purpose=deed`; every other upload stays images only.
+ */
+const DEED_MIME_TYPES = new Set([...ALLOWED_MIME_TYPES, 'application/pdf']);
+
 /** 10 MiB maximum upload size */
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -75,11 +81,14 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	}
 
 	// ── Server-side validation ────────────────────────────────────────────────
-	if (!ALLOWED_MIME_TYPES.has(file.type)) {
+	const isDeed = formData.get('purpose') === 'deed';
+	if (!(isDeed ? DEED_MIME_TYPES : ALLOWED_MIME_TYPES).has(file.type)) {
 		return json(
 			{
 				error: 'Validation failed',
-				message: `File type "${file.type}" is not allowed. Upload a JPEG, PNG, WebP, GIF, or AVIF image.`
+				message: isDeed
+					? `File type "${file.type}" is not allowed. Upload a PDF or an image of the signed deed.`
+					: `File type "${file.type}" is not allowed. Upload a JPEG, PNG, WebP, GIF, or AVIF image.`
 			},
 			{ status: 422 }
 		);
@@ -119,7 +128,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 	try {
 		const cloudinaryRes = await fetch(
-			`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+			`https://api.cloudinary.com/v1_1/${cloudName}/${isDeed ? 'auto' : 'image'}/upload`,
 			{
 				method: 'POST',
 				body: uploadForm

@@ -5,6 +5,7 @@
 	import { loadingStore } from '$lib/stores/loading';
 	import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
 	import ConfirmDialogContainer from '$lib/components/ui/ConfirmDialogContainer.svelte';
+	import ForcePasswordChange from '$lib/components/auth/ForcePasswordChange.svelte';
 	import type { Snippet } from 'svelte';
 	
 	interface Props {
@@ -30,7 +31,10 @@
 	});
 </script>
 
-{#if $isAuthenticated}
+{#if $isAuthenticated && $authStore.user?.mustChangePassword}
+	<!-- An account on its starting password chooses its own before the app loads. -->
+	<ForcePasswordChange user={$authStore.user} />
+{:else if $isAuthenticated}
 	{@render children()}
 {/if}
 

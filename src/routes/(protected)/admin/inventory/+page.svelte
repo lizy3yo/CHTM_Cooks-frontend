@@ -3989,7 +3989,7 @@ Kitchen Stove,4-burner with oven,Gas regulator,,2,1,2,Station 1`;
 								<div class="relative w-full">
 									<input
 										type="text"
-										placeholder="Search by name, description, or code..."
+										placeholder="Search by name or description..."
 										bind:value={query}
 										class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pr-4 pl-10 text-sm shadow-sm transition-all hover:border-gray-300 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none"
 									/>

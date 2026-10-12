@@ -2,8 +2,9 @@
 	/**
 	 * Declared value and deed of donation for one donation record.
 	 *
-	 * The deed is printed from the record, signed on paper, and a photo or scan
-	 * of the signed copy is uploaded here, which marks the deed as signed.
+	 * The deed is printed from the record, signed on paper, and the signed copy
+	 * (PDF or photo, up to 5 files) is uploaded here, which marks the deed as
+	 * signed for every item given under it.
 	 */
 	import { Printer, Upload, FileCheck, LoaderCircle } from 'lucide-svelte';
 	import { donationsAPI, type DonationResponse } from '$lib/api/donations';
@@ -20,8 +21,15 @@
 
 	let { donation, readOnly = false, onUpdated }: Props = $props();
 
+	const MAX_FILES = 5;
+	const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
 	let uploading = $state(false);
 	const signed = $derived(donation.deedStatus === 'signed');
+	/** Every signed file on the deed; older records hold a single URL. */
+	const signedFiles = $derived(
+		donation.deed?.files?.length ? donation.deed.files : donation.deedFileUrl ? [donation.deedFileUrl] : []
+	);
 
 	function print(): void {
 		if (!printDeedOfDonation(donation)) {
@@ -30,14 +38,27 @@
 	}
 
 	async function uploadSigned(input: HTMLInputElement): Promise<void> {
-		const file = input.files?.[0];
+		const picked = Array.from(input.files ?? []);
 		input.value = '';
-		if (!file) return;
+		if (picked.length === 0) return;
+
+		if (signedFiles.length + picked.length > MAX_FILES) {
+			toastStore.error(`A deed holds up to ${MAX_FILES} files.`, 'Too many files');
+			return;
+		}
+		const tooBig = picked.find((f) => f.size > MAX_FILE_BYTES);
+		if (tooBig) {
+			toastStore.error(`${tooBig.name} is larger than 10 MB.`, 'File too large');
+			return;
+		}
 
 		uploading = true;
 		try {
-			const uploaded = await uploadInventoryImage(file);
-			const updated = await donationsAPI.attachDeed(donation.id, uploaded.url);
+			const urls: string[] = [];
+			for (const file of picked) {
+				urls.push((await uploadInventoryImage(file, 'deed')).url);
+			}
+			const updated = await donationsAPI.attachDeed(donation.id, urls);
 			onUpdated?.(updated);
 			toastStore.success('The signed deed is on file.', 'Deed signed');
 		} catch (err) {
@@ -95,23 +116,33 @@
 				{#if uploading}
 					<LoaderCircle size={15} class="animate-spin" /> Uploading…
 				{:else}
-					<Upload size={15} /> {signed ? 'Replace signed copy' : 'Upload signed copy'}
+					<Upload size={15} /> {signed ? 'Add signed copy' : 'Upload signed copy'}
 				{/if}
-				<input type="file" accept="image/*" class="sr-only" disabled={uploading} onchange={(e) => uploadSigned(e.currentTarget)} />
+				<input
+					type="file"
+					accept="application/pdf,image/*"
+					multiple
+					class="sr-only"
+					disabled={uploading}
+					onchange={(e) => uploadSigned(e.currentTarget)}
+				/>
 			</label>
 		{/if}
-		{#if donation.deedFileUrl}
+		{#each signedFiles as url, i (url)}
 			<a
-				href={donation.deedFileUrl}
+				href={url}
 				target="_blank"
 				rel="noopener noreferrer"
 				class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
 			>
-				<FileCheck size={15} /> View signed deed
+				<FileCheck size={15} /> View signed deed{signedFiles.length > 1 ? ` ${i + 1}` : ''}
 			</a>
-		{/if}
+		{/each}
 	</div>
+	{#if donation.deed?.declaredTotal !== null && donation.deed?.declaredTotal !== undefined}
+		<p class="mt-2 text-xs text-gray-500">Total written on the deed: {peso(donation.deed.declaredTotal)}</p>
+	{/if}
 	{#if !readOnly && !signed}
-		<p class="mt-2 text-xs text-gray-500">Print the deed, have it signed, then upload a photo or scan of the signed page.</p>
+		<p class="mt-2 text-xs text-gray-500">Print the deed, have it signed, then upload a PDF or photo of the signed page.</p>
 	{/if}
 </section>

@@ -11,6 +11,7 @@
 	import { donationsAPI, type DonationResponse, type CreateDonationRequest } from '$lib/api/donations';
 	import { importsAPI, type DonationImportRow } from '$lib/api/imports';
 	import DonationDeedPanel from './DonationDeedPanel.svelte';
+	import DeedOfDonationModal from './DeedOfDonationModal.svelte';
 	import SpreadsheetImportModal, { type ImportColumn } from '$lib/components/ui/SpreadsheetImportModal.svelte';
 	import { peso } from '$lib/utils/deedOfDonation';
 	import { walkInTransactionsAPI, type WalkInTransactionRecord } from '$lib/api/walkInTransactions';
@@ -181,6 +182,8 @@
 
 	// --- Donation import (Excel / CSV) ---
 	let showDonationImport = $state(false);
+	// Deed of donation: one deed with all of its items (the college's form).
+	let showDeedModal = $state(false);
 	const DONATION_IMPORT_COLUMNS: ImportColumn[] = [
 		{ key: 'donorName', label: 'Donor', required: true, example: 'Hotel Sample Inc.', aliases: ['Donor Name', 'Donated By'] },
 		{ key: 'itemName', label: 'Item', required: true, example: 'Dinner Plate', aliases: ['Item Name', 'Name'] },
@@ -588,7 +591,9 @@
 					d.donorName.toLowerCase().includes(query) ||
 					d.itemName.toLowerCase().includes(query) ||
 					(d.purpose && d.purpose.toLowerCase().includes(query)) ||
-					(d.receiptNumber && d.receiptNumber.toLowerCase().includes(query))
+					(d.receiptNumber && d.receiptNumber.toLowerCase().includes(query)) ||
+					(d.deed?.reference && d.deed.reference.toLowerCase().includes(query)) ||
+					(d.deed?.orNumber && d.deed.orNumber.toLowerCase().includes(query))
 			);
 		}
 		return result;
@@ -1626,6 +1631,9 @@
 		{d.receiptNumber || `DON-${d.id.slice(0, 6).toUpperCase()}`}
 	</p>
 	<p class="mt-1 text-xs text-gray-500">{fmtDate(d.date || d.createdAt)}</p>
+	{#if d.deed && !d.receiptNumber?.startsWith(d.deed.reference)}
+		<p class="mt-0.5 font-mono text-[11px] text-gray-500">{d.deed.reference}</p>
+	{/if}
 {/snippet}
 
 {#snippet donItem(d: DonationResponse)}
@@ -1636,7 +1644,12 @@
 {/snippet}
 
 {#snippet donAction(d: DonationResponse)}
-	{#if d.inventoryAction === 'add_to_existing'}
+	{#if d.receiptOnly}
+		<span
+			class="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-amber-700"
+			>Receipt only</span
+		>
+	{:else if d.inventoryAction === 'add_to_existing'}
 		<span
 			class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-emerald-700"
 			>Added to stock</span
@@ -1723,9 +1736,16 @@
 				<button
 					type="button"
 					onclick={() => (showDonationModal = true)}
+					class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+				>
+					Log Single Item
+				</button>
+				<button
+					type="button"
+					onclick={() => (showDeedModal = true)}
 					class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700"
 				>
-					<Heart size={15} class="fill-white text-white" /> Log Item Donation
+					<Heart size={15} class="fill-white text-white" /> Log Deed of Donation
 				</button>
 			{/if}
 		</div>
@@ -3463,9 +3483,19 @@
 				{@render detailField('Quantity', `+${d.quantity} ${d.unit || (d.quantity === 1 ? 'unit' : 'units')}`)}
 				{@render detailField(
 					'Stock action',
-					d.inventoryAction === 'add_to_existing' ? 'Added to an existing inventory item' : 'Created a new inventory item'
+					d.receiptOnly
+						? 'Amount recorded, nothing added to stock'
+						: d.inventoryAction === 'add_to_existing'
+							? 'Added to an existing inventory item'
+							: 'Created a new inventory item'
 				)}
 				{@render detailField('Recorded by', d.recordedBy)}
+				{#if d.deed}
+					{@render detailField('Deed reference', d.deed.reference)}
+					{@render detailField('Program', d.deed.program)}
+					{@render detailField('Submitted by', d.deed.submitterEmail)}
+					{@render detailField('OR number', d.deed.orNumber)}
+				{/if}
 			</dl>
 		</section>
 
@@ -3492,6 +3522,14 @@
 		donDetailBody,
 		donDetailFooter
 	)}
+{/if}
+
+{#if showDeedModal}
+	<DeedOfDonationModal
+		itemNames={inventoryItems.filter((item) => !item.archived).map((item) => item.name)}
+		onClose={() => (showDeedModal = false)}
+		onSaved={refreshDonationsAfterImport}
+	/>
 {/if}
 
 {#if showDonationImport}
