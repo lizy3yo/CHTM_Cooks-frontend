@@ -37,6 +37,8 @@ export interface StudentIncident {
 	studentId: string;
 	type: IncidentType;
 	itemName: string;
+	/** The item's photo; null when it has none. */
+	picture?: string | null;
 	category: string | null;
 	quantity: number;
 	/** null for walk-ins, which have no replacement tracking. */
@@ -53,6 +55,8 @@ export interface PastDueReplacement {
 	studentId: string;
 	studentName: string;
 	itemName: string;
+	/** The item's photo; null when it has none. */
+	picture?: string | null;
 	type: IncidentType;
 	outstanding: number;
 	dueDate: string;

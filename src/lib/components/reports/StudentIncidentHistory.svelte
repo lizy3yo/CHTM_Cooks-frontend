@@ -7,7 +7,7 @@
 	 * Below it, unpaid replacements by age and the ones past their due date.
 	 */
 	import { untrack } from 'svelte';
-	import { Search, Download, ChevronRight, History, Receipt, AlertCircle } from 'lucide-svelte';
+	import { Search, Download, ChevronRight, History, Receipt, AlertCircle, Package } from 'lucide-svelte';
 	import {
 		studentIncidentsAPI,
 		type StudentIncident,
@@ -354,8 +354,19 @@
 									</button>
 								</td>
 								<td class="px-3 py-3 text-gray-700">
-									{p.itemName}
-									<span class="ml-1 text-xs {p.type === 'missing' ? 'text-red-600' : 'text-amber-600'}">({p.type})</span>
+									<div class="flex items-center gap-2.5">
+										{#if p.picture}
+											<img src={p.picture} alt="" loading="lazy" class="h-9 w-9 shrink-0 rounded-lg border border-gray-200 object-cover" />
+										{:else}
+											<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 text-gray-400" aria-hidden="true">
+												<Package size={16} />
+											</div>
+										{/if}
+										<span>
+											{p.itemName}
+											<span class="ml-1 text-xs {p.type === 'missing' ? 'text-red-600' : 'text-amber-600'}">({p.type})</span>
+										</span>
+									</div>
 								</td>
 								<td class="px-3 py-3 text-center font-semibold text-rose-700">{p.outstanding}</td>
 								<td class="px-3 py-3 text-gray-600">{fmtDate(p.dueDate)}</td>

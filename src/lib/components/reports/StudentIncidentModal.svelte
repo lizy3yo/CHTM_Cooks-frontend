@@ -2,7 +2,7 @@
 	/**
 	 * One student's full damage & missing history, newest first.
 	 */
-	import { X, Download, PackageX, Wrench, ClipboardList, Store } from 'lucide-svelte';
+	import { X, Download, Package, PackageX, Wrench, ClipboardList, Store } from 'lucide-svelte';
 	import type { StudentIncident, StudentIncidentSummary } from '$lib/api/studentIncidents';
 
 	interface Props {
@@ -118,8 +118,21 @@
 								{@const badge = STATUS_BADGE[i.status]}
 								<li class="rounded-xl border border-gray-200 p-3 sm:p-4">
 									<div class="flex items-start gap-3">
-										<div class="mt-0.5 rounded-lg p-2 {i.type === 'missing' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}">
-											{#if i.type === 'missing'}<PackageX class="h-4 w-4" />{:else}<Wrench class="h-4 w-4" />{/if}
+										<!-- The item's photo, with the kind of incident marked on its corner. -->
+										<div class="relative shrink-0">
+											{#if i.picture}
+												<img src={i.picture} alt={i.itemName} loading="lazy" class="h-12 w-12 rounded-lg border border-gray-200 object-cover" />
+											{:else}
+												<div class="flex h-12 w-12 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 text-gray-400" aria-hidden="true">
+													<Package class="h-5 w-5" />
+												</div>
+											{/if}
+											<span
+												class="absolute -right-1.5 -bottom-1.5 rounded-full p-1 ring-2 ring-white {i.type === 'missing' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}"
+												title={i.type === 'missing' ? 'Missing' : 'Damaged'}
+											>
+												{#if i.type === 'missing'}<PackageX class="h-3 w-3" />{:else}<Wrench class="h-3 w-3" />{/if}
+											</span>
 										</div>
 										<div class="min-w-0 flex-1">
 											<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
