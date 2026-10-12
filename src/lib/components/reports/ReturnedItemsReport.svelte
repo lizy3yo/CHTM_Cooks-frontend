@@ -12,6 +12,8 @@
 	import { downloadReturnedItemsExcel } from '$lib/utils/inventoryReportsExcel';
 	import { toastStore } from '$lib/stores/toast';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
+	import { opensDetail, DETAIL_HOVER } from './reportDetail.svelte';
+	import { returnedItemDetail } from './reportDetailBuilders';
 
 	interface Props {
 		/** The report's selected range (yyyy-mm-dd); null means the current month. */
@@ -202,7 +204,7 @@
 					</thead>
 					<tbody class="divide-y divide-gray-100 bg-white">
 						{#each pageRows as row (row.id)}
-							<tr class="align-top">
+							<tr class="align-top {DETAIL_HOVER}" {...opensDetail(() => returnedItemDetail(row, report?.rows ?? []), `View details for ${row.itemName}`)}>
 								<td class="px-4 py-3 whitespace-nowrap text-gray-700">
 									{fmtDate(row.returnedAt)}
 									<p class="font-mono text-xs text-gray-500">{row.requestCode}</p>
@@ -239,7 +241,11 @@
 									{#if hasDetail(row)}
 										<button
 											type="button"
-											onclick={() => (openRow = openRow === row.id ? null : row.id)}
+											onclick={(e) => {
+												// The row itself opens the details window.
+												e.stopPropagation();
+												openRow = openRow === row.id ? null : row.id;
+											}}
 											aria-expanded={openRow === row.id}
 											class="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-pink-700 hover:text-pink-900"
 										>

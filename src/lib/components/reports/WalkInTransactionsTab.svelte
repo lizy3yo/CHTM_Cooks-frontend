@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { Users, Search } from 'lucide-svelte';
+	import { opensDetail, DETAIL_HOVER } from './reportDetail.svelte';
+	import { walkInDetail } from './reportDetailBuilders';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import type { WalkInSummary, WalkInReportTransaction } from '$lib/api/analyticsReports';
 
@@ -132,7 +134,7 @@
 				</thead>
 				<tbody class="divide-y divide-gray-100 bg-white">
 					{#each pagedRows as w (w.id)}
-						<tr class="align-top hover:bg-gray-50/60">
+						<tr class="align-top {DETAIL_HOVER}" {...opensDetail(() => walkInDetail(w), `View the walk-in by ${w.studentName || 'Unknown'}`)}>
 							<td class="px-4 py-3">
 								<div class="font-medium text-gray-900">{w.studentName || 'Unknown'}</div>
 								<div class="text-xs text-gray-500">{personLine(w)}</div>

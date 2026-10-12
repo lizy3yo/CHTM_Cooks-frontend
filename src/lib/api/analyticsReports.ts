@@ -50,6 +50,7 @@ export interface ItemBorrowed {
 	id: string;
 	name: string;
 	category: string;
+	picture?: string | null;
 	totalQuantity: number;
 	borrowCount: number;
 }
@@ -59,6 +60,12 @@ export interface BorrowedItemEntry {
 	requestId: string;
 	requestDate: string;
 	requestStatus: string;
+	borrowDate?: string | null;
+	returnDate?: string | null;
+	returnedAt?: string | null;
+	purpose?: string | null;
+	itemId?: string | null;
+	picture?: string | null;
 	name: string;
 	category: string;
 	quantity: number;
@@ -138,6 +145,7 @@ export interface EomVarianceItem {
 	_id: string;
 	name: string;
 	category: string;
+	picture?: string | null;
 	quantity: number;
 	eomCount: number;
 	variance: number;
@@ -198,6 +206,13 @@ export interface StockAdjustmentEntry {
 	notes: string;
 	createdAt: string;
 	date: string;
+	/** For the details window. */
+	itemId?: string | null;
+	picture?: string | null;
+	adjustedBy?: string | null;
+	adjustedByRole?: string | null;
+	countBefore?: number | null;
+	countAfter?: number | null;
 }
 
 export interface DonationRecord {
@@ -216,6 +231,22 @@ export interface DonationRecord {
 	unitCost?: number | null;
 	totalValue?: number | null;
 	deedStatus?: 'pending' | 'signed';
+	/** For the details window: the item's photo and the deed it was given under. */
+	inventoryItemId?: string | null;
+	picture?: string | null;
+	recordedBy?: string | null;
+	deed?: {
+		id: string;
+		reference: string;
+		representativeName: string;
+		submitterEmail?: string | null;
+		program?: string | null;
+		dateDonated?: string | null;
+		orNumber?: string | null;
+		declaredTotal?: number | null;
+		notes?: string | null;
+		files: string[];
+	} | null;
 }
 
 export interface ReplacementSummary {
@@ -307,7 +338,7 @@ export interface WalkInReportTransaction {
 	status: 'borrowed' | 'returned' | 'missing';
 	returnedAt?: string | null;
 	notes?: string | null;
-	items: { name: string; quantity: number; category: string }[];
+	items: { name: string; quantity: number; category: string; picture?: string | null; inspectionStatus?: string | null }[];
 }
 
 export interface AnalyticsReport {
@@ -372,7 +403,7 @@ interface CacheEntry {
 }
 
 const CLIENT_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours - aligned with server cache and session timeout
-const CLIENT_CACHE_VERSION = 'v13';
+const CLIENT_CACHE_VERSION = 'v14';
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<AnalyticsReport>>();
 

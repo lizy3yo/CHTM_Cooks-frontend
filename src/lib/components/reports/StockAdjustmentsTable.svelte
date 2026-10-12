@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { StockAdjustmentEntry } from '$lib/api/analyticsReports';
 	import { ClipboardList, ChevronLeft, ChevronRight } from 'lucide-svelte';
+	import { opensDetail, DETAIL_HOVER } from './reportDetail.svelte';
+	import { stockAdjustmentDetail } from './reportDetailBuilders';
 
 	interface Props {
 		adjustments: StockAdjustmentEntry[];
@@ -72,7 +74,7 @@
 					</tr>
 				{:else}
 					{#each paged as adj (adj.id)}
-						<tr class="hover:bg-gray-50">
+						<tr class={DETAIL_HOVER} {...opensDetail(() => stockAdjustmentDetail(adj), `View details for the ${adj.itemName} adjustment`)}>
 							<td class="px-4 py-3 text-sm font-semibold text-gray-900">{adj.itemName}</td>
 							<td class="px-4 py-3 text-sm">
 								<span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {adj.quantity > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">

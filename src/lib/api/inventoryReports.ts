@@ -26,6 +26,8 @@ export interface VarianceOverEntry {
 	reason: string | null;
 	unitCost?: number | null;
 	deedStatus?: 'pending' | 'signed' | null;
+	/** The item's photo, for the details window. */
+	picture?: string | null;
 }
 
 export interface VarianceUnderEntry {
@@ -50,6 +52,8 @@ export interface VarianceUnderEntry {
 	carriedFrom: string | null;
 	/** The 3-day disciplinary notice has gone out. */
 	noticeSent: boolean;
+	/** The item's photo, for the details window. */
+	picture?: string | null;
 }
 
 export interface VarianceUnexplained {
@@ -97,6 +101,9 @@ export interface ReturnedItemRow {
 	studentId: string | null;
 	studentName: string;
 	itemName: string;
+	itemId?: string | null;
+	/** The item's photo, for the details window. */
+	picture?: string | null;
 	category: string | null;
 	quantity: number;
 	good: number;

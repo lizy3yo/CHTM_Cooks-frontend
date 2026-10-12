@@ -9,7 +9,9 @@
 	 * begins empty again, while Under keeps running until every unit is back.
 	 */
 	import { untrack } from 'svelte';
-	import { Search, Download, AlertCircle, ChevronLeft, ChevronRight, Scale, TriangleAlert } from 'lucide-svelte';
+	import { Search, Download, AlertCircle, ChevronLeft, ChevronRight, Scale, TriangleAlert, Package } from 'lucide-svelte';
+	import { openReportDetail, DETAIL_HOVER } from './reportDetail.svelte';
+	import { overEntryDetail, underEntryDetail } from './reportDetailBuilders';
 	import {
 		inventoryReportsAPI,
 		type InventoryVarianceReport,
@@ -332,7 +334,25 @@
 		{:else}
 			<ul class="mt-3 divide-y divide-gray-100 rounded-lg border border-gray-200">
 				{#each pageRows as entry (entry.id)}
-					<li class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 px-4 py-3 sm:grid-cols-[minmax(0,14rem)_4rem_minmax(0,1fr)]">
+					<li>
+						<button
+							type="button"
+							onclick={() =>
+								openReportDetail(
+									tab === 'over'
+										? overEntryDetail(entry as VarianceOverEntry, report?.monthLabel ?? '')
+										: underEntryDetail(entry as VarianceUnderEntry)
+								)}
+							aria-label="View details for {entry.itemName}"
+							class="grid w-full grid-cols-[2.5rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-4 py-3 text-left sm:grid-cols-[2.5rem_minmax(0,14rem)_4rem_minmax(0,1fr)] {DETAIL_HOVER}"
+						>
+						{#if entry.picture}
+							<img src={entry.picture} alt="" loading="lazy" class="h-10 w-10 rounded-lg border border-gray-200 object-cover" />
+						{:else}
+							<div class="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 text-gray-400" aria-hidden="true">
+								<Package size={18} />
+							</div>
+						{/if}
 						<div class="min-w-0">
 							<p class="truncate text-sm font-semibold text-gray-900" title={entry.itemName}>{entry.itemName}</p>
 							<p class="truncate text-xs text-gray-500">{entry.category ?? 'Uncategorized'}</p>
@@ -340,7 +360,7 @@
 						<p class="text-right text-base font-bold tabular-nums sm:text-left {tab === 'over' ? 'text-emerald-700' : 'text-red-700'}">
 							{tab === 'over' ? '+' : '−'}{entry.quantity}
 						</p>
-						<div class="col-span-2 min-w-0 sm:col-span-1">
+						<div class="col-span-3 min-w-0 sm:col-span-1">
 							{#if tab === 'over'}
 								{@const e = entry as VarianceOverEntry}
 								<span class="inline-block rounded-full px-2 py-0.5 text-xs font-semibold {SOURCE_STYLE[e.source]}">
@@ -355,6 +375,7 @@
 								<p class="mt-1 text-xs text-gray-600">{underDetail(e)}</p>
 							{/if}
 						</div>
+						</button>
 					</li>
 				{/each}
 			</ul>

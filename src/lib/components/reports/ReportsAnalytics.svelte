@@ -45,6 +45,9 @@
 	import BorrowingDetailModal from '$lib/components/reports/BorrowingDetailModal.svelte';
 	import StudentRiskDetailModal from '$lib/components/reports/StudentRiskDetailModal.svelte';
 	import StockAdjustmentDetailModal from '$lib/components/reports/StockAdjustmentDetailModal.svelte';
+	import ReportDetailModal from '$lib/components/reports/ReportDetailModal.svelte';
+	import { opensDetail, statusBadge, DETAIL_HOVER, type ReportDetail } from '$lib/components/reports/reportDetail.svelte';
+	import { borrowedItemDetail, overdueDetail, requestsDetail, studentsDetail } from '$lib/components/reports/reportDetailBuilders';
 	import WalkInTransactionsTab from '$lib/components/reports/WalkInTransactionsTab.svelte';
 	import StudentIncidentHistory from '$lib/components/reports/StudentIncidentHistory.svelte';
 	import InventoryVarianceReport from '$lib/components/reports/InventoryVarianceReport.svelte';
@@ -170,6 +173,63 @@
 	}
 
 	const numberFmt = new Intl.NumberFormat();
+
+	// ── Details behind the figures ──────────────────────────────────────────
+	/** Every request line in the period; the full report carries it. */
+	const detailEntries = $derived(report?.borrowRequests?.itemEntries ?? []);
+
+	/** Items whose count is above or below the month's starting count. */
+	function varianceItemsDetail(over: boolean): ReportDetail {
+		const items = (report?.inventory?.eomVariance ?? []).filter((i) => (over ? i.variance > 0 : i.variance < 0));
+		return {
+			title: over ? 'Items over the starting count' : 'Items under the starting count',
+			subtitle: 'Current count against the month\'s starting count',
+			stat: {
+				label: over ? 'Units over' : 'Units under',
+				value: numberFmt.format(Math.abs(items.reduce((sum, i) => sum + i.variance, 0))),
+				tone: over ? 'good' : 'bad'
+			},
+			sections: [
+				{
+					title: 'Items',
+					empty: report ? 'No items in this group.' : 'The item list is still loading. Try again in a moment.',
+					rows: items.map((i) => ({
+						picture: i.picture ?? null,
+						title: i.name,
+						subtitle: i.category || 'Uncategorized',
+						meta: `Now ${i.quantity} · started at ${i.eomCount}`,
+						right: `${i.variance > 0 ? '+' : ''}${i.variance}`
+					}))
+				}
+			]
+		};
+	}
+
+	function inventoryCountDetail(label: string): ReportDetail {
+		return {
+			title: label === 'Current' ? 'Current stock' : 'Starting count',
+			subtitle: 'Inventory compare',
+			stat: {
+				label: label === 'Current' ? 'Units on record now' : 'Units at the start of the month',
+				value: numberFmt.format(label === 'Current' ? inventorySummary.currentCount : inventorySummary.eomCount)
+			},
+			fields: [
+				{ label: 'Current count', value: numberFmt.format(inventorySummary.currentCount) },
+				{ label: 'Starting count', value: numberFmt.format(inventorySummary.eomCount) },
+				{ label: 'Donated units', value: numberFmt.format(inventorySummary.donations ?? 0) },
+				{ label: 'Required items', value: numberFmt.format(inventorySummary.requiredCount ?? 0) },
+				{ label: 'Low on stock', value: numberFmt.format(inventorySummary.lowStockCount ?? 0) },
+				{ label: 'Out of stock', value: numberFmt.format(inventorySummary.outOfStockCount ?? 0) },
+				{ label: 'Units added by adjustment', value: numberFmt.format(inventorySummary.stockAdjustmentsAdded ?? 0) },
+				{ label: 'Units removed by adjustment', value: numberFmt.format(inventorySummary.stockAdjustmentsDeducted ?? 0) }
+			]
+		};
+	}
+
+	const trustLine = (s: { requestsTotal?: number; incidents?: number; trustTierLabel?: string }) => ({
+		meta: `${s.requestsTotal ?? 0} requests · ${s.incidents ?? 0} incidents`,
+		...(s.trustTierLabel ? { badge: { label: s.trustTierLabel, tone: 'neutral' as const } } : {})
+	});
 
 	/** yyyy-mm-dd in the user's own timezone; toISOString() is UTC and can shift the day. */
 	function localISO(d: Date): string {
@@ -1092,7 +1152,10 @@
 				{#if activeTab === 'overview'}
 					<div data-tab-panel="overview" class="space-y-6">
 						<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-tour={tour('stats')}>
-							<div class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm hover:shadow-md sm:p-5">
+							<div
+								class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm hover:shadow-md sm:p-5 {DETAIL_HOVER}"
+								{...opensDetail(() => requestsDetail('Total Requests', formatRangeLabel(), detailEntries), 'View details for Total Requests')}
+							>
 								<div class="flex items-start justify-between">
 									<div>
 										<p class="text-sm font-semibold text-gray-700">Total Requests</p>
@@ -1106,7 +1169,10 @@
 									</div>
 								</div>
 							</div>
-							<div class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm hover:shadow-md sm:p-5">
+							<div
+								class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm hover:shadow-md sm:p-5 {DETAIL_HOVER}"
+								{...opensDetail(() => requestsDetail('Returned Requests', `${returnRate}% of requests in ${formatRangeLabel()}`, detailEntries, (e) => e.requestStatus === 'returned', statusBadge('returned')), 'View details for Return Rate')}
+							>
 								<div class="flex items-start justify-between">
 									<div>
 										<p class="text-sm font-semibold text-gray-700">Return Rate</p>
@@ -1120,7 +1186,10 @@
 									</div>
 								</div>
 							</div>
-							<div class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm hover:shadow-md sm:p-5">
+							<div
+								class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm hover:shadow-md sm:p-5 {DETAIL_HOVER}"
+								{...opensDetail(() => overdueDetail(report?.borrowRequests?.overdueRequests ?? []), 'View details for Overdue Items')}
+							>
 								<div class="flex items-start justify-between">
 									<div>
 										<p class="text-sm font-semibold text-gray-700">Overdue Items</p>
@@ -1179,7 +1248,18 @@
 										<div class="space-y-2">
 											{#each statusChartSeries as row}
 												<div
-													class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2"
+													class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 {DETAIL_HOVER}"
+													{...opensDetail(
+														() =>
+															requestsDetail(
+																statusBadge(row.status).label,
+																`Requests with this status in ${formatRangeLabel()}`,
+																detailEntries,
+																(e) => e.requestStatus === row.status,
+																statusBadge(row.status)
+															),
+														`View ${row.status.replace(/_/g, ' ')} requests`
+													)}
 												>
 													<div class="flex items-center gap-2">
 														<span class="h-2.5 w-2.5 rounded-full" style={`background:${row.color}`}
@@ -1225,7 +1305,10 @@
 										</div>
 									{:else}
 										{#each topBorrowedOverview as item}
-											<div>
+											<div
+												class="-mx-2 rounded-lg px-2 py-1 {DETAIL_HOVER}"
+												{...opensDetail(() => borrowedItemDetail(item, detailEntries), `View who borrowed ${item.name}`)}
+											>
 												<div class="mb-1 flex items-center justify-between">
 													<p class="truncate text-sm font-medium text-gray-800">{item.name}</p>
 													<p class="text-xs font-semibold text-pink-700">{item.totalQuantity}</p>
@@ -1258,7 +1341,18 @@
 										</p>
 										<div class="space-y-2">
 											{#each [{ label: 'Current', value: inventorySummary.currentCount, color: 'bg-gray-700' }, { label: 'EOM', value: inventorySummary.eomCount, color: 'bg-slate-500' }, { label: 'Over (+)', value: inventoryOverTotal, color: 'bg-emerald-500' }, { label: 'Variance (-)', value: Math.abs(inventoryShortTotal), color: 'bg-rose-500' }] as row}
-												<div class="flex items-center gap-2">
+												<div
+													class="-mx-2 flex items-center gap-2 rounded-lg px-2 py-1 {DETAIL_HOVER}"
+													{...opensDetail(
+														() =>
+															row.label === 'Over (+)'
+																? varianceItemsDetail(true)
+																: row.label === 'Variance (-)'
+																	? varianceItemsDetail(false)
+																	: inventoryCountDetail(row.label),
+														`View details for ${row.label}`
+													)}
+												>
 													<p class="w-24 text-xs font-medium text-gray-600">{row.label}</p>
 													<div class="h-2.5 flex-1 rounded-full bg-gray-100">
 														<div
@@ -1280,7 +1374,19 @@
 										</p>
 										<div class="space-y-2">
 											{#each trustTierBreakdown as tier}
-												<div class="flex items-center gap-2">
+												<div
+													class="-mx-2 flex items-center gap-2 rounded-lg px-2 py-1 {DETAIL_HOVER}"
+													{...opensDetail(
+														() =>
+															studentsDetail(
+																`${tier.label} trust`,
+																'Students in this trust tier',
+																studentTrustScores.filter((s) => s.trustTier === tier.key),
+																trustLine
+															),
+														`View ${tier.label} students`
+													)}
+												>
 													<p class="w-24 text-xs font-medium text-gray-600">{tier.label}</p>
 													<div class="h-2.5 flex-1 rounded-full bg-gray-100">
 														<div
@@ -1317,7 +1423,10 @@
 									</div>
 
 									<div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-										<div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+										<div
+											class="rounded-xl border border-gray-200 bg-gray-50 p-4 {DETAIL_HOVER}"
+											{...opensDetail(() => requestsDetail('Total Requests', formatRangeLabel(), detailEntries), 'View all requests')}
+										>
 											<p class="text-sm text-gray-600">Total Requests</p>
 											<p class="mt-2 text-2xl font-bold text-gray-900">
 												{numberFmt.format(
@@ -1794,7 +1903,13 @@
 										</div>
 									{:else}
 										<div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-											<div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+											<div
+												class="rounded-xl border border-gray-200 bg-gray-50 p-4 {DETAIL_HOVER}"
+												{...opensDetail(
+													() => studentsDetail('Students', 'Every student with a trust score in this period', studentTrustScores, trustLine),
+													'View all students'
+												)}
+											>
 												<p class="text-sm text-gray-600">Students</p>
 												<p class="mt-2 text-2xl font-bold text-gray-900">
 													{numberFmt.format(studentTrustScores.length)}
@@ -1804,7 +1919,22 @@
 												<p class="text-sm text-gray-600">Average Trust Score</p>
 												<p class="mt-2 text-2xl font-bold text-pink-700">{averageTrustScore}</p>
 											</div>
-											<div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+											<div
+												class="rounded-xl border border-gray-200 bg-gray-50 p-4 {DETAIL_HOVER}"
+												{...opensDetail(
+													() =>
+														studentsDetail(
+															'High Incident Students',
+															'Students with the most damaged or missing items',
+															report?.studentRisk.highIncidentStudents ?? [],
+															(s) => ({
+																right: String(s.incidents ?? 0),
+																meta: `${s.damagedCount ?? 0} damaged · ${s.missingCount ?? 0} missing`
+															})
+														),
+													'View high incident students'
+												)}
+											>
 												<p class="text-sm text-gray-600">High Incident Students</p>
 												<p class="mt-2 text-2xl font-bold text-amber-700">
 													{numberFmt.format(report.studentRisk.highIncidentStudents.length)}
@@ -2061,6 +2191,7 @@
 		entries={report?.borrowRequests?.itemEntries ?? []}
 		onClose={() => (studentDetail = null)}
 	/>
+	<ReportDetailModal />
 	<StockAdjustmentDetailModal
 		open={!!adjDetail}
 		adj={adjDetail}

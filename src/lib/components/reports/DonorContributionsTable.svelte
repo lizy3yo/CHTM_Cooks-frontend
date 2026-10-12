@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { DonationRecord } from '$lib/api/analyticsReports';
 	import { Heart, ChevronLeft, ChevronRight, Search } from 'lucide-svelte';
+	import { opensDetail, DETAIL_HOVER } from './reportDetail.svelte';
+	import { donationDetail } from './reportDetailBuilders';
 
 	interface Props {
 		donations: DonationRecord[];
@@ -121,7 +123,7 @@
 					</tr>
 				{:else}
 					{#each paged as d (d.id)}
-						<tr class="hover:bg-gray-50">
+						<tr class={DETAIL_HOVER} {...opensDetail(() => donationDetail(d, donations), `View the donation from ${d.donorName}`)}>
 							<td class="px-4 py-3">
 								<div class="font-semibold text-gray-900">{d.donorName}</div>
 								<div class="text-xs text-gray-500">
