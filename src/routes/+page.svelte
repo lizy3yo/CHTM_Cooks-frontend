@@ -115,6 +115,8 @@
 		activeStep = index;
 	}
 
+	// The landing page is public, so it renders immediately and never waits on
+	// the session check. Signed-in visitors are redirected once it resolves.
 	$effect(() => {
 		if (!$isLoading && !authCheckComplete) {
 			authCheckComplete = true;
@@ -202,23 +204,7 @@
 	/>
 </svelte:head>
 
-{#if $isLoading}
-	<div class="loading-screen">
-		<div class="loading-inner">
-			<div class="loading-logo-wrap">
-				<div class="loading-glow"></div>
-				<img src={favicon} alt="CHTM Logo" class="loading-logo" />
-			</div>
-			<div class="loading-dots">
-				<span style="animation-delay:0ms"></span>
-				<span style="animation-delay:160ms"></span>
-				<span style="animation-delay:320ms"></span>
-			</div>
-		</div>
-	</div>
-{/if}
-
-<div class="page-root" class:hidden={$isLoading}>
+<div class="page-root">
 	<LandingNav />
 	<LandingHero />
 
@@ -742,61 +728,10 @@
 		font-family: 'Inter', system-ui, sans-serif;
 	}
 
-	/* Loading */
-	.loading-screen {
-		position: fixed;
-		inset: 0;
-		z-index: 200;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: #fff;
-	}
-	.loading-inner {
-		text-align: center;
-	}
-	.loading-logo-wrap {
-		position: relative;
-		width: 80px;
-		height: 80px;
-		margin: 0 auto 1rem;
-	}
-	.loading-glow {
-		position: absolute;
-		inset: -4px;
-		border-radius: 50%;
-		background: rgba(233, 30, 99, 0.18);
-		filter: blur(12px);
-		animation: glow 2s ease-in-out infinite;
-	}
-	.loading-logo {
-		width: 80px;
-		height: 80px;
-		position: relative;
-		z-index: 1;
-		animation: bounce 1s ease-in-out infinite alternate;
-	}
-	.loading-dots {
-		display: flex;
-		gap: 0.5rem;
-		justify-content: center;
-	}
-	.loading-dots span {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		background: #e91e63;
-		animation: dot 1s ease-in-out infinite;
-	}
-
 	/* Page root */
 	.page-root {
 		background: #fff;
 		min-height: 100vh;
-	}
-	.page-root.hidden {
-		opacity: 0;
-		pointer-events: none;
 	}
 
 	/* Sections */
@@ -2471,35 +2406,6 @@
 	}
 
 	/* Keyframes */
-	@keyframes glow {
-		0%,
-		100% {
-			opacity: 0.6;
-		}
-		50% {
-			opacity: 1;
-		}
-	}
-	@keyframes bounce {
-		from {
-			transform: translateY(0);
-		}
-		to {
-			transform: translateY(-8px);
-		}
-	}
-	@keyframes dot {
-		0%,
-		80%,
-		100% {
-			transform: scale(0.6);
-			opacity: 0.4;
-		}
-		40% {
-			transform: scale(1);
-			opacity: 1;
-		}
-	}
 
 	/* ══════════════════════════════════════════════════════════════
 	   MODERN CAROUSEL - Stacked Card Design
