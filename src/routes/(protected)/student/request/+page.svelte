@@ -217,8 +217,25 @@
 	let acknowledgeTerms = $state(false);
 	let selectedClassCodeId = $state<string>(''); // Required: Selected class code
 	let availableClassCodes = $state<ClassCodeResponse[]>([]); // Student's enrolled class codes
-	let loadingClassCodes = $state(false);
-	let hasNoEnrollment = $state(false); // Track if student has no class enrollment
+	/**
+	 * Where the enrollment check stands. "No classes yet" while the list is still
+	 * loading is not the same as "enrolled in none", and neither is a failed
+	 * check — only 'none' means the student truly has no class.
+	 */
+	let enrollmentStatus = $state<'loading' | 'enrolled' | 'none' | 'error'>('loading');
+	const checkingEnrollment = $derived(enrollmentStatus === 'loading');
+	const isNotEnrolled = $derived(enrollmentStatus === 'none');
+	const enrollmentCheckFailed = $derived(enrollmentStatus === 'error');
+	/** True until the student is known to be enrolled: blocks continuing and submitting. */
+	const enrollmentBlocksRequest = $derived(enrollmentStatus !== 'enrolled');
+	/** Why the request is blocked on enrollment, worded for the current state. */
+	const enrollmentMessage = $derived(
+		enrollmentStatus === 'loading'
+			? 'Still checking your class enrollment. Please wait a moment.'
+			: enrollmentStatus === 'error'
+				? "We couldn't check your class enrollment. Please retry."
+				: 'You must be enrolled in at least one class to request equipment.'
+	);
 	let showClassDropdown = $state(false);
 	let classSearchQuery = $state('');
 
@@ -421,7 +438,7 @@
 
 	// Notify and block when student is unenrolled
 	$effect(() => {
-		if (!hasNoEnrollment) {
+		if (!isNotEnrolled) {
 			hasShownEnrollmentDialog = false;
 			return;
 		}
@@ -536,8 +553,7 @@
 			}
 			if (!selectedClassCodeId || selectedClassCodeId.trim() === '')
 				stepErrors.classCode = 'Class code is required';
-			if (hasNoEnrollment || availableClassCodes.length === 0)
-				stepErrors.classCode = 'You must be enrolled in at least one class to submit requests.';
+			if (enrollmentBlocksRequest) stepErrors.classCode = enrollmentMessage;
 		} else if (currentStep === 3) {
 			if (!purposeDetails.trim()) stepErrors.purposeDetails = 'Please provide purpose details';
 		}
@@ -1099,8 +1115,16 @@
 
 	/** Whether the student may change their request list; explains why not when blocked. */
 	function canEditCart(): boolean {
-		if (hasNoEnrollment || availableClassCodes.length === 0) {
-			toastStore.error('You must be enrolled in a class to add items.', 'Restricted');
+		if (checkingEnrollment) {
+			toastStore.info(enrollmentMessage, 'One moment');
+			return false;
+		}
+
+		if (enrollmentBlocksRequest) {
+			toastStore.error(
+				isNotEnrolled ? 'You must be enrolled in a class to add items.' : enrollmentMessage,
+				'Restricted'
+			);
 			return false;
 		}
 
@@ -1281,8 +1305,8 @@
 		}
 
 		// Block submission if student has no enrollment
-		if (hasNoEnrollment || availableClassCodes.length === 0) {
-			errors.classCode = 'You must be enrolled in at least one class to submit equipment requests.';
+		if (enrollmentBlocksRequest) {
+			errors.classCode = enrollmentMessage;
 		}
 
 		// Block submission if student has unresolved replacement obligations
@@ -1540,8 +1564,7 @@
 	 * Industry-standard: Students must be enrolled in at least one class to submit requests
 	 */
 	async function loadStudentClassCodes() {
-		loadingClassCodes = true;
-		hasNoEnrollment = false;
+		enrollmentStatus = 'loading';
 
 		try {
 			// Fetch only the class codes where the student is enrolled
@@ -1562,7 +1585,7 @@
 
 			// Check if student has no enrollment
 			if (availableClassCodes.length === 0) {
-				hasNoEnrollment = true;
+				enrollmentStatus = 'none';
 				errors.classCode =
 					'You must be enrolled in at least one class to submit equipment requests.';
 				toastStore.error(
@@ -1570,22 +1593,21 @@
 					'Enrollment Required'
 				);
 			} else {
+				enrollmentStatus = 'enrolled';
+				if (errors.classCode) {
+					const { classCode: _cleared, ...rest } = errors;
+					errors = rest;
+				}
 				// Auto-select first class if only one is available
 				if (availableClassCodes.length === 1) {
 					selectedClassCodeId = availableClassCodes[0].id;
 				}
 			}
-
-			console.log('[CLASS-CODES] Loaded student class codes:', availableClassCodes.length);
 		} catch (error) {
+			// A failed check says nothing about enrollment, so don't claim the
+			// student isn't enrolled — offer a retry instead.
 			console.error('[CLASS-CODES] Failed to load class codes:', error);
-			hasNoEnrollment = true;
-			toastStore.error(
-				'Unable to load your class enrollment. Please try again or contact support.',
-				'Load Error'
-			);
-		} finally {
-			loadingClassCodes = false;
+			enrollmentStatus = 'error';
 		}
 	}
 
@@ -1824,7 +1846,37 @@
 			<!-- Selected Items -->
 			{#if currentStep === 1}
 				<div data-tour="request-items-section" class="animate-fadeIn rounded-lg bg-white p-4 shadow sm:p-6">
-					{#if hasNoEnrollment || availableClassCodes.length === 0}
+					{#if enrollmentCheckFailed}
+						<div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4" role="alert">
+							<div class="flex flex-wrap items-center gap-3">
+								<div
+									class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm"
+								>
+									<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+										/>
+									</svg>
+								</div>
+								<div class="min-w-0 flex-1">
+									<h3 class="text-sm font-bold text-amber-900">Couldn't check your class enrollment</h3>
+									<p class="mt-1 text-xs leading-relaxed text-amber-800">
+										This is usually a connection problem, not a problem with your enrollment.
+									</p>
+								</div>
+								<button
+									type="button"
+									onclick={() => void loadStudentClassCodes()}
+									class="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-amber-700 focus:ring-2 focus:ring-amber-500 focus:ring-offset-1 focus:outline-none"
+								>
+									Retry
+								</button>
+							</div>
+						</div>
+					{:else if isNotEnrolled}
 						<div class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4">
 							<div class="flex gap-3">
 								<div
@@ -1936,7 +1988,7 @@
 						<!-- Search Button -->
 						<div class="search-dropdown-container relative w-full sm:w-auto">
 							<button
-								disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasPendingRequest || hasUnresolvedObligations}
+								disabled={enrollmentBlocksRequest || hasPendingRequest || hasUnresolvedObligations}
 								title={hasUnresolvedObligations
 									? 'You have unresolved replacement obligations for missing or damaged items'
 									: hasPendingRequest
@@ -2127,7 +2179,7 @@
 															selectedItems.find((i) => i.id === item.id) !== undefined}
 														<button
 															onclick={() => addItemToCart(item)}
-															disabled={isSelected || hasUnresolvedObligations || hasPendingRequest || hasNoEnrollment || availableClassCodes.length === 0}
+															disabled={isSelected || hasUnresolvedObligations || hasPendingRequest || enrollmentBlocksRequest}
 															class="group flex w-full items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-gray-50/80 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white"
 														>
 															<!-- Item Image -->
@@ -2453,8 +2505,7 @@
 																updateItemQuantity(item.id, String(newQty));
 															}}
 															disabled={item.requestedQuantity <= 1 ||
-																hasNoEnrollment ||
-																availableClassCodes.length === 0 ||
+																enrollmentBlocksRequest ||
 																hasPendingRequest ||
 																hasUnresolvedObligations}
 															class="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:border-pink-500 hover:bg-pink-50 hover:text-pink-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:bg-white disabled:hover:text-gray-700"
@@ -2484,8 +2535,7 @@
 																	? Math.min(item.maxQuantityPerRequest, item.available)
 																	: item.available}
 																value={item.requestedQuantity}
-																disabled={hasNoEnrollment ||
-																	availableClassCodes.length === 0 ||
+																disabled={enrollmentBlocksRequest ||
 																	hasPendingRequest ||
 																	hasUnresolvedObligations}
 																onchange={(e) =>
@@ -2517,8 +2567,7 @@
 																(item.maxQuantityPerRequest
 																	? Math.min(item.maxQuantityPerRequest, item.available)
 																	: item.available) ||
-																hasNoEnrollment ||
-																availableClassCodes.length === 0 ||
+																enrollmentBlocksRequest ||
 																hasPendingRequest ||
 																hasUnresolvedObligations}
 															class="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 transition-all hover:border-pink-500 hover:bg-pink-50 hover:text-pink-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:bg-white disabled:hover:text-gray-700"
@@ -2550,8 +2599,7 @@
 												<!-- Remove Button -->
 												{#if !item.isrequired}
 													<button
-														disabled={hasNoEnrollment ||
-															availableClassCodes.length === 0 ||
+														disabled={enrollmentBlocksRequest ||
 															hasPendingRequest ||
 															hasUnresolvedObligations}
 														onclick={() => removeItemFromCart(item.id)}
@@ -3137,7 +3185,7 @@
 
 					<!-- Class Code -->
 					<div
-						class="rounded-lg bg-white p-4 shadow sm:p-6 {hasNoEnrollment
+						class="rounded-lg bg-white p-4 shadow sm:p-6 {isNotEnrolled
 							? 'ring-2 ring-red-500'
 							: ''}"
 					>
@@ -3250,7 +3298,7 @@
 										</div>
 									{/if}
 								</div>
-							{:else if loadingClassCodes}
+							{:else if checkingEnrollment}
 								<div class="flex items-center gap-2 text-xs text-gray-500">
 									<div
 										class="h-3 w-3 animate-spin rounded-full border-2 border-pink-600 border-t-transparent"
@@ -3317,7 +3365,21 @@
 									<p class="mt-2 text-xs font-semibold text-red-600">{errors.classCode}</p>
 								{/if}
 							</div>
-						{:else if !loadingClassCodes}
+						{:else if enrollmentCheckFailed}
+							<div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center" role="alert">
+								<p class="text-sm font-bold text-amber-900">Couldn't load your classes</p>
+								<p class="mt-1 text-xs text-amber-800">
+									This is usually a connection problem, not a problem with your enrollment.
+								</p>
+								<button
+									type="button"
+									onclick={() => void loadStudentClassCodes()}
+									class="mt-3 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-amber-700 focus:ring-2 focus:ring-amber-500 focus:ring-offset-1 focus:outline-none"
+								>
+									Retry
+								</button>
+							</div>
+						{:else if isNotEnrolled}
 							<div class="rounded-lg border-2 border-red-300 bg-red-50 p-6 text-center">
 								<div
 									class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100"
@@ -3820,18 +3882,26 @@
 			<button
 				type="button"
 				data-tour="student-request-continue"
-				disabled={hasNoEnrollment || availableClassCodes.length === 0 || hasPendingRequest || hasUnresolvedObligations}
+				disabled={enrollmentBlocksRequest || hasPendingRequest || hasUnresolvedObligations}
 				title={hasUnresolvedObligations
 					? 'Resolve all outstanding obligations before continuing'
 					: hasPendingRequest
 						? 'You currently have a pending request awaiting action'
-						: hasNoEnrollment || availableClassCodes.length === 0
-							? 'You must be enrolled in a class to continue'
+						: enrollmentBlocksRequest
+							? enrollmentMessage
 							: ''}
 				onclick={handleStepNext}
 				class="inline-flex items-center gap-2 rounded-lg bg-pink-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-pink-700 focus:ring-2 focus:ring-pink-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-pink-600"
 			>
-				Continue
+				{#if checkingEnrollment}
+					Checking enrollment…
+				{:else if enrollmentCheckFailed}
+					Couldn't check enrollment
+				{:else if isNotEnrolled}
+					Enrollment Required
+				{:else}
+					Continue
+				{/if}
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 				</svg>
@@ -3840,8 +3910,7 @@
 			<div class="flex items-center gap-3">
 				<button
 					onclick={resetForm}
-					disabled={hasNoEnrollment ||
-						availableClassCodes.length === 0 ||
+					disabled={enrollmentBlocksRequest ||
 						hasUnresolvedObligations ||
 						hasLowTrust ||
 						hasPendingRequest}
@@ -3861,8 +3930,7 @@
 					data-tour="student-request-submit"
 					onclick={handleSubmit}
 					disabled={isSubmitting ||
-						hasNoEnrollment ||
-						availableClassCodes.length === 0 ||
+						enrollmentBlocksRequest ||
 						hasUnresolvedObligations ||
 						hasLowTrust ||
 						hasPendingRequest}
@@ -3873,8 +3941,8 @@
 							? 'Your Trust Score is below the eligibility threshold; requests are temporarily restricted.'
 							: hasUnresolvedObligations
 								? 'Resolve all outstanding obligations before submitting'
-								: hasNoEnrollment || availableClassCodes.length === 0
-									? 'You must be enrolled in a class to submit requests'
+								: enrollmentBlocksRequest
+									? enrollmentMessage
 									: ''}
 				>
 					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3887,7 +3955,11 @@
 					</svg>
 					{#if hasUnresolvedObligations}
 						Obligations Pending
-					{:else if hasNoEnrollment || availableClassCodes.length === 0}
+					{:else if checkingEnrollment}
+						Checking enrollment…
+					{:else if enrollmentCheckFailed}
+						Couldn't check enrollment
+					{:else if isNotEnrolled}
 						Enrollment Required
 					{:else if isSubmitting}
 						Submitting...

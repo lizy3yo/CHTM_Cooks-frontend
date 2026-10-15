@@ -38,16 +38,19 @@
 		return $requestCartItems.find((entry) => entry.itemId === itemId) ?? null;
 	});
 	let hasShownUnauthorizedToast = $state(false);
-	let hasNoEnrollment = $state(false);
-	let loadingClassCodes = $state(false);
+	/**
+	 * Where the enrollment check stands. Only 'none' means the student truly has
+	 * no class — not "still loading" and not "the check failed".
+	 */
+	let enrollmentStatus = $state<'loading' | 'enrolled' | 'none' | 'error'>('loading');
+	const hasNoEnrollment = $derived(enrollmentStatus === 'none');
 	let availableClassCodes = $state<any[]>([]);
 	let hasPendingRequest = $state(false);
 	let hasUnresolvedObligations = $state(false);
 	let unresolvedObligationCount = $state(0);
 
 	async function loadStudentClassCodes() {
-		loadingClassCodes = true;
-		hasNoEnrollment = false;
+		enrollmentStatus = 'loading';
 		try {
 			const response = await fetch('/api/class-codes/my-classes', {
 				method: 'GET',
@@ -59,14 +62,11 @@
 			if (!response.ok) throw new Error('Failed to fetch class codes');
 			const data = await response.json();
 			availableClassCodes = data.classCodes || [];
-			if (availableClassCodes.length === 0) {
-				hasNoEnrollment = true;
-			}
+			enrollmentStatus = availableClassCodes.length === 0 ? 'none' : 'enrolled';
 		} catch (error) {
+			// A failed check says nothing about enrollment; offer a retry instead.
 			console.error('[CLASS-CODES] Failed to load class codes:', error);
-			hasNoEnrollment = true;
-		} finally {
-			loadingClassCodes = false;
+			enrollmentStatus = 'error';
 		}
 	}
 
@@ -363,7 +363,15 @@
 			toastStore.error('You already have a pending borrow request awaiting action.', 'Restricted');
 			return;
 		}
-		if (hasNoEnrollment || availableClassCodes.length === 0) {
+		if (enrollmentStatus === 'loading') {
+			toastStore.info('Still checking your class enrollment. Please wait a moment.', 'One moment');
+			return;
+		}
+		if (enrollmentStatus === 'error') {
+			toastStore.error("We couldn't check your class enrollment. Please retry.", 'Restricted');
+			return;
+		}
+		if (hasNoEnrollment) {
 			toastStore.error('You must be enrolled in a class to request equipment.', 'Restricted');
 			return;
 		}
@@ -811,7 +819,7 @@
 			<p class="mt-1 text-sm text-gray-500">Browse and request available cooking equipment</p>
 		</div>
 		<div class="flex items-center gap-2">
-			{#if hasNoEnrollment || availableClassCodes.length === 0}
+			{#if hasNoEnrollment}
 				<button
 					disabled
 					data-tour="student-catalog-enroll"
@@ -953,7 +961,30 @@
 		</div>
 	</div>
 
-	{#if hasNoEnrollment}
+	{#if enrollmentStatus === 'error'}
+		<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm animate-fadeIn" role="alert">
+			<div class="flex flex-wrap items-center gap-3">
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm">
+					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+					</svg>
+				</div>
+				<div class="flex-1 min-w-0">
+					<h3 class="text-sm font-bold text-amber-900">Couldn't check your class enrollment</h3>
+					<p class="mt-1 text-xs text-amber-800 leading-relaxed">
+						This is usually a connection problem, not a problem with your enrollment.
+					</p>
+				</div>
+				<button
+					type="button"
+					onclick={() => void loadStudentClassCodes()}
+					class="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-amber-700 focus:ring-2 focus:ring-amber-500 focus:ring-offset-1 focus:outline-none"
+				>
+					Retry
+				</button>
+			</div>
+		</div>
+	{:else if hasNoEnrollment}
 		<div class="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm animate-fadeIn">
 			<div class="flex gap-3">
 				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500 text-white shadow-sm">
