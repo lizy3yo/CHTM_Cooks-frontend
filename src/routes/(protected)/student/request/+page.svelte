@@ -1,21 +1,20 @@
 <script lang="ts">
-	import { onMount, onDestroy, tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { get } from 'svelte/store';
 	import { catalogAPI, type CatalogItem } from '$lib/api/catalog';
-	import {
-		subscribeToInventoryChanges,
-		type InventoryRealtimeEvent,
-		type DayAvailability
-	} from '$lib/api/inventory';
-	import { subscribeToCartUpdates } from '$lib/api/cartStream';
+	import { subscribeToInventoryChanges, type DayAvailability } from '$lib/api/inventory';
 	import { borrowRequestsAPI } from '$lib/api/borrowRequests';
 	import { replacementObligationsAPI } from '$lib/api/replacementObligations';
 	import { donationsAPI } from '$lib/api/donations';
 	import { classCodesAPI, type ClassCodeResponse } from '$lib/api/classCodes';
 	import { statisticsAPI } from '$lib/api/statistics';
-	import { requestCartStore, requestCartItems } from '$lib/stores/requestCart';
+	import {
+		requestCartStore,
+		requestCartItems,
+		requestCartInitialized
+	} from '$lib/stores/requestCart';
 	import { practiceMode } from '$lib/stores/onboarding';
 	import { toastStore } from '$lib/stores/toast';
 	import ItemImagePlaceholder from '$lib/components/ui/ItemImagePlaceholder.svelte';
@@ -69,9 +68,11 @@
 	let showItemSelector = $state(false);
 	let sseConnected = $state(false);
 	let sseReconnecting = $state(false);
-	let cartEventListener: ((event: Event) => void) | null = null;
-	let cartSSEUnsubscribe: (() => void) | null = null;
 	let donationSSEUnsubscribe: (() => void) | null = null;
+	// Set on unmount so async setup that finishes late never subscribes to anything.
+	let destroyed = false;
+	// Cart entries currently being dropped as unavailable (see pruneUnavailableCartItems).
+	const pruningItemIds = new Set<string>();
 
 	// Search and filter state
 	let searchQuery = $state('');
@@ -107,9 +108,7 @@
 
 	// Event deduplication and debouncing
 	let updateDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-	let lastNotificationTime = $state<number>(0);
 	const UPDATE_DEBOUNCE_MS = 1000; // 1 second debounce
-	const NOTIFICATION_COOLDOWN_MS = 2000; // 2 seconds between notifications
 
 	// Form fields
 	let selectedItems = $state<SelectedRequestItem[]>([]);
@@ -962,7 +961,8 @@
 		return item.id.slice(-6).toUpperCase();
 	}
 
-	async function loadAvailableEquipment(options?: { forceRefresh?: boolean }): Promise<void> {
+	/** Resolves true when the catalog loaded; false when it failed and the old list stands. */
+	async function loadAvailableEquipment(options?: { forceRefresh?: boolean }): Promise<boolean> {
 		try {
 			const response = await catalogAPI.getCatalog(
 				{
@@ -1005,177 +1005,69 @@
 
 			// Filter available equipment (quantity > 0, excluding required items to avoid duplication)
 			availableEquipment = allItems.filter((item) => item.available > 0 && !item.isrequired);
+
+			// A fresh catalog is the only safe basis for dropping cart entries.
+			await pruneUnavailableCartItems();
+			return true;
 		} catch (error) {
 			console.error('Failed to load requestable equipment', error);
 			toastStore.error('Unable to load available equipment right now', 'Load Error');
+			return false;
 		} finally {
 			isLoading = false;
 		}
 	}
 
 	/**
-	 * Show notification with cooldown to prevent spam
-	 * Industry-standard notification throttling
+	 * Coalesce a burst of inventory events (a bulk edit, a donation) into one refresh.
 	 */
-	function showUpdateNotification(message: string) {
-		const now = Date.now();
-
-		// Check if we're within cooldown period
-		if (now - lastNotificationTime < NOTIFICATION_COOLDOWN_MS) {
-			return; // Skip notification during cooldown
-		}
-
-		// Update last notification time
-		lastNotificationTime = now;
-
-		// Show notification
-		toastStore.info(message, 'Inventory Updated');
+	function handleInventoryUpdate(): void {
+		if (updateDebounceTimer) clearTimeout(updateDebounceTimer);
+		updateDebounceTimer = setTimeout(() => {
+			updateDebounceTimer = null;
+			void refreshAfterInventoryChange();
+		}, UPDATE_DEBOUNCE_MS);
 	}
 
 	/**
-	 * Handle inventory update with debouncing and deduplication
-	 * Industry-standard approach to prevent duplicate notifications
+	 * Reload the catalog and reconcile the cart against it. Only entries that actually
+	 * changed are touched — the student's other picks and quantities stay as they are —
+	 * and the list updating in place is the feedback, so no toast is raised.
 	 */
-	async function handleInventoryUpdate(event: InventoryRealtimeEvent) {
-		console.log('[UPDATE] ===== PROCESSING UPDATE =====');
-		console.log('[UPDATE] Event:', JSON.stringify(event, null, 2));
+	async function refreshAfterInventoryChange(): Promise<void> {
+		// Realtime-triggered refresh bypasses the short-lived browser cache.
+		catalogAPI.invalidateCatalogCache();
 
-		// Debounce: Clear existing timer and set new one
-		if (updateDebounceTimer) {
-			console.log('[UPDATE] ⏱️ Clearing existing debounce timer');
-			clearTimeout(updateDebounceTimer);
-		}
+		const previousRequiredIds = new Set(requiredItems.map((item) => item.id));
+		const loaded = await loadAvailableEquipment({ forceRefresh: true });
+		if (!loaded || destroyed) return;
 
-		console.log('[UPDATE] ⏱️ Setting debounce timer for', UPDATE_DEBOUNCE_MS, 'ms');
-		updateDebounceTimer = setTimeout(async () => {
-			console.log('[UPDATE] 🔄 Debounce timer fired, processing update...');
+		const currentRequiredIds = new Set(requiredItems.map((item) => item.id));
+		const cartIds = new Set(get(requestCartItems).map((entry) => entry.itemId));
 
-			// Ensure SSE-triggered refresh bypasses short-lived browser cache.
-			catalogAPI.invalidateCatalogCache();
-
-			// Store current selected items before reload
-			const currentSelectedIds = selectedItems.map((item) => item.id);
-			const currentQuantities = new Map(
-				selectedItems.map((item) => [item.id, item.requestedQuantity])
-			);
-			console.log('[UPDATE] 📋 Current selected IDs:', currentSelectedIds);
-
-			// Store previous required item IDs for comparison
-			const previousrequiredIds = new Set(requiredItems.map((item) => item.id));
-			console.log('[UPDATE] 📌 Previous required IDs:', Array.from(previousrequiredIds));
-
-			// Reload equipment data (this updates requiredItems and availableEquipment)
-			console.log('[UPDATE] 🔃 Reloading equipment data...');
-			await loadAvailableEquipment({ forceRefresh: true });
-			console.log('[UPDATE] ✅ Equipment data reloaded');
-
-			// Get new required item IDs
-			const newrequiredIds = new Set(requiredItems.map((item) => item.id));
-			console.log('[UPDATE] 📌 New required IDs:', Array.from(newrequiredIds));
-
-			// Identify items that were removed from required status
-			const removedrequiredIds = new Set(
-				[...previousrequiredIds].filter((id) => !newrequiredIds.has(id))
-			);
-			console.log('[UPDATE] ➖ Removed required IDs:', Array.from(removedrequiredIds));
-
-			// Identify items that were added to required status
-			const addedrequiredIds = new Set(
-				[...newrequiredIds].filter((id) => !previousrequiredIds.has(id))
-			);
-			console.log('[UPDATE] ➕ Added required IDs:', Array.from(addedrequiredIds));
-
-			// Re-sync cart with new data
-			console.log('[UPDATE] 🛒 Clearing cart...');
-			requestCartStore.clear();
-
-			// Re-add all current required items
-			console.log('[UPDATE] 🛒 Re-adding', requiredItems.length, 'required items...');
-			for (const item of requiredItems) {
-				requestCartStore.addItem({
-					itemId: item.id,
-					name: item.name,
-					maxQuantity: Math.max(1, item.available)
-				});
-				console.log('[UPDATE]   ✓ Added required item:', item.name, '(ID:', item.id, ')');
+		try {
+			// An item that stopped being required leaves the cart it was auto-added to.
+			for (const itemId of previousRequiredIds) {
+				if (!currentRequiredIds.has(itemId) && cartIds.has(itemId)) {
+					await requestCartStore.removeItem(itemId);
+				}
 			}
 
-			// Re-add previously selected non-required items (excluding removed required items)
-			const allItems = [...availableEquipment, ...requiredItems];
-			console.log('[UPDATE] 🛒 Re-adding previously selected non-required items...');
-			console.log(
-				'[UPDATE] 🛒 All items count:',
-				allItems.length,
-				'(available:',
-				availableEquipment.length,
-				', required:',
-				requiredItems.length,
-				')'
-			);
-
-			for (const itemId of currentSelectedIds) {
-				// Skip if this item was removed from required status
-				if (removedrequiredIds.has(itemId)) {
-					console.log('[UPDATE]   ⊘ Skipping removed required item:', itemId);
-					continue;
-				}
-
-				const item = allItems.find((i) => i.id === itemId);
-
-				// Only re-add if item exists and is not already added as required
-				if (item && !item.isrequired) {
-					const previousQty = currentQuantities.get(itemId) || 1;
-					requestCartStore.addItem({
+			// A newly required item joins the cart, as it would on page load.
+			for (const item of requiredItems) {
+				if (!previousRequiredIds.has(item.id) && !cartIds.has(item.id)) {
+					await requestCartStore.addItem({
 						itemId: item.id,
 						name: item.name,
-						maxQuantity: item.available
+						maxQuantity: Math.max(1, item.available)
 					});
-					// Restore previous quantity if still valid
-					if (previousQty <= item.available) {
-						requestCartStore.setQuantity(itemId, previousQty);
-					}
-					console.log(
-						'[UPDATE]   ✓ Re-added non-required item:',
-						item.name,
-						'(ID:',
-						itemId,
-						', isrequired:',
-						item.isrequired,
-						')'
-					);
-				} else if (item && item.isrequired) {
-					console.log(
-						'[UPDATE]   ⊘ Skipping (already added as required):',
-						item.name,
-						'(ID:',
-						itemId,
-						')'
-					);
-				} else {
-					console.log('[UPDATE]   ⊘ Item not found in allItems:', itemId);
 				}
 			}
+		} catch (error) {
+			console.error('[UPDATE] Failed to reconcile required items:', error);
+		}
 
-			// Sync selected items
-			console.log('[UPDATE] 🔄 Syncing selected items from cart...');
-			syncSelectedItemsFromCart();
-			console.log('[UPDATE] ✅ Cart synced, selected items count:', selectedItems.length);
-
-			// Show single, appropriate notification with cooldown
-			if (addedrequiredIds.size > 0 && removedrequiredIds.size > 0) {
-				showUpdateNotification('Frequently requested items updated');
-			} else if (addedrequiredIds.size > 0) {
-				showUpdateNotification('New frequently requested items added');
-			} else if (removedrequiredIds.size > 0) {
-				showUpdateNotification('Frequently requested items removed');
-			} else {
-				showUpdateNotification('Equipment availability updated');
-			}
-
-			// Reset debounce timer
-			updateDebounceTimer = null;
-			console.log('[UPDATE] ===== UPDATE COMPLETE =====');
-		}, UPDATE_DEBOUNCE_MS);
+		syncSelectedItemsFromCart();
 	}
 
 	function addItemToCart(item: RequestItemOption) {
@@ -1296,20 +1188,33 @@
 				};
 			})
 			.filter((item): item is SelectedRequestItem => item !== null);
+	}
 
-		const missingItemIds = cartEntries
-			.filter((entry) => !equipmentById.has(entry.itemId))
-			.map((entry) => entry.itemId);
+	/**
+	 * Drop cart entries the catalog no longer offers (archived, deleted or out of stock).
+	 *
+	 * Runs only right after a successful catalog load, so a stale or still-loading list
+	 * can never empty a student's cart. It is silent — the entry simply leaves the list,
+	 * the way live inventory behaves elsewhere — and each entry is removed at most once
+	 * however many cart updates arrive while the removal is in flight.
+	 */
+	async function pruneUnavailableCartItems(): Promise<void> {
+		if (!get(requestCartInitialized)) return;
 
-		for (const missingId of missingItemIds) {
-			requestCartStore.removeItem(missingId);
-		}
+		const offeredIds = new Set([...availableEquipment, ...requiredItems].map((item) => item.id));
+		const staleIds = get(requestCartItems)
+			.map((entry) => entry.itemId)
+			.filter((id) => !offeredIds.has(id) && !pruningItemIds.has(id));
 
-		if (missingItemIds.length > 0) {
-			toastStore.warning(
-				'Some items in your request list are no longer available and were removed.',
-				'Inventory Updated'
-			);
+		for (const itemId of staleIds) {
+			pruningItemIds.add(itemId);
+			try {
+				await requestCartStore.removeItem(itemId);
+			} catch (error) {
+				console.error('[CART] Failed to drop unavailable item:', itemId, error);
+			} finally {
+				pruningItemIds.delete(itemId);
+			}
 		}
 	}
 
@@ -1714,6 +1619,7 @@
 			await loadTrustScoreStatus();
 			// Check for active pending request
 			await checkPendingRequest();
+			if (destroyed) return;
 
 			if (cached) {
 				// Cache path: sync cart and revalidate in background
@@ -1808,30 +1714,13 @@
 				}
 			}
 
-			console.log('[MOUNT] Setting up cart synchronization...');
+			// The page may have been left while the requests above were in flight;
+			// subscribing now would outlive it and keep acting on a dead page.
+			if (destroyed) return;
 
-			// Listen for cart updates via custom events (same-page sync)
-			cartEventListener = (event: Event) => {
-				const customEvent = event as CustomEvent;
-				console.log('[CART-SYNC] Cart updated:', customEvent.detail);
-
-				// Sync selected items when cart changes
-				syncSelectedItemsFromCart();
-			};
-
-			window.addEventListener('cart-updated', cartEventListener);
-
-			// Also subscribe to cart updates via SSE for cross-tab/device sync
-			cartSSEUnsubscribe = subscribeToCartUpdates(
-				(event) => {
-					console.log('[CART-SSE] Cart updated from another tab/device:', event);
-					// Sync selected items when cart changes
-					syncSelectedItemsFromCart();
-				},
-				(error) => {
-					console.error('[CART-SSE] Error:', error);
-				}
-			);
+			// Cart changes (this tab, other tabs, other devices) all land in
+			// requestCartStore, which the $effect above already follows — no
+			// separate cart listeners are needed here.
 
 			// Subscribe to real-time inventory updates via SSE
 			unsubscribe = subscribeToInventoryChanges(
@@ -1857,7 +1746,7 @@
 
 					if (event.entityType === 'item' && supportedActions.has(event.action)) {
 						console.log('[SSE] ✅ Item event detected, processing update...');
-						void handleInventoryUpdate(event);
+						handleInventoryUpdate();
 					} else {
 						console.log('[SSE] ⊘ Non-item event, ignoring');
 					}
@@ -1891,13 +1780,7 @@
 				console.log(
 					'[SSE] Donation change detected (donations stream) - triggering inventory update'
 				);
-				void handleInventoryUpdate({
-					action: 'item_updated',
-					entityType: 'item',
-					entityId: '',
-					entityName: 'donation_event',
-					occurredAt: new Date().toISOString()
-				});
+				handleInventoryUpdate();
 			});
 
 			console.log('[MOUNT] SSE subscriptions set up complete');
@@ -1905,42 +1788,17 @@
 
 		return () => {
 			console.log('[MOUNT] Component unmounting, cleaning up...');
-			// Cleanup: Clear any pending debounce timers
+			destroyed = true;
 			if (updateDebounceTimer) {
 				clearTimeout(updateDebounceTimer);
+				updateDebounceTimer = null;
 			}
-			// Cleanup event listeners
-			if (cartEventListener) {
-				window.removeEventListener('cart-updated', cartEventListener);
-				cartEventListener = null;
-			}
-			// Cleanup SSE subscriptions
 			unsubscribe();
-			if (cartSSEUnsubscribe) {
-				cartSSEUnsubscribe();
-				cartSSEUnsubscribe = null;
-			}
 			if (donationSSEUnsubscribe) {
 				donationSSEUnsubscribe();
 				donationSSEUnsubscribe = null;
 			}
 		};
-	});
-
-	// Cleanup on component destroy
-	onDestroy(() => {
-		if (cartEventListener) {
-			window.removeEventListener('cart-updated', cartEventListener);
-			cartEventListener = null;
-		}
-		if (cartSSEUnsubscribe) {
-			cartSSEUnsubscribe();
-			cartSSEUnsubscribe = null;
-		}
-		if (donationSSEUnsubscribe) {
-			donationSSEUnsubscribe();
-			donationSSEUnsubscribe = null;
-		}
 	});
 </script>
 
