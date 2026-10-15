@@ -361,12 +361,13 @@ function createChatStore() {
 					};
 				});
 
-				const nextState = hydrateActiveMessages({
+				// Not persisted per chunk: serializing the full history to
+				// localStorage on every delta blocks the main thread while
+				// streaming. finalizeMessage persists the completed reply.
+				return hydrateActiveMessages({
 					...s,
 					conversations
 				});
-				persistState(nextState);
-				return nextState;
 			});
 		},
 

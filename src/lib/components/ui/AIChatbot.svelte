@@ -26,6 +26,9 @@
 	const isChatbotEnabled = $derived($userSettingsStore.aiChatbotEnabled);
 	const isDark = $derived($themeStore === 'dark');
 
+	// Most recent messages sent as model context (mirrors GOOGLE_AI_MAX_HISTORY).
+	const CHAT_CONTEXT_WINDOW = 20;
+
 	let inputValue = $state('');
 	let messagesEl = $state<HTMLDivElement | null>(null);
 	let inputEl = $state<HTMLTextAreaElement | null>(null);
@@ -158,10 +161,15 @@
 		const text = inputValue.trim();
 		if (!text || isLoading) return;
 
-		const history = [...messages, { role: 'user' as const, content: text }].map((m) => ({
-			role: m.role,
-			content: m.content
-		}));
+		// Skip empty turns (left behind by failed replies, which the API rejects)
+		// and send only the recent window to keep the prompt small.
+		const history = [...messages, { role: 'user' as const, content: text }]
+			.filter((m) => m.content.trim().length > 0)
+			.slice(-CHAT_CONTEXT_WINDOW)
+			.map((m) => ({
+				role: m.role,
+				content: m.content
+			}));
 
 		inputValue = '';
 		chatStore.setError(null);
