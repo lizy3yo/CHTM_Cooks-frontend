@@ -57,7 +57,8 @@ export function validatePassword(password: string): ValidationError | null {
 		return { field: 'password', message: 'Password must contain at least one number' };
 	}
 	
-	if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+	// Any symbol counts (e.g. - _ ! #), matching the server's rule.
+	if (!/[^A-Za-z0-9]/.test(password)) {
 		return { field: 'password', message: 'Password must contain at least one special character' };
 	}
 	
@@ -149,7 +150,7 @@ export function getPasswordStrength(password: string): {
 	if (password.length >= 12) score++;
 	if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
 	if (/[0-9]/.test(password)) score++;
-	if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) score++;
+	if (/[^A-Za-z0-9]/.test(password)) score++;
 	
 	const labels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong'];
 	const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
