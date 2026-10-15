@@ -32,6 +32,8 @@ export interface AddCartItemRequest {
 	maxQuantity: number;
 	categoryId?: string;
 	picture?: string;
+	/** Leave an item that is already in the cart untouched instead of incrementing it. */
+	ifAbsent?: boolean;
 }
 
 /**
@@ -46,7 +48,14 @@ export interface UpdateCartQuantityRequest {
  * Add Item Response
  */
 export interface AddCartItemResponse extends CartResponse {
-	result: 'added' | 'incremented' | 'capped';
+	result: 'added' | 'incremented' | 'capped' | 'unchanged';
+}
+
+/**
+ * Batch Add Response — `added` counts the items that were not in the cart yet
+ */
+export interface AddCartItemsResponse extends CartResponse {
+	added: number;
 }
 
 /**
@@ -147,6 +156,26 @@ export const cartAPI = {
 			return handleResponse<AddCartItemResponse>(response);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Failed to add item to cart';
+			throw new Error(message);
+		}
+	},
+
+	/**
+	 * Add several items in one request. Items already in the cart keep their
+	 * quantity; missing ones are added with quantity 1. Safe to retry.
+	 *
+	 * @param items - Items to add
+	 * @returns Updated cart and how many items were newly added
+	 * @throws Error if request fails
+	 */
+	async addItems(
+		items: Omit<AddCartItemRequest, 'quantity' | 'ifAbsent'>[]
+	): Promise<AddCartItemsResponse> {
+		try {
+			const response = await fetch('/api/cart/batch', getFetchOptions('POST', { items }));
+			return handleResponse<AddCartItemsResponse>(response);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Failed to add items to cart';
 			throw new Error(message);
 		}
 	},

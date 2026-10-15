@@ -91,6 +91,15 @@ function buildCatalogCacheKey(filters: CatalogFilters = {}): string {
 	return query || 'default';
 }
 
+/** Largest page the server returns (`limit` is capped at 200 in InventoryController). */
+const CATALOG_MAX_PAGE_SIZE = 200;
+
+export type FullCatalogFilters = Omit<CatalogFilters, 'page' | 'limit'>;
+
+function buildFullCatalogCacheKey(filters: FullCatalogFilters): string {
+	return `all:${buildCatalogCacheKey(filters)}`;
+}
+
 /** Search results are always read live, never served from the cache. */
 function isSearch(filters: CatalogFilters): boolean {
 	return !!filters.search && filters.search.trim() !== '';
@@ -174,6 +183,54 @@ export const catalogAPI = {
 			const message = error instanceof Error ? error.message : 'Failed to fetch catalog';
 			throw new Error(message);
 		}
+	},
+
+	/**
+	 * Fetch every catalog item, not just the first page.
+	 *
+	 * The server caps a page at {@link CATALOG_MAX_PAGE_SIZE} items, so asking
+	 * for `limit: 1000` silently returned only the first 200. This reads page 1,
+	 * then the remaining pages in parallel, and returns them merged as a single
+	 * page. The merged result is cached as one entry, so a revisit renders from
+	 * {@link peekFullCatalog} without waiting on the network.
+	 */
+	async getFullCatalog(
+		filters: FullCatalogFilters = {},
+		options: CatalogRequestOptions = {}
+	): Promise<CatalogResponse> {
+		const fetchPage = async (page: number): Promise<CatalogResponse> => {
+			const query = buildCatalogQuery({ ...filters, page, limit: CATALOG_MAX_PAGE_SIZE });
+			const bust = options.forceRefresh ? `&_t=${Date.now()}` : '';
+			const response = await fetch(`/api/inventory/catalog?${query}${bust}`, getFetchOptions('GET'));
+			return handleResponse<CatalogResponse>(response);
+		};
+
+		try {
+			return await catalogCache.fetch(
+				buildFullCatalogCacheKey(filters),
+				async () => {
+					const first = await fetchPage(1);
+					if (first.pages <= 1) return first;
+
+					const rest = await Promise.all(
+						Array.from({ length: first.pages - 1 }, (_, i) => fetchPage(i + 2))
+					);
+					const items = [first, ...rest].flatMap((page) => page.items);
+
+					return { ...first, items, page: 1, pages: 1, limit: items.length };
+				},
+				{ force: options.forceRefresh || isSearch(filters) }
+			);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Failed to fetch catalog';
+			throw new Error(message);
+		}
+	},
+
+	/** Last known full catalog (see {@link getFullCatalog}), stale or not. */
+	peekFullCatalog(filters: FullCatalogFilters = {}): CatalogResponse | null {
+		if (isSearch(filters)) return null;
+		return catalogCache.peek(buildFullCatalogCacheKey(filters));
 	},
 
 	/**

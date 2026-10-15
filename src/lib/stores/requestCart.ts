@@ -1,7 +1,8 @@
-import { derived, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import { browser } from '$app/environment';
 import { cartAPI, type CartItemResponse } from '$lib/api/cart';
 import { subscribeToCartUpdates } from '$lib/api/cartStream';
+import { practiceMode } from '$lib/stores/onboarding';
 
 export interface RequestCartItem {
 	itemId: string;
@@ -19,9 +20,12 @@ interface RequestCartState {
 	sseConnected: boolean;
 }
 
-type AddItemPayload = Omit<RequestCartItem, 'quantity'> & { quantity?: number };
+type AddItemPayload = Omit<RequestCartItem, 'quantity'> & { quantity?: number; ifAbsent?: boolean };
 
-type AddItemResult = 'added' | 'incremented' | 'capped';
+type AddItemResult = 'added' | 'incremented' | 'capped' | 'unchanged';
+
+/** A required item the cart must contain. */
+export type RequiredCartItem = Omit<RequestCartItem, 'quantity'>;
 
 const initialState: RequestCartState = {
 	items: [],
@@ -47,25 +51,82 @@ function toStoreItem(apiItem: CartItemResponse): RequestCartItem {
 function createRequestCartStore() {
 	const { subscribe, update, set } = writable<RequestCartState>(initialState);
 	let sseUnsubscribe: (() => void) | null = null;
+	// The layout and the page both call init() on mount; they share one request.
+	let initPromise: Promise<void> | null = null;
+	// Required-item syncs run one after another so two pages can't race each other.
+	let requiredSync: Promise<unknown> = Promise.resolve();
 
-	return {
+	/**
+	 * Sandbox for the guided tour. The tour tells students that nothing they do
+	 * is saved, so while it runs, student edits change only this browser's copy
+	 * of the cart. When the tour ends, the copy is reloaded from the server and
+	 * the practice edits are gone.
+	 */
+	let sandboxed = false;
+
+	function setItems(items: RequestCartItem[], source: string): void {
+		update((state) => ({ ...state, items }));
+		window.dispatchEvent(new CustomEvent('cart-updated', { detail: { items, source } }));
+	}
+
+	function currentItems(): RequestCartItem[] {
+		return get({ subscribe }).items;
+	}
+
+	/** Same rules as POST /api/cart, applied to the local copy. */
+	function addLocally(item: AddItemPayload): AddItemResult {
+		const items = currentItems();
+		const requested = item.quantity ?? 1;
+		const existing = items.find((entry) => entry.itemId === item.itemId);
+
+		if (existing && item.ifAbsent) return 'unchanged';
+
+		if (existing) {
+			const capped = existing.quantity + requested >= item.maxQuantity;
+			const quantity = Math.min(existing.quantity + requested, item.maxQuantity);
+			setItems(
+				items.map((entry) =>
+					entry.itemId === item.itemId ? { ...entry, quantity, maxQuantity: item.maxQuantity } : entry
+				),
+				'addItem'
+			);
+			return capped ? 'capped' : 'incremented';
+		}
+
+		setItems(
+			[
+				...items,
+				{
+					itemId: item.itemId,
+					name: item.name,
+					quantity: Math.min(requested, item.maxQuantity),
+					maxQuantity: item.maxQuantity,
+					categoryId: item.categoryId,
+					picture: item.picture
+				}
+			],
+			'addItem'
+		);
+		return 'added';
+	}
+
+	const store = {
 		subscribe,
 
 		/**
-		 * Initialize cart by loading from database and setting up SSE
-		 * Should be called once on app mount
+		 * Initialize cart by loading from database and setting up SSE.
+		 * Safe to call from several places: concurrent and later calls resolve
+		 * with the first load instead of fetching again.
 		 */
-		async init(): Promise<void> {
-			if (!browser) return;
+		init(): Promise<void> {
+			if (!browser) return Promise.resolve();
+			if (!initPromise) {
+				initPromise = this.load();
+			}
+			return initPromise;
+		},
 
-			// Guard against double-initialization — only fetch once per session
-			let alreadyInitialized = false;
-			update((state) => {
-				alreadyInitialized = state.initialized;
-				return state;
-			});
-			if (alreadyInitialized) return;
-
+		async load(): Promise<void> {
 			update((state) => ({ ...state, loading: true }));
 
 			try {
@@ -139,6 +200,7 @@ function createRequestCartStore() {
 		 */
 		async addItem(item: AddItemPayload): Promise<AddItemResult> {
 			if (!browser) return 'added';
+			if (sandboxed) return addLocally(item);
 
 			try {
 				const response = await cartAPI.addItem({
@@ -147,7 +209,8 @@ function createRequestCartStore() {
 					quantity: item.quantity ?? 1,
 					maxQuantity: item.maxQuantity,
 					categoryId: item.categoryId,
-					picture: item.picture
+					picture: item.picture,
+					ifAbsent: item.ifAbsent
 				});
 
 				const items = response.items.map(toStoreItem);
@@ -168,10 +231,66 @@ function createRequestCartStore() {
 		},
 
 		/**
+		 * Make sure every required item is in the cart.
+		 *
+		 * Only items that are missing are sent, in a single request, and the
+		 * server adds them with quantity 1 while leaving everything already in
+		 * the cart exactly as it is. Calling this any number of times, from any
+		 * page, never changes a quantity. Waits for the cart to load first, so
+		 * it never acts on an empty, not-yet-loaded cart.
+		 *
+		 * Resolves with how many items were added.
+		 */
+		syncRequiredItems(required: RequiredCartItem[]): Promise<number> {
+			if (!browser || required.length === 0) return Promise.resolve(0);
+
+			const run = async (): Promise<number> => {
+				await store.init();
+
+				const inCart = new Set(currentItems().map((entry) => entry.itemId));
+				const missing = required.filter((item) => !inCart.has(item.itemId));
+				if (missing.length === 0) return 0;
+
+				const response = await cartAPI.addItems(missing);
+				const serverItems = response.items.map(toStoreItem);
+
+				if (sandboxed) {
+					// Keep the practice copy; just fold in the required items.
+					const local = currentItems();
+					const localIds = new Set(local.map((entry) => entry.itemId));
+					setItems(
+						[...local, ...serverItems.filter((entry) => !localIds.has(entry.itemId))],
+						'syncRequiredItems'
+					);
+				} else {
+					setItems(serverItems, 'syncRequiredItems');
+				}
+
+				return response.added;
+			};
+
+			const result = requiredSync.then(run, run);
+			requiredSync = result.catch(() => undefined);
+			return result;
+		},
+
+		/**
 		 * Update item quantity (persists to database)
 		 */
 		async setQuantity(itemId: string, quantity: number): Promise<void> {
 			if (!browser) return;
+
+			if (sandboxed) {
+				const items = currentItems();
+				const entry = items.find((i) => i.itemId === itemId);
+				if (!entry) throw new Error('Item not found in cart');
+				const clamped = Math.max(1, Math.min(quantity, entry.maxQuantity));
+				setItems(
+					items.map((i) => (i.itemId === itemId ? { ...i, quantity: clamped } : i)),
+					'setQuantity'
+				);
+				return;
+			}
 
 			try {
 				const response = await cartAPI.updateQuantity(itemId, quantity);
@@ -197,6 +316,14 @@ function createRequestCartStore() {
 		async removeItem(itemId: string): Promise<void> {
 			if (!browser) return;
 
+			if (sandboxed) {
+				setItems(
+					currentItems().filter((i) => i.itemId !== itemId),
+					'removeItem'
+				);
+				return;
+			}
+
 			try {
 				const response = await cartAPI.removeItem(itemId);
 				const items = response.items.map(toStoreItem);
@@ -221,6 +348,11 @@ function createRequestCartStore() {
 		 */
 		async clear(): Promise<void> {
 			if (!browser) return;
+
+			if (sandboxed) {
+				setItems([], 'clear');
+				return;
+			}
 
 			try {
 				await cartAPI.clearCart();
@@ -261,9 +393,21 @@ function createRequestCartStore() {
 				sseUnsubscribe();
 				sseUnsubscribe = null;
 			}
+			initPromise = null;
 			set(initialState);
 		}
 	};
+
+	if (browser) {
+		practiceMode.subscribe((active) => {
+			if (active === sandboxed) return;
+			sandboxed = active;
+			// Tour over: drop the practice copy and show the real cart again.
+			if (!active) void store.refresh();
+		});
+	}
+
+	return store;
 }
 
 export const requestCartStore = createRequestCartStore();

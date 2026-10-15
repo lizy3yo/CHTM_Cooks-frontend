@@ -609,35 +609,30 @@
 	/**
 	 * Load required items into the request cart
 	 * This ensures required items are always available in the cart dropdown
+	 *
+	 * Runs after every catalog page arrives, so it must be idempotent: it waits
+	 * for the cart to load and only adds items that are missing. Previously it
+	 * read the cart before it had loaded (seeing it empty) and re-added every
+	 * required item, which raised each one's quantity by 1 on every run.
 	 */
 	async function loadrequiredItemsToCart(): Promise<void> {
 		if (!catalogData) return;
 
-		// Filter required items from catalog
 		const requiredItems = catalogData.items.filter((item) => item.isrequired === true);
-
 		if (requiredItems.length === 0) return;
 
-		// Get current cart items
-		const currentCartItems = $requestCartItems;
-
-		// Add required items that aren't already in the cart
-		for (const item of requiredItems) {
-			const alreadyInCart = currentCartItems.some((cartItem) => cartItem.itemId === item.id);
-
-			if (!alreadyInCart) {
-				try {
-					await requestCartStore.addItem({
-						itemId: item.id,
-						name: item.name,
-						maxQuantity: availableQuantityForItem(item),
-						categoryId: item.categoryId,
-						picture: item.picture
-					});
-				} catch (error) {
-					console.error('Failed to add required item to cart:', error);
-				}
-			}
+		try {
+			await requestCartStore.syncRequiredItems(
+				requiredItems.map((item) => ({
+					itemId: item.id,
+					name: item.name,
+					maxQuantity: Math.max(1, availableQuantityForItem(item)),
+					categoryId: item.categoryId,
+					picture: item.picture
+				}))
+			);
+		} catch (error) {
+			console.error('Failed to add required items to cart:', error);
 		}
 	}
 

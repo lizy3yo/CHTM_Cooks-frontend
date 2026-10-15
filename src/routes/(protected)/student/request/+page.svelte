@@ -3,7 +3,12 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { get } from 'svelte/store';
-	import { catalogAPI, type CatalogItem } from '$lib/api/catalog';
+	import {
+		catalogAPI,
+		type CatalogItem,
+		type CatalogResponse,
+		type FullCatalogFilters
+	} from '$lib/api/catalog';
 	import { subscribeToInventoryChanges, type DayAvailability } from '$lib/api/inventory';
 	import { borrowRequestsAPI } from '$lib/api/borrowRequests';
 	import { replacementObligationsAPI } from '$lib/api/replacementObligations';
@@ -247,6 +252,11 @@
 	let hasShownPendingDialog = $state(false);
 
 	async function checkPendingRequest(): Promise<void> {
+		// The two checks are independent; run them side by side.
+		await Promise.all([checkActiveRequest(), checkOverdueHold()]);
+	}
+
+	async function checkActiveRequest(): Promise<void> {
 		try {
 			const res = await borrowRequestsAPI.list({
 				statuses: [
@@ -264,8 +274,6 @@
 			hasPendingRequest = false;
 			console.error('[PENDING-CHECK] Failed to load pending request status:', err);
 		}
-
-		await checkOverdueHold();
 	}
 
 	// 3-day rule: items kept more than three days past their return date put
@@ -438,11 +446,10 @@
 	// Reactive effect: Sync selected items when cart items change
 	$effect(() => {
 		// Watch for changes in cart items
-		const cartItems = $requestCartItems;
+		void $requestCartItems;
 
 		// Only sync if we have equipment loaded and not currently loading
 		if ((availableEquipment.length > 0 || requiredItems.length > 0) && !isLoading) {
-			console.log('[REACTIVE] Cart items changed, syncing selected items...', cartItems.length);
 			syncSelectedItemsFromCart();
 		}
 	});
@@ -961,53 +968,63 @@
 		return item.id.slice(-6).toUpperCase();
 	}
 
+	/**
+	 * The one set of catalog filters this page uses, for both the network read
+	 * and the instant-render cache lookup — they must match or the cache never hits.
+	 * Only two days can ever be booked, so both are asked for up front and the
+	 * student sees each one before committing to a date.
+	 */
+	const CATALOG_FILTERS: FullCatalogFilters = {
+		availability: 'all',
+		sortBy: 'name',
+		dates: bookableDates
+	};
+
+	function toRequestItemOption(item: CatalogItem): RequestItemOption {
+		const availability = item.availability ?? undefined;
+
+		return {
+			id: item.id,
+			name: item.name,
+			code: buildItemCode(item),
+			image: inferItemIcon(item.name),
+			picture: item.picture,
+			category: item.category || 'Uncategorized',
+			available: bestAvailability(availability, availableQuantityForItem(item)),
+			specification: item.specification || 'No specification provided',
+			status: item.status,
+			location: (item as any).location,
+			isrequired: item.isrequired || false,
+			maxQuantityPerRequest: item.maxQuantityPerRequest,
+			availability
+		};
+	}
+
+	function applyCatalog(response: CatalogResponse): void {
+		const allItems = response.items.map(toRequestItemOption);
+
+		// Required items are always shown, even at zero stock: every request carries them.
+		requiredItems = allItems.filter((item) => item.isrequired === true);
+
+		// Optional equipment the student can pick (required items are already in the cart).
+		availableEquipment = allItems.filter((item) => item.available > 0 && !item.isrequired);
+	}
+
 	/** Resolves true when the catalog loaded; false when it failed and the old list stands. */
 	async function loadAvailableEquipment(options?: { forceRefresh?: boolean }): Promise<boolean> {
 		try {
-			const response = await catalogAPI.getCatalog(
-				{
-					availability: 'all',
-					sortBy: 'name',
-					page: 1,
-					limit: 1000,
-					// Only two days can ever be booked, so ask for both up front and
-					// show the student each one before they commit to a date.
-					dates: bookableDates
-				},
-				{
-					forceRefresh: options?.forceRefresh ?? false
-				}
-			);
-
-			// Separate required items from regular items
-			const allItems = response.items.map((item) => {
-				const availability = item.availability ?? undefined;
-
-				return {
-					id: item.id,
-					name: item.name,
-					code: buildItemCode(item),
-					image: inferItemIcon(item.name),
-					picture: item.picture,
-					category: item.category || 'Uncategorized',
-					available: bestAvailability(availability, availableQuantityForItem(item)),
-					specification: item.specification || 'No specification provided',
-					status: item.status,
-					location: (item as any).location,
-					isrequired: (item as any).isrequired || false,
-					maxQuantityPerRequest: item.maxQuantityPerRequest,
-					availability
-				};
+			const response = await catalogAPI.getFullCatalog(CATALOG_FILTERS, {
+				forceRefresh: options?.forceRefresh ?? false
 			});
+			if (destroyed) return false;
 
-			// Filter required items (always show, even if quantity is 0)
-			requiredItems = allItems.filter((item) => item.isrequired === true);
+			applyCatalog(response);
 
-			// Filter available equipment (quantity > 0, excluding required items to avoid duplication)
-			availableEquipment = allItems.filter((item) => item.available > 0 && !item.isrequired);
-
-			// A fresh catalog is the only safe basis for dropping cart entries.
+			// A fresh, complete catalog is the only safe basis for dropping cart
+			// entries — and the cart has to be loaded before it can be compared.
+			await requestCartStore.init();
 			await pruneUnavailableCartItems();
+			await ensureRequiredItemsInCart();
 			return true;
 		} catch (error) {
 			console.error('Failed to load requestable equipment', error);
@@ -1015,6 +1032,26 @@
 			return false;
 		} finally {
 			isLoading = false;
+		}
+	}
+
+	/**
+	 * Put every required item in the cart. Idempotent: only missing items are
+	 * added (quantity 1) and quantities already in the cart are never touched,
+	 * however often this runs.
+	 */
+	async function ensureRequiredItemsInCart(): Promise<void> {
+		try {
+			await requestCartStore.syncRequiredItems(
+				requiredItems.map((item) => ({
+					itemId: item.id,
+					name: item.name,
+					maxQuantity: Math.max(1, item.available),
+					picture: item.picture
+				}))
+			);
+		} catch (error) {
+			console.error('[CART] Failed to add required items:', error);
 		}
 	}
 
@@ -1033,6 +1070,7 @@
 	 * Reload the catalog and reconcile the cart against it. Only entries that actually
 	 * changed are touched — the student's other picks and quantities stay as they are —
 	 * and the list updating in place is the feedback, so no toast is raised.
+	 * A newly required item is added by the load itself (ensureRequiredItemsInCart).
 	 */
 	async function refreshAfterInventoryChange(): Promise<void> {
 		// Realtime-triggered refresh bypasses the short-lived browser cache.
@@ -1052,17 +1090,6 @@
 					await requestCartStore.removeItem(itemId);
 				}
 			}
-
-			// A newly required item joins the cart, as it would on page load.
-			for (const item of requiredItems) {
-				if (!previousRequiredIds.has(item.id) && !cartIds.has(item.id)) {
-					await requestCartStore.addItem({
-						itemId: item.id,
-						name: item.name,
-						maxQuantity: Math.max(1, item.available)
-					});
-				}
-			}
 		} catch (error) {
 			console.error('[UPDATE] Failed to reconcile required items:', error);
 		}
@@ -1070,10 +1097,11 @@
 		syncSelectedItemsFromCart();
 	}
 
-	function addItemToCart(item: RequestItemOption) {
+	/** Whether the student may change their request list; explains why not when blocked. */
+	function canEditCart(): boolean {
 		if (hasNoEnrollment || availableClassCodes.length === 0) {
 			toastStore.error('You must be enrolled in a class to add items.', 'Restricted');
-			return;
+			return false;
 		}
 
 		if (hasUnresolvedObligations) {
@@ -1081,7 +1109,7 @@
 				'You have unresolved replacement obligations for missing or damaged items. Please settle all obligations before requesting new items.',
 				'Request Restricted'
 			);
-			return;
+			return false;
 		}
 
 		if (hasPendingRequest) {
@@ -1089,19 +1117,29 @@
 				'You already have an active pending borrow request awaiting action.',
 				'Request Restricted'
 			);
+			return false;
+		}
+
+		return true;
+	}
+
+	async function addItemToCart(item: RequestItemOption): Promise<void> {
+		if (!canEditCart()) return;
+
+		try {
+			await requestCartStore.addItem({
+				itemId: item.id,
+				name: item.name,
+				maxQuantity: item.available,
+				picture: item.picture
+			});
+		} catch {
+			toastStore.error(`Could not add "${item.name}". Please try again.`, 'Error');
 			return;
 		}
 
-		requestCartStore.addItem({
-			itemId: item.id,
-			name: item.name,
-			maxQuantity: item.available
-		});
-
 		syncSelectedItemsFromCart();
 		errors.items = '';
-
-		// Optional: Show success feedback
 		toastStore.success(`"${item.name}" added to your request`, 'Item Added');
 	}
 
@@ -1417,19 +1455,18 @@
 
 		if (!confirmed) return;
 
-		// Clear the cart entirely first
-		requestCartStore.clear();
-
-		// Re-add required items with quantity reset to 1
-		for (const item of requiredItems) {
-			await requestCartStore.addItem({
-				itemId: item.id,
-				name: item.name,
-				maxQuantity: Math.max(1, item.available)
-			});
+		// Empty the cart and wait for it. Re-adding the required items without
+		// waiting let the adds reach the server before the clear, so they were
+		// counted onto the old quantities instead of starting again at 1.
+		try {
+			await requestCartStore.clear();
+		} catch {
+			toastStore.error('Could not clear your selected items. Please try again.', 'Error');
+			return;
 		}
 
-		// Sync selected items from the restored cart
+		// Required items come back at quantity 1.
+		await ensureRequiredItemsInCart();
 		syncSelectedItemsFromCart();
 
 		// Reset all form fields
@@ -1553,164 +1590,56 @@
 	}
 
 	onMount(() => {
-		console.log('[MOUNT] Component mounted, loading equipment...');
-
 		let unsubscribe: () => void = () => {};
 
-		// Check for cached catalog data BEFORE async operations (industry standard: instant render)
-		const currentFilters = {
-			availability: 'all' as const,
-			sortBy: 'name' as const,
-			page: 1,
-			limit: 1000
-		};
-
-		const cached = catalogAPI.peekCachedCatalog(currentFilters);
-
+		// Stale-while-revalidate: paint the last known catalog at once, then refresh
+		// it in the background. Uses the same filters as the network read, so a
+		// revisit really does skip the skeleton.
+		const cached = catalogAPI.peekFullCatalog(CATALOG_FILTERS);
 		if (cached) {
-			console.log('[MOUNT] ✅ Cache hit - rendering instantly without skeleton');
-			// Process cached data SYNCHRONOUSLY for instant render
-			const allItems = cached.items.map((item) => ({
-				id: item.id,
-				name: item.name,
-				code: buildItemCode(item),
-				image: inferItemIcon(item.name),
-				picture: item.picture,
-				category: item.category || 'Uncategorized',
-				available: availableQuantityForItem(item),
-				specification: item.specification || 'No specification provided',
-				status: item.status,
-				location: (item as any).location,
-				isrequired: (item as any).isrequired || false,
-				maxQuantityPerRequest: item.maxQuantityPerRequest
-			}));
-
-			requiredItems = allItems.filter((item) => item.isrequired === true);
-			availableEquipment = allItems.filter((item) => item.available > 0 && !item.isrequired);
-
-			// Hide skeleton immediately when cache is available
+			applyCatalog(cached);
 			isLoading = false;
-
-			console.log('[MOUNT] 📊 Loaded from cache:', {
-				total: allItems.length,
-				required: requiredItems.length,
-				available: availableEquipment.length
-			});
-		} else {
-			console.log('[MOUNT] ⚠️ Cache miss - will show skeleton during load');
 		}
 
-		void (async () => {
-			// CRITICAL: Initialize cart from database FIRST before doing anything else
-			// This ensures we don't duplicate items that are already in the cart
-			console.log('[MOUNT] Initializing cart from database...');
-			try {
-				await requestCartStore.init();
-				console.log('[MOUNT] Cart initialized successfully');
-			} catch (error) {
-				console.error('[MOUNT] Failed to initialize cart:', error);
-			}
+		// Eligibility checks don't affect the item list, so they run side by side
+		// and never hold it back. Each one fails open on its own.
+		void Promise.allSettled([
+			loadStudentClassCodes(),
+			loadObligationStatus(),
+			loadTrustScoreStatus(),
+			checkPendingRequest()
+		]);
 
-			// Load student's class codes
-			await loadStudentClassCodes();
-			// Check for pending replacement obligations
-			await loadObligationStatus();
-			// Check trust score eligibility (Poor/Critical -> block requests)
-			await loadTrustScoreStatus();
-			// Check for active pending request
-			await checkPendingRequest();
+		void (async () => {
+			// The item list needs only the cart and the catalog — load them together.
+			await Promise.all([
+				requestCartStore.init().catch((error) => {
+					console.error('[MOUNT] Failed to initialize cart:', error);
+				}),
+				loadAvailableEquipment()
+			]);
 			if (destroyed) return;
 
-			if (cached) {
-				// Cache path: sync cart and revalidate in background
-				console.log('[MOUNT] 🔄 Cache path: syncing cart and revalidating...');
+			syncSelectedItemsFromCart();
 
-				// Get current cart items ONCE before the loop (AFTER cart is initialized)
-				const currentCartItems = get(requestCartItems);
-				console.log('[MOUNT] Current cart items before adding requireds:', currentCartItems.length);
-
-				// Auto-add required items to cart ONLY if they don't exist
-				if (requiredItems.length > 0) {
-					for (const item of requiredItems) {
-						// Check if item already exists in cart (using the snapshot we took)
-						const alreadyInCart = currentCartItems.some((cartItem) => cartItem.itemId === item.id);
-
-						if (!alreadyInCart) {
-							console.log('[MOUNT] Adding required item to cart:', item.name);
-							await requestCartStore.addItem({
-								itemId: item.id,
-								name: item.name,
-								maxQuantity: Math.max(1, item.available)
-							});
-						} else {
-							console.log('[MOUNT] required item already in cart, skipping:', item.name);
-						}
-					}
-				}
-
-				// Sync cart items
-				const cartItems = get(requestCartItems);
-				if (cartItems.length > 0) {
-					syncSelectedItemsFromCart();
-				}
-
-				// Revalidate in background (same as catalog) - this keeps data fresh without blocking UI
-				console.log('[MOUNT] 🔄 Revalidating catalog in background...');
-				// Resolves from cache unless the realtime hub has flagged a change.
-				loadAvailableEquipment().then(() => {
-					console.log('[MOUNT] ✅ Background revalidation complete');
-				});
-			} else {
-				// No cache path: load fresh data
-				console.log('[MOUNT] 📡 No cache: loading fresh data from API...');
-				await loadAvailableEquipment();
-
-				console.log('[MOUNT] Equipment loaded, required items:', requiredItems.length);
-
-				// Get current cart items ONCE before the loop (AFTER cart is initialized)
-				const currentCartItems = get(requestCartItems);
-				console.log('[MOUNT] Current cart items before adding requireds:', currentCartItems.length);
-
-				// Auto-add required items to cart ONLY if they don't exist
-				if (requiredItems.length > 0) {
-					for (const item of requiredItems) {
-						// Check if item already exists in cart (using the snapshot we took)
-						const alreadyInCart = currentCartItems.some((cartItem) => cartItem.itemId === item.id);
-
-						if (!alreadyInCart) {
-							console.log('[MOUNT] Adding required item to cart:', item.name);
-							await requestCartStore.addItem({
-								itemId: item.id,
-								name: item.name,
-								maxQuantity: Math.max(1, item.available)
-							});
-						} else {
-							console.log('[MOUNT] required item already in cart, skipping:', item.name);
-						}
-					}
-
-					syncSelectedItemsFromCart();
-				} else {
-					const cartItems = get(requestCartItems);
-					if (cartItems.length > 0) {
-						syncSelectedItemsFromCart();
-					}
-				}
-			}
-
-			// Handle preselected item from URL
+			// Preselected item from the URL. `ifAbsent` keeps a reload of the same
+			// link from bumping the quantity each time.
 			const itemId = get(page).url.searchParams.get('itemId');
-			if (itemId) {
-				// Check both available equipment and required items
-				const allItems = [...availableEquipment, ...requiredItems];
-				const preselectedItem = allItems.find((item) => item.id === itemId);
-				if (preselectedItem) {
-					requestCartStore.addItem({
+			const preselectedItem = itemId
+				? availableEquipment.find((item) => item.id === itemId)
+				: undefined;
+			if (preselectedItem) {
+				try {
+					await requestCartStore.addItem({
 						itemId: preselectedItem.id,
 						name: preselectedItem.name,
-						maxQuantity: preselectedItem.available
+						maxQuantity: preselectedItem.available,
+						picture: preselectedItem.picture,
+						ifAbsent: true
 					});
 					syncSelectedItemsFromCart();
+				} catch (error) {
+					console.error('[MOUNT] Failed to add preselected item:', error);
 				}
 			}
 
@@ -1725,15 +1654,6 @@
 			// Subscribe to real-time inventory updates via SSE
 			unsubscribe = subscribeToInventoryChanges(
 				(event) => {
-					console.log('[SSE] ===== EVENT RECEIVED =====');
-					console.log('[SSE] Action:', event.action);
-					console.log('[SSE] Entity Type:', event.entityType);
-					console.log('[SSE] Entity ID:', event.entityId);
-					console.log('[SSE] Entity Name:', event.entityName);
-					console.log('[SSE] Occurred At:', event.occurredAt);
-					console.log('[SSE] Full Event:', JSON.stringify(event, null, 2));
-					console.log('[SSE] ============================');
-
 					// Handle ALL inventory item events (created, updated, archived, restored, deleted)
 					// This includes when items are marked/unmarked as required
 					const supportedActions = new Set([
@@ -1745,20 +1665,15 @@
 					]);
 
 					if (event.entityType === 'item' && supportedActions.has(event.action)) {
-						console.log('[SSE] ✅ Item event detected, processing update...');
 						handleInventoryUpdate();
-					} else {
-						console.log('[SSE] ⊘ Non-item event, ignoring');
 					}
 				},
 				{
 					onConnect: () => {
-						console.log('[SSE] ✅ Connected successfully to inventory stream');
 						sseConnected = true;
 						sseReconnecting = false;
 					},
 					onDisconnect: () => {
-						console.log('[SSE] ❌ Disconnected from inventory stream');
 						sseConnected = false;
 					},
 					onError: (error) => {
@@ -1777,17 +1692,11 @@
 				// availability updated" toast every time, with nothing changed.
 				if (event?.reason !== 'change') return;
 
-				console.log(
-					'[SSE] Donation change detected (donations stream) - triggering inventory update'
-				);
 				handleInventoryUpdate();
 			});
-
-			console.log('[MOUNT] SSE subscriptions set up complete');
 		})();
 
 		return () => {
-			console.log('[MOUNT] Component unmounting, cleaning up...');
 			destroyed = true;
 			if (updateDebounceTimer) {
 				clearTimeout(updateDebounceTimer);
@@ -2358,7 +2267,7 @@
 						<div class="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{errors.items}</div>
 					{/if}
 
-					{#if isLoading}
+					{#if isLoading || !$requestCartInitialized}
 						<!-- Skeleton Loader -->
 						<SelectedItemsSkeletonLoader count={3} />
 					{:else if selectedItems.length > 0}

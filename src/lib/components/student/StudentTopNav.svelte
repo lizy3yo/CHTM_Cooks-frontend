@@ -23,7 +23,12 @@
 	import { toastStore } from '$lib/stores/toast';
 	import { notificationsAPI, watchNotifications, type NotificationRecord } from '$lib/api/notifications';
 	import { sidebarCollapsed } from '$lib/stores/student';
-	import { requestCartCount, requestCartStore, requestCartItems } from '$lib/stores/requestCart';
+	import {
+		requestCartCount,
+		requestCartStore,
+		requestCartItems,
+		requestCartInitialized
+	} from '$lib/stores/requestCart';
 	import { catalogAPI } from '$lib/api/catalog';
 	import { Moon, Sun, HelpCircle, Bell, ChevronDown, LogOut, User, Settings, History, CalendarDays, ShoppingBag } from 'lucide-svelte';
 	import SignOutModal from '$lib/components/ui/SignOutModal.svelte';
@@ -41,7 +46,8 @@
 	let recentNotifications = $state<NotificationRecord[]>([]);
 	let unreadCount = $state(0);
 	let loadingNotifications = $state(false);
-	let catalogData = $state<any>(null);
+	// Last known catalog first, so required items are recognised from the start.
+	let catalogData = $state<any>(catalogAPI.peekFullCatalog({ availability: 'all' }));
 
 	// ── Live clock ────────────────────────────────────────────────────────────
 	let now = $state(new Date());
@@ -217,12 +223,9 @@
 	 */
 	async function loadCatalogData() {
 		try {
-			const data = await catalogAPI.getCatalog({ 
-				availability: 'all',
-				limit: 1000 
-			});
-			catalogData = data;
-			console.log('[CART-IMAGES] Catalog data loaded:', data.items.length, 'items');
+			// Every page: the server caps one at 200 items, and a required item past
+			// that point would otherwise not be recognised (and so be removable).
+			catalogData = await catalogAPI.getFullCatalog({ availability: 'all' });
 		} catch (error) {
 			console.error('[CART-IMAGES] Failed to load catalog data:', error);
 		}
@@ -364,7 +367,21 @@
 
 					<!-- Items List - Scrollable -->
 					<div class="max-h-80 overflow-y-auto py-2">
-						{#if $requestCartCount === 0}
+						{#if !$requestCartInitialized || ($requestCartCount > 0 && !catalogData)}
+							<!-- Until the catalog is known, required items can't be told apart
+							     from the rest; show nothing rather than mislabel them. -->
+							<div class="space-y-2 px-4 py-3" aria-busy="true" aria-label="Loading request list">
+								{#each [0, 1, 2] as row (row)}
+									<div class="flex animate-pulse gap-3">
+										<div class="h-12 w-12 shrink-0 rounded-lg bg-gray-200"></div>
+										<div class="flex-1 space-y-2 py-1">
+											<div class="h-3 w-3/4 rounded bg-gray-200"></div>
+											<div class="h-3 w-1/3 rounded bg-gray-200"></div>
+										</div>
+									</div>
+								{/each}
+							</div>
+						{:else if $requestCartCount === 0}
 							<div class="py-8 text-center">
 								<ShoppingBag size={28} class="mx-auto mb-2 text-pink-600" />
 								<p class="text-sm text-gray-500">No items in request list</p>
